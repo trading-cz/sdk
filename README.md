@@ -18,10 +18,21 @@ Shared data models for the trading platform.
 **Install published package:**
 ```bash
 # Install specific version from GitHub Releases
-pip install https://github.com/trading-cz/model/releases/download/v0.0.1/trading_model-0.0.1-py3-none-any.whl
+pip install https://github.com/trading-cz/model/releases/download/v0.0.5/trading_model-0.0.5-py3-none-any.whl
 
 # Or install latest from git
 pip install git+https://github.com/trading-cz/model.git@main
+```
+
+**⚠️ Upgrading to a new version:**
+```bash
+# Always uninstall first to avoid stale cached files
+pip uninstall trading-model -y
+# On Windows, also remove the cz folder manually if needed:
+# Remove-Item -Recurse -Force "$env:USERPROFILE\AppData\Roaming\Python\Python312\site-packages\cz"
+
+# Then install the new version
+pip install https://github.com/trading-cz/model/releases/download/vX.X.X/trading_model-X.X.X-py3-none-any.whl --no-cache-dir
 ```
 
 ## Repository Structure
