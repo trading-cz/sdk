@@ -47,6 +47,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install "dataclasses-avroschema[cli]>=0.66"
 
+      - name: Check schema paths for hyphens
+        if: steps.changes.outputs.schemas == 'true'
+        run: |
+          echo "🔍 Checking schema paths for hyphens (invalid for Python modules)..."
+          INVALID_PATHS=$(find schemas -type d -name "*-*" 2>/dev/null || true)
+          if [ -n "$INVALID_PATHS" ]; then
+            echo "❌ Error: Schema directory names cannot contain hyphens!"
+            echo "Python modules require underscores. Please rename:"
+            echo ""
+            echo "$INVALID_PATHS" | while read dir; do
+              FIXED=$(echo "$dir" | tr '-' '_')
+              echo "  $dir -> $FIXED"
+            done
+            echo ""
+            echo "💡 Use underscores instead of hyphens in directory names."
+            exit 1
+          fi
+          echo "✅ All schema paths are valid Python module names"
+
       - name: Lint Avro schemas
         if: steps.changes.outputs.schemas == 'true'
         run: |
