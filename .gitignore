@@ -20,9 +20,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# Generated code (built at release time)
-src/
-
 # Virtual environments
 .venv/
 venv/

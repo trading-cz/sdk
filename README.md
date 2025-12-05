@@ -8,6 +8,18 @@ Shared data models for the trading platform.
 - **Generated code**: Python classes (Pydantic) via `dc-avro` CLI
 - **Kafka payload**: JSON (key and value) - Avro binary planned for future
 
+## GitHub Actions
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `generate-models-on-pr.yml` | Pull Request | Detects `.avsc` changes → generates Python models → auto-commits to PR |
+| `build-and-push.yml` | Tag `v*.*.*` | Builds package from pre-generated models → publishes to GitHub Packages |
+
+**Install published package:**
+```bash
+pip install trading-model --index-url https://pypi.pkg.github.com/trading-cz/simple
+```
+
 ## Repository Structure
 
 ```
@@ -38,10 +50,10 @@ schemas/kafka/market-data/value.avsc
 
 ### 2. Create Pull Request
 
-GitHub Actions will:
-- Validate all `.avsc` schemas (`dc-avro lint`)
-- Generate Python classes (dry-run)
-- Verify generation succeeds
+GitHub Actions (`generate-models-on-pr.yml`) will automatically:
+- Detect if any `.avsc` files changed
+- Validate schemas (`dc-avro lint`)
+- Generate Python models and commit them to your PR
 
 ### 3. Release
 
@@ -53,9 +65,9 @@ git push origin v0.0.1
 ```
 
 GitHub Actions (`build-and-push.yml`) will:
-- Generate Python classes from all `.avsc` files
+- Verify generated models exist
 - Build Python package
-- Publish to artifactory
+- Publish to GitHub Packages
 
 ### 4. Consume in other repositories
 
