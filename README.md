@@ -17,7 +17,11 @@ Shared data models for the trading platform.
 
 **Install published package:**
 ```bash
-pip install trading-model --index-url https://pypi.pkg.github.com/trading-cz/simple
+# Install specific version from GitHub Releases
+pip install https://github.com/trading-cz/model/releases/download/v0.0.1/trading_model-0.0.1-py3-none-any.whl
+
+# Or install latest from git
+pip install git+https://github.com/trading-cz/model.git@main
 ```
 
 ## Repository Structure

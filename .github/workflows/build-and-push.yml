@@ -1,6 +1,6 @@
 # Build and Push Python Package
 # Triggers when a version tag (v*.*.*) is pushed or manually dispatched
-# Models are pre-generated via PR workflow - this just builds and publishes
+# Models are pre-generated via PR workflow - this just builds and publishes to GitHub Releases
 
 name: Build and Push Python Package
 
@@ -20,8 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: read
-      packages: write
+      contents: write
       
     steps:
       - name: Checkout repository
@@ -38,6 +37,7 @@ jobs:
           # Strip 'v' prefix if present (v0.0.4 -> 0.0.4)
           VERSION="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Building version: $VERSION"
 
       - name: Verify generated models exist
@@ -58,7 +58,7 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          pip install build
 
       - name: Update version in pyproject.toml
         run: |
@@ -72,22 +72,35 @@ jobs:
           echo "📦 Package built"
           ls -la dist/
 
-      - name: Publish to GitHub Packages
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🚀 Publishing to GitHub Packages..."
-          twine upload --repository-url https://upload.pypi.pkg.github.com/${{ github.repository_owner }} dist/*
-          echo "✅ Package published"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Installation
+            
+            ```bash
+            pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/trading_model-${{ steps.version.outputs.version }}-py3-none-any.whl
+            ```
 
       - name: Summary
         run: |
-          echo "### 📦 Python Package Published" >> $GITHUB_STEP_SUMMARY
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="${{ github.repository }}"
+          
+          echo "### 📦 Python Package Published to GitHub Releases" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Install:** \`pip install trading-model==${{ steps.version.outputs.version }} --index-url https://pypi.pkg.github.com/${{ github.repository_owner }}/simple\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Install:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install https://github.com/$REPO/releases/download/$TAG/trading_model-$VERSION-py3-none-any.whl" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** https://github.com/$REPO/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Files:**" >> $GITHUB_STEP_SUMMARY
           ls dist/ | while read f; do echo "- \`$f\`" >> $GITHUB_STEP_SUMMARY; done
