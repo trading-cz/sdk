@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   generate-models:
@@ -95,6 +95,35 @@ jobs:
           
           echo "✅ Models generated"
 
+      - name: Validate Python syntax
+        if: steps.changes.outputs.schemas == 'true'
+        run: |
+          echo "🔍 Validating Python syntax..."
+          echo "## 🐍 Python Syntax Validation" > validation.txt
+          echo "" >> validation.txt
+          echo "| File | Status |" >> validation.txt
+          echo "|------|--------|" >> validation.txt
+          
+          ERRORS=0
+          for pyfile in $(find src/cz/trading/model -name "*.py" ! -name "__init__.py" 2>/dev/null | sort); do
+            if python -m py_compile "$pyfile" 2>&1; then
+              echo "| \`$pyfile\` | ✅ Valid |" >> validation.txt
+            else
+              echo "| \`$pyfile\` | ❌ Error |" >> validation.txt
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+          
+          echo "" >> validation.txt
+          if [ $ERRORS -gt 0 ]; then
+            echo "**Result:** ❌ Found $ERRORS file(s) with syntax errors" >> validation.txt
+            cat validation.txt
+            exit 1
+          else
+            echo "**Result:** ✅ All files passed syntax validation" >> validation.txt
+            cat validation.txt
+          fi
+
       - name: Check for generated file changes
         if: steps.changes.outputs.schemas == 'true'
         id: generated
@@ -135,3 +164,12 @@ jobs:
             echo "**Schema changes detected:** No" >> $GITHUB_STEP_SUMMARY
             echo "ℹ️ No .avsc files were added, modified, or deleted" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Comment on Pull Request
+        if: steps.changes.outputs.schemas == 'true' && success()
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          file-path: validation.txt
+          reactions: rocket
+          comment-tag: python_validation
+          mode: recreate

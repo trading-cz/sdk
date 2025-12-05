@@ -56,7 +56,7 @@
           {
             "name": "symbol",
             "type": "string",
-            "doc": "Ticker symbol (e.g., NVDA, ES, BTC)"
+            "doc": "Ticker symbol (e.g., NVDA, MCD, BTC)"
           },
           {
             "name": "exchange",
