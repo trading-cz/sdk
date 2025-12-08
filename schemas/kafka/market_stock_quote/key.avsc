@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "MarketStockQuoteKey",
+  "namespace": "cz.trading.model.kafka.market_stock_quote",
+  "doc": "Key for stock quote messages from Alpaca - used for Kafka partitioning by symbol",
+  "fields": [
+    {
+      "name": "symbol",
+      "type": "string",
+      "doc": "Ticker symbol (e.g., AAPL, MSFT, SPY)"
+    }
+  ]
+}

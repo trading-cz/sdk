@@ -1,0 +1,68 @@
+{
+  "type": "record",
+  "name": "MarketStockQuoteValue",
+  "namespace": "cz.trading.model.kafka.market_stock_quote",
+  "doc": "Stock quote data received from Alpaca StockDataStream",
+  "fields": [
+    {
+      "name": "symbol",
+      "type": "string",
+      "doc": "Ticker symbol (e.g., AAPL, MSFT)"
+    },
+    {
+      "name": "timestamp",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-micros"
+      },
+      "doc": "Quote timestamp in microseconds UTC (from Alpaca)"
+    },
+    {
+      "name": "bid_price",
+      "type": "double",
+      "doc": "Best bid price"
+    },
+    {
+      "name": "ask_price",
+      "type": "double",
+      "doc": "Best ask price"
+    },
+    {
+      "name": "bid_size",
+      "type": "int",
+      "doc": "Bid size in shares"
+    },
+    {
+      "name": "ask_size",
+      "type": "int",
+      "doc": "Ask size in shares"
+    },
+    {
+      "name": "bid_exchange",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Exchange code for bid (Alpaca exchange code)"
+    },
+    {
+      "name": "ask_exchange",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Exchange code for ask (Alpaca exchange code)"
+    },
+    {
+      "name": "conditions",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "default": [],
+      "doc": "Quote condition codes from Alpaca"
+    },
+    {
+      "name": "tape",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "SIP tape identifier (A=NYSE, B=ARCA/regional, C=NASDAQ)"
+    }
+  ]
+}
