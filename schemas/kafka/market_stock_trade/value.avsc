@@ -1,0 +1,58 @@
+{
+  "type": "record",
+  "name": "MarketStockTradeValue",
+  "namespace": "cz.trading.model.kafka.market_stock_trade",
+  "doc": "Stock trade data received from Alpaca StockDataStream",
+  "fields": [
+    {
+      "name": "symbol",
+      "type": "string",
+      "doc": "Ticker symbol (e.g., AAPL, MSFT)"
+    },
+    {
+      "name": "timestamp",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-micros"
+      },
+      "doc": "Trade timestamp in microseconds UTC (from Alpaca)"
+    },
+    {
+      "name": "price",
+      "type": "double",
+      "doc": "Trade execution price"
+    },
+    {
+      "name": "size",
+      "type": "double",
+      "doc": "Trade size (Alpaca returns float)"
+    },
+    {
+      "name": "exchange",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Exchange code where trade occurred (Alpaca exchange code)"
+    },
+    {
+      "name": "trade_id",
+      "type": ["null", "long"],
+      "default": null,
+      "doc": "Unique trade ID from exchange"
+    },
+    {
+      "name": "conditions",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "default": [],
+      "doc": "Trade condition codes from Alpaca (e.g., '@' for regular, 'T' for extended hours)"
+    },
+    {
+      "name": "tape",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "SIP tape identifier (A=NYSE, B=ARCA/regional, C=NASDAQ)"
+    }
+  ]
+}
