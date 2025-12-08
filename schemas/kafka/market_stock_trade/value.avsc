@@ -24,8 +24,8 @@
     },
     {
       "name": "size",
-      "type": "int",
-      "doc": "Trade size in shares"
+      "type": "double",
+      "doc": "Trade size (Alpaca returns float)"
     },
     {
       "name": "exchange",

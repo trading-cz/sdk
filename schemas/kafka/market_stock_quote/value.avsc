@@ -29,13 +29,13 @@
     },
     {
       "name": "bid_size",
-      "type": "int",
-      "doc": "Bid size in shares"
+      "type": "double",
+      "doc": "Bid size (Alpaca returns float)"
     },
     {
       "name": "ask_size",
-      "type": "int",
-      "doc": "Ask size in shares"
+      "type": "double",
+      "doc": "Ask size (Alpaca returns float)"
     },
     {
       "name": "bid_exchange",

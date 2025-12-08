@@ -2,12 +2,17 @@
   "type": "record",
   "name": "MarketStockQuoteKey",
   "namespace": "cz.trading.model.kafka.market_stock_quote",
-  "doc": "Key for stock quote messages from Alpaca - used for Kafka partitioning by symbol",
+  "doc": "Key for stock quote messages. Symbol for filtering, sequence for traceability. Use random partitioner to avoid hot symbol bottleneck.",
   "fields": [
     {
       "name": "symbol",
       "type": "string",
-      "doc": "Ticker symbol (e.g., AAPL, MSFT, SPY)"
+      "doc": "Ticker symbol (e.g., AAPL, SPY) - used for consumer filtering"
+    },
+    {
+      "name": "sequence",
+      "type": "long",
+      "doc": "Monotonically increasing sequence number from ingestion service - used for gap detection and debugging"
     }
   ]
 }
