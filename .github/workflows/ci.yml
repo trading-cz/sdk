@@ -11,8 +11,4 @@ jobs:
     uses: trading-cz/github-action/.github/workflows/python-ci.yml@main
     with:
       python-version: '3.12'
-      source-dir: 'src/tradingcz'
       test-dir: tests
-      run-pylint: true
-      run-mypy: true
-      run-ruff: true
