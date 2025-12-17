@@ -20,8 +20,9 @@ def test_enums_import() -> None:
 
 def test_timeframe_enum_values() -> None:
     """Test Timeframe enum has expected values."""
-    assert hasattr(Timeframe, "ONE_MIN")
-    assert hasattr(Timeframe, "ONE_DAY")
+    assert hasattr(Timeframe, "MINUTE_1")
+    assert hasattr(Timeframe, "MINUTE_5")
+    assert hasattr(Timeframe, "DAY")
 
 
 def test_adjustment_enum_values() -> None:
