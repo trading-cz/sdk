@@ -1,0 +1,11 @@
+name: MegaLinter
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  megalinter:
+    uses: trading-cz/github-action/.github/workflows/megalinter.yml@main

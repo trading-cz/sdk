@@ -38,3 +38,8 @@ htmlcov/
 
 # mypy
 .mypy_cache/
+# Generated folder (but keep generated/tradingcz/model committed)
+generated/
+!generated/tradingcz/
+!generated/tradingcz/model/
+!generated/tradingcz/**/.gitkeep

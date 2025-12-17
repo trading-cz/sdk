@@ -1,219 +1,224 @@
-# Trading Model Repository
+# Trading SDK Repository
 
-Shared data models for the trading platform.
+Shared SDK and data models for the trading platform.
 
 ## Overview
 
-- **Schema format**: Avro Schema (`.avsc`) - single source of truth
-- **Generated code**: Python classes (Pydantic) via `dc-avro` CLI
-- **Kafka payload**: JSON (key and value) - Avro binary planned for future
+- **Purpose**: Provide shared data models, enums, DTOs, and utilities for trading services
+- **Hand-written code**: Enums, DTOs, utilities - manually maintained
+- **Location**: Single-source package at `tradingcz/` root
+
+---
+
+## Project Structure
+
+```
+sdk/
+├── pyproject.toml                    # Package config
+├── README.md
+│
+└── tradingcz/                        # Core package
+    └── model/
+        ├── __init__.py               # Re-exports enums + DTOs
+        │
+        ├── enums/                    # ✏️ HAND-WRITTEN - Shared enumerations
+        │   ├── timeframe.py          # Timeframe (1Min, 5Min, 1Hour, 1Day)
+        │   ├── adjustment.py         # Adjustment (raw, split, dividend, all)
+        │   └── order.py              # SortOrder, OrderSide, OrderType
+        │
+        ├── dto/                      # ✏️ HAND-WRITTEN - Data Transfer Objects
+        │   ├── bar.py                # OHLCV bar
+        │   ├── quote.py              # Bid/ask quote
+        │   ├── trade.py              # Individual trade
+        │   └── snapshot.py           # Market snapshot
+        │
+        └── utils/                    # ✏️ HAND-WRITTEN - Utilities
+            └── converters.py         # DTO ↔ Kafka schema converters
+```
+
+### Folder Responsibilities
+
+| Folder | Type | Purpose | Who Edits |
+|--------|------|---------|-----------|
+| `schemas/` | Source | Avro schemas (Kafka contracts) | Developers |
+| `src/.../enums/` | Source | Hand-written enumerations | Developers |
+| `src/.../dto/` | Source | Hand-written DTOs | Developers |
+| `src/.../utils/` | Source | Hand-written utilities | Developers |
+| `src/.../kafka/` | Generated | Auto-generated from Avro | **GitHub Actions only** |
+
+---
+
+## Package Structure After Install
+
+```python
+from tradingcz.model import (
+    # Enums (hand-written)
+    Timeframe, Adjustment, SortOrder, OrderSide, OrderType,
+    
+    # DTOs (hand-written)
+    Bar, Quote, Trade, Snapshot,
+    
+    # Converters (hand-written)
+    quote_to_kafka, trade_to_kafka,
+)
+```
+
+---
 
 ## GitHub Actions
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `generate-models-on-pr.yml` | Pull Request | Detects `.avsc` changes → generates Python models → auto-commits to PR |
-| `build-and-push.yml` | Tag `v*.*.*` | Builds package from pre-generated models → publishes to GitHub Packages |
+| `ci.yml` | Push / PR | Linting, type checking, testing |
+| `build-and-push.yml` | Tag `v*.*.*` | Builds package → publishes to GitHub Packages |
 
-**Install published package:**
-```bash
-# Install specific version from GitHub Releases
-pip install https://github.com/trading-cz/model/releases/download/v0.0.5/trading_model-0.0.5-py3-none-any.whl
+---
 
-# Or install latest from git
-pip install git+https://github.com/trading-cz/model.git@main
-```
+## Developer Workflows
 
-**⚠️ Upgrading to a new version:**
-```bash
-# Always uninstall first to avoid stale cached files
-pip uninstall trading-model -y
-# On Windows, also remove the cz folder manually if needed:
-# Remove-Item -Recurse -Force "$env:USERPROFILE\AppData\Roaming\Python\Python312\site-packages\cz"
+### Adding a New Enum (hand-written)
 
-# Then install the new version
-pip install https://github.com/trading-cz/model/releases/download/vX.X.X/trading_model-X.X.X-py3-none-any.whl --no-cache-dir
-```
-
-## Repository Structure
-
-```
-schemas/                          # Avro schemas (source of truth)
-├── kafka/                        # Kafka message schemas
-│   ├── raw_signal/               # Trading signals from strategies
-│   ├── market_stock_quote/       # Stock quotes from Alpaca
-│   └── market_stock_trade/       # Stock trades from Alpaca
-└── <future-system>/
-
-src/                              # Auto-generated (never edit manually!)
-└── cz/trading/model/kafka/...
-```
-
-## Available Schemas
-
-| Schema | Topic | Description |
-|--------|-------|-------------|
-| `raw_signal` | `signal.raw` | Trading signals produced by strategies |
-| `market_stock_quote` | `market.stock.quotes` | Stock quotes from Alpaca (ingestion-alpaca) |
-| `market_stock_trade` | `market.stock.trades` | Stock trades from Alpaca (ingestion-alpaca) |
-
-## Developer Workflow
-
-### 1. Design a new schema
-
-Create Avro schemas in `schemas/kafka/<topic-name>/`:
-
-```bash
-schemas/kafka/market-data/key.avsc
-schemas/kafka/market-data/value.avsc
-```
-
-### 2. Create Pull Request
-
-GitHub Actions (`generate-models-on-pr.yml`) will automatically:
-- Detect if any `.avsc` files changed
-- Validate schemas (`dc-avro lint`)
-- Generate Python models and commit them to your PR
-
-### 3. Release
-
-Create a git tag:
-
-```bash
-git tag v0.0.1
-git push origin v0.0.1
-```
-
-GitHub Actions (`build-and-push.yml`) will:
-- Verify generated models exist
-- Build Python package
-- Publish to GitHub Packages
-
-### 4. Consume in other repositories
-
-```toml
-# pyproject.toml
-dependencies = ["trading-model>=0.0.1"]
-```
+1. Create file in `tradingcz/model/enums/`:
 
 ```python
-from cz.trading.model.kafka.market_data import MarketDataKey, MarketDataValue
+# tradingcz/model/enums/order.py
+from enum import Enum
 
-# Serialize to JSON for Kafka
-key = MarketDataKey(message_id="...", tracking_id="...", ...)
-value = MarketDataValue(symbol="AAPL", price=150.0, ...)
+class OrderSide(str, Enum):
+    """Order side for trading."""
+    BUY = "buy"
+    SELL = "sell"
 
-producer.send(
-    topic="market-data",
-    key=key.model_dump_json().encode(),
-    value=value.model_dump_json().encode(),
-)
-
-# Deserialize from Kafka JSON
-key = MarketDataKey.model_validate_json(msg.key)
-value = MarketDataValue.model_validate_json(msg.value)
+class OrderType(str, Enum):
+    """Order type."""
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
+    STOP_LIMIT = "stop_limit"
 ```
 
-## CLI Tool: dc-avro
+2. Export in `tradingcz/model/enums/__init__.py`:
 
-Generate Python classes from Avro schemas using [dataclasses-avroschema](https://github.com/marcosschroh/dataclasses-avroschema).
-
-### Installation
-
-```bash
-pip install "dataclasses-avroschema[cli]"
+```python
+from .order import OrderSide, OrderType
+from .timeframe import Timeframe
+from .adjustment import Adjustment
 ```
 
-### Commands
+3. Commit and push - CI will validate code quality
 
-```bash
-# Generate Pydantic model from schema
-dc-avro generate-model --path schemas/kafka/<topic>/key.avsc --model-type pydantic
+### Adding a New DTO (hand-written)
 
-# Validate schemas
-dc-avro lint schemas/**/*.avsc
+1. Create file in `tradingcz/model/dto/`:
 
-# Compare schema versions (for evolution)
-dc-avro schema-diff --source-path v1.avsc --target-path v2.avsc
+```python
+# tradingcz/model/dto/bar.py
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+@dataclass(slots=True)
+class Bar:
+    """OHLCV bar for charting and backtesting."""
+    symbol: str
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    trade_count: Optional[int] = None
+    vwap: Optional[float] = None
 ```
 
-### Model Types
+2. Export in `tradingcz/model/dto/__init__.py`
 
-| Type | Description |
-|------|-------------|
-| `dataclass` | Python dataclass with `AvroModel` (default) |
-| `pydantic` | Pydantic `BaseModel` - **recommended for JSON** |
-| `avrodantic` | Pydantic + Avro helpers - for future Avro binary |
+### Adding a Converter (hand-written)
 
-## Local Validation
+```python
+# tradingcz/model/utils/converters.py
+from tradingcz.model.dto import Quote
 
-Before pushing schema changes, verify locally:
-
-```bash
-# 1. Install CLI (once)
-pip install "dataclasses-avroschema[cli]"
-
-# 2. Validate schema syntax
-dc-avro lint schemas/kafka/<topic>/key.avsc
-dc-avro lint schemas/kafka/<topic>/value.avsc
-
-# 3. Preview generated Python (stdout only - don't commit manually!)
-dc-avro generate-model --path schemas/kafka/<topic>/value.avsc --model-type pydantic
-```
-
-**Note**: Never manually create files in `src/` - they are auto-generated by GitHub Actions on PR.
-
-## Example Schema
-
-### Key Schema (`schemas/kafka/common/key.avsc`)
-
-```json
-{
-  "type": "record",
-  "name": "CommonKey",
-  "namespace": "cz.trading.model.kafka.common",
-  "doc": "Standard Kafka message key with envelope metadata",
-  "fields": [
-    {
-      "name": "message_id",
-      "type": { "type": "string", "logicalType": "uuid" },
-      "doc": "UUID v4: Unique identifier for this message"
-    },
-    {
-      "name": "tracking_id",
-      "type": "string",
-      "doc": "Correlation ID that travels with the trade"
-    },
-    {
-      "name": "timestamp_utc",
-      "type": { "type": "long", "logicalType": "timestamp-millis" },
-      "doc": "Message generation time in UTC as epoch millis"
-    },
-    {
-      "name": "system_id",
-      "type": "string",
-      "doc": "Source system identifier"
-    },
-    {
-      "name": "version",
-      "type": "string",
-      "default": "1.0",
-      "doc": "Schema version string"
+def quote_to_kafka(quote: Quote) -> dict:
+    """Convert REST DTO to Kafka payload."""
+    return {
+        "symbol": quote.symbol,
+        "timestamp": int(quote.timestamp.timestamp() * 1_000_000),  # micros
+        "bid_price": quote.bid_price,
+        "ask_price": quote.ask_price,
+        "bid_size": quote.bid_size or 0,
+        "ask_size": quote.ask_size or 0,
     }
-  ]
-}
 ```
 
-## Future: Avro Binary Serialization
+---
 
-Currently using JSON for Kafka payloads. To migrate to Avro binary:
+## Installation
 
-1. Change `--model-type pydantic` to `--model-type avrodantic`
-2. Use `serialize()` / `deserialize()` methods instead of `model_dump_json()`
+```bash
+# Install from GitHub Releases
+pip install https://github.com/trading-cz/sdk/releases/download/v0.0.7/trading_sdk-0.0.7-py3-none-any.whl
 
-```python
-# Future Avro binary usage
-key = CommonKey(...)
-binary = key.serialize()  # Avro binary
-key = CommonKey.deserialize(binary)
+# Or install from git
+pip install git+https://github.com/trading-cz/sdk.git@main
 ```
+
+**⚠️ Upgrading:**
+```bash
+pip uninstall trading-sdk -y
+pip install <new-version> --no-cache-dir
+```
+
+---
+
+## Available Models
+
+### Enums (hand-written)
+
+| Enum | Values | Purpose |
+|------|--------|---------|
+| `Timeframe` | 1Min, 5Min, 15Min, 1Hour, 1Day | Bar aggregation periods |
+| `Adjustment` | raw, split, dividend, all | Corporate action adjustments |
+| `SortOrder` | asc, desc | Time-series ordering |
+| `OrderSide` | buy, sell | Trade direction |
+| `OrderType` | market, limit, stop, stop_limit | Order execution type |
+
+### DTOs (hand-written)
+
+| DTO | Fields | Purpose |
+|-----|--------|---------|
+| `Bar` | symbol, timestamp, OHLCV, vwap | Candlestick data |
+| `Quote` | symbol, timestamp, bid/ask price+size | Level 1 quotes |
+| `Trade` | symbol, timestamp, price, size | Individual trades |
+| `Snapshot` | latest_trade, latest_quote, bars | Complete market state |
+
+---
+
+## Local Development
+
+```bash
+# Install in editable mode
+pip install -e .
+
+# Run tests
+pytest tests/ -v
+
+# Lint with ruff
+ruff check tradingcz/
+
+# Type check
+mypy tradingcz/
+
+# Format code
+ruff format tradingcz/
+```
+
+---
+
+## Design Principles
+
+1. **Simplicity** — Shared data models without code generation complexity
+2. **Type safety** — All models use Pydantic or dataclasses
+3. **Consistent naming** — `tradingcz.model.*` namespace everywhere
+4. **Easy consumption** — One import for all models
+5. **Maintainability** — All code is hand-written and version-controlled
