@@ -1,0 +1,73 @@
+# Configuration file for MegaLinter - SDK repository
+# See all available variables at https://megalinter.io/latest/config-file/
+
+# Apply fixes for formatters
+APPLY_FIXES: all
+APPLY_FIXES_EVENT: all
+APPLY_FIXES_MODE: commit
+
+# Validate all codebase
+VALIDATE_ALL_CODEBASE: true
+
+# Essential linters for SDK - optimized for speed and accuracy
+# - Removed: flake8, pylint, pyright, bandit (redundant or slow)
+# - Kept: ruff (modern), black (formatter), mypy (type checker), isort (imports)
+ENABLE_LINTERS:
+  - ACTION_ACTIONLINT
+  - PYTHON_BLACK
+  - PYTHON_ISORT
+  - PYTHON_RUFF
+  - PYTHON_MYPY
+  - MARKDOWN_MARKDOWNLINT
+  - MARKDOWN_MARKDOWN_TABLE_FORMATTER
+  - YAML_YAMLLINT
+  - YAML_PRETTIER
+  - REPOSITORY_GITLEAKS
+  - REPOSITORY_TRIVY
+  - SPELL_LYCHEE
+
+# Disable redundant linters to reduce runtime and false positives
+DISABLE_LINTERS:
+  - PYTHON_FLAKE8           # Redundant with ruff (0.03s vs 0.5s)
+  - PYTHON_PYLINT           # Slow (5.8s), overlaps with ruff - USE RUFF INSTEAD
+  - PYTHON_PYRIGHT          # Duplicate type checker; mypy is proven
+  - PYTHON_BANDIT           # Security linter; too specialized
+  - SPELL_CSPELL            # Too many false positives (129 errors!)
+  - REPOSITORY_CHECKOV      # IaC scanning; not applicable
+  - REPOSITORY_GRYPE        # Duplicate of trivy (27.44s runtime)
+  - REPOSITORY_KICS         # Duplicate of checkov
+  - REPOSITORY_DEVSKIM      # Redundant security scanning
+  - REPOSITORY_SECRETLINT   # Duplicate of gitleaks
+  - REPOSITORY_TRUFFLEHOG   # Duplicate of gitleaks
+  - REPOSITORY_SYFT         # SBOM generator; not needed
+  - REPOSITORY_TRIVY_SBOM   # Duplicate of syft
+  - REPOSITORY_DUSTILOCK    # Minimal value
+  - REPOSITORY_GIT_DIFF     # Internal utility
+  - COPYPASTE_JSCPD         # Copy-paste detection; optional
+
+# Python configuration
+PYTHON_BLACK_CONFIG_FILE: pyproject.toml
+PYTHON_ISORT_CONFIG_FILE: pyproject.toml
+PYTHON_MYPY_CONFIG_FILE: pyproject.toml
+PYTHON_RUFF_CONFIG_FILE: pyproject.toml
+
+# ActionLint configuration for workflow validation
+ACTION_ACTIONLINT_CONFIG_FILE: .github/actionlint.yaml
+
+# YAML formatting
+YAML_PRETTIER_ARGUMENTS: '--single-quote'
+
+# Display output options
+SHOW_ELAPSED_TIME: true
+SHOW_SKIPPED_LINTERS: true
+SHOW_LINTER_TIMINGS: true
+
+# Disable LLM advisor and flavor suggestions
+LLM_ADVISOR_ENABLED: false
+FLAVOR_SUGGESTIONS: false
+
+# Fail on errors
+DISABLE_ERRORS: false
+
+# Post comment on PR
+POST_COMMENT: true
