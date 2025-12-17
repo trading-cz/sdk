@@ -7,3 +7,6 @@ on:
 jobs:
   megalinter:
     uses: trading-cz/github-action/.github/workflows/megalinter.yml@main
+    permissions:
+      contents: write
+      pull-requests: write
