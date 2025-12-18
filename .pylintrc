@@ -4,12 +4,12 @@ ignore-patterns=^\.#
 
 [MESSAGES CONTROL]
 disable=
-    C0114,  # missing-module-docstring (optional; already in pyproject.toml)
-    C0115,  # missing-class-docstring
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring (data models are self-documenting)
     C0116,  # missing-function-docstring
-    R0903,  # too-few-public-methods
+    C0104,  # disallowed-name (business terms: 'bar', 'quote', 'trade' are domain essentials)
+    R0903,  # too-few-public-methods (domain models intentionally data-only)
     R0913,  # too-many-arguments
-    C0103,  # invalid-name (for 'bar', 'quote', etc. in domain models)
 
 [FORMAT]
 max-line-length=100
