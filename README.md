@@ -1,12 +1,25 @@
-# Trading SDK Repository
+# Trading SDK (`trading-sdk`)
 
 Shared SDK and data models for the trading platform.
 
 ## Overview
 
+- **Package name**: `trading-sdk`
+- **Namespace**: `tradingcz.model` (shared namespace pattern)
 - **Purpose**: Provide shared data models, enums, DTOs, and utilities for trading services
 - **Hand-written code**: Enums, DTOs, utilities - manually maintained
-- **Location**: Single-source package at `tradingcz/` root
+- **GitHub Releases**: Installable wheel via direct URL
+
+---
+
+## Installation
+
+```bash
+# Install from GitHub Releases (wheel URL)
+pip install https://github.com/trading-cz/sdk/releases/download/v0.0.8/trading_sdk-0.0.8-py3-none-any.whl
+```
+
+This creates the `tradingcz.model` namespace, which composes cleanly with other `tradingcz.*` packages (e.g., `tradingcz.ingestion` from ingestion-alpaca).
 
 ---
 
@@ -14,26 +27,29 @@ Shared SDK and data models for the trading platform.
 
 ```
 sdk/
-├── pyproject.toml                    # Package config
+├── pyproject.toml                    # Package config (version, namespace setup)
 ├── README.md
 │
-└── tradingcz/                        # Core package
-    └── model/
-        ├── __init__.py               # Re-exports enums + DTOs
-        │
-        ├── enums/                    # ✏️ HAND-WRITTEN - Shared enumerations
-        │   ├── timeframe.py          # Timeframe (1Min, 5Min, 1Hour, 1Day)
-        │   ├── adjustment.py         # Adjustment (raw, split, dividend, all)
-        │   └── order.py              # SortOrder, OrderSide, OrderType
-        │
-        ├── dto/                      # ✏️ HAND-WRITTEN - Data Transfer Objects
-        │   ├── bar.py                # OHLCV bar
-        │   ├── quote.py              # Bid/ask quote
-        │   ├── trade.py              # Individual trade
-        │   └── snapshot.py           # Market snapshot
-        │
-        └── utils/                    # ✏️ HAND-WRITTEN - Utilities
-            └── converters.py         # DTO ↔ Kafka schema converters
+├── tradingcz/                        # Namespace package root
+│   ├── __init__.py                   # Uses pkgutil.extend_path() for composition
+│   └── model/                        # Core models (tradingcz.model.*)
+│       ├── __init__.py               # Re-exports enums + DTOs
+│       ├── domain/                   # Data domain models
+│       │   ├── bar.py                # OHLCV bar
+│       │   ├── quote.py              # Bid/ask quote
+│       │   ├── trade.py              # Individual trade
+│   Namespace Pattern
+
+This package uses the **namespace package pattern** (PEP 420 via `pkgutil.extend_path()`):
+
+- **Distribution name**: `trading-sdk`
+- **Import namespace**: `tradingcz.model` (shared top-level `tradingcz`)
+- **Composition**: Works seamlessly with other `tradingcz.*` packages across repos
+  - `tradingcz.model` ← from `trading-sdk`
+  - `tradingcz.ingestion` ← from `ingestion-alpaca`
+  - `tradingcz.common` ← from `ingestion-alpaca`
+
+Install both wheels, and Python's import system will find all subpackages without conflicts.
 ```
 
 ### Folder Responsibilities
@@ -137,7 +153,8 @@ class Bar:
 
 ```python
 # tradingcz/model/utils/converters.py
-from tradingcz.model.dto import Quote
+from tradingcz.model.domain import Quote
+
 
 def quote_to_kafka(quote: Quote) -> dict:
     """Convert REST DTO to Kafka payload."""
@@ -203,15 +220,17 @@ pip install -e .
 # Run tests
 pytest tests/ -v
 
-# Lint with ruff
-ruff check tradingcz/
+# Validate code quality (same checks as CI)
+ruff check tradingcz/          # Fast linting (flake8 + isort checks)
+pylint tradingcz/ --disable=import-error  # Comprehensive analysis
+mypy tradingcz/                # Type checking
 
-# Type check
-mypy tradingcz/
-
-# Format code
-ruff format tradingcz/
+# Auto-fix issues
+ruff check tradingcz/ --fix    # Auto-fix ruff issues
+ruff format tradingcz/         # Format code
 ```
+
+**Note**: Both `ruff` and `pylint` are configured in `pyproject.toml` and run in CI via MegaLinter. Local dev should verify both pass before pushing.
 
 ---
 
