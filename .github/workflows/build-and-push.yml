@@ -1,4 +1,4 @@
-name: Build and Push Python Package
+name: Build and Push SDK Package
 
 on:
   push:
@@ -13,7 +13,88 @@ on:
 
 jobs:
   build-and-push:
-    uses: trading-cz/github-action/.github/workflows/python-build-wheel.yml@main
-    with:
-      python-version: '3.12'
-      pyproject-path: 'pyproject.toml'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip 'v' prefix if present (v0.0.8 -> 0.0.8)
+          VERSION="${VERSION#v}"
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+          } >> "$GITHUB_OUTPUT"
+          echo "📦 Building version: $VERSION"
+
+      - name: Verify namespace package structure
+        run: |
+          if [ ! -d "tradingcz/model" ]; then
+            echo "❌ Error: SDK models not found in tradingcz/model/"
+            exit 1
+          fi
+          echo "✅ SDK structure verified:"
+          find tradingcz -maxdepth 2 -name "*.py" | head -20
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Update version in pyproject.toml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          echo "📝 Updated pyproject.toml to version $VERSION"
+
+      - name: Build package
+        run: |
+          python -m build
+          echo "📦 Package built"
+          ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Installation via GitHub Packages
+            
+            ```bash
+            pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/trading_sdk-${{ steps.version.outputs.version }}-py3-none-any.whl
+            ```
+            
+            **Note:** This is a namespace package (`tradingcz.model`). It composes cleanly with other `tradingcz.*` packages via `pkgutil.extend_path()`.
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          REPO="${{ github.repository }}"
+          
+          {
+            echo "### 📦 trading-sdk Published to GitHub Releases"
+            echo ""
+            echo "**Version:** \`$VERSION\`"
+            echo ""
+            echo "**Release:** [$TAG](https://github.com/$REPO/releases/tag/$TAG)"
+          } >> "$GITHUB_STEP_SUMMARY"

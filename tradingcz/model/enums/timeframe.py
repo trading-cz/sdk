@@ -1,22 +1,17 @@
-"""Timeframe enumeration for historical data."""
+"""Timeframe enumeration for historical data.
+Providers must map these to their native timeframe format.
+Only includes timeframes that most providers support.
+"""
 
 from enum import Enum
 
 
 class Timeframe(str, Enum):
-    """Canonical timeframes for historical bars.
-    
-    Providers must map these to their native timeframe format.
-    Only includes timeframes that most providers support.
-    
-    Example:
-        from tradingcz.model import Timeframe
-        
-        tf = Timeframe.MINUTE_5
-        print(tf.value)  # "5Min"
-    """
     MINUTE_1 = "1Min"
     MINUTE_5 = "5Min"
     MINUTE_15 = "15Min"
+    MINUTE_30 = "30Min"
     HOUR_1 = "1Hour"
+    HOUR_4 = "4Hour"
+    HOUR_8 = "8Hour"
     DAY = "1Day"

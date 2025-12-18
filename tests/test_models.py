@@ -1,7 +1,5 @@
 """Basic test to verify trading-sdk imports work correctly."""
 
-import pytest
-
 from tradingcz.model import Bar, Quote, Trade, Timeframe, Adjustment
 
 

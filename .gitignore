@@ -43,3 +43,5 @@ generated/
 !generated/tradingcz/
 !generated/tradingcz/model/
 !generated/tradingcz/**/.gitkeep
+
+PLANS.md

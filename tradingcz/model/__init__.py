@@ -2,13 +2,12 @@
 
 This package provides:
 - Enums: Timeframe, Adjustment, SortOrder, OrderSide, OrderType
-- DTOs: Bar, Quote, Trade, Snapshot (for REST APIs and internal use)
-- Kafka schemas: Generated from Avro (in generated/ folder)
-- Converters: DTO ↔ Kafka schema utilities
+- Domain Models: Bar, Quote, Trade, Snapshot (pure dataclasses)
+- Response Models: HTTP responses and Kafka keys
 
 Usage:
     from tradingcz.model import Timeframe, Bar, Quote
-    from tradingcz.model.kafka.market_stock_quote import MarketStockQuoteValue
+    from tradingcz.model.response import BarResponse, QuoteResponse
 """
 
 from .enums import (
@@ -18,11 +17,24 @@ from .enums import (
     OrderSide,
     OrderType,
 )
-from .dto import (
+from .domain import (
     Bar,
     Quote,
     Trade,
     Snapshot,
+)
+from .response import (
+    BarResponse,
+    QuoteResponse,
+    TradeResponse,
+    SnapshotResponse,
+    bar_to_response,
+    quote_to_response,
+    trade_to_response,
+    snapshot_to_response,
+    MarketStockQuoteKey,
+    MarketStockTradeKey,
+    RawSignalKey,
 )
 
 __all__ = [
@@ -32,9 +44,21 @@ __all__ = [
     "SortOrder",
     "OrderSide",
     "OrderType",
-    # DTOs
+    # Domain Models
     "Bar",
     "Quote",
     "Trade",
     "Snapshot",
+    # Response Models
+    "BarResponse",
+    "QuoteResponse",
+    "TradeResponse",
+    "SnapshotResponse",
+    "bar_to_response",
+    "quote_to_response",
+    "trade_to_response",
+    "snapshot_to_response",
+    "MarketStockQuoteKey",
+    "MarketStockTradeKey",
+    "RawSignalKey",
 ]
