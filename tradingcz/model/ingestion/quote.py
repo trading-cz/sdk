@@ -6,12 +6,14 @@ Represents the best bid and ask prices (and sometimes sizes) at a point in time.
 # pylint: disable=duplicate-code
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(slots=True, frozen=True)
-class Quote:
+
+class Quote(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     symbol: str
     timestamp: datetime       # tz-aware UTC
     bid_price: float

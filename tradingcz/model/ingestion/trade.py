@@ -4,12 +4,14 @@ Represents a single executed trade at a point in time.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(slots=True, frozen=True)
-class Trade:  # pylint: disable=too-many-instance-attributes
+
+class Trade(BaseModel):  # pylint: disable=too-many-instance-attributes
+    model_config = ConfigDict(frozen=True)
+
     symbol: str
     timestamp: datetime       # tz-aware UTC
     price: float

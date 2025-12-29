@@ -5,14 +5,16 @@ Combines the latest trade, quote, minute bar, and daily bar in one call.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from tradingcz.model.domain.bar import Bar
-from tradingcz.model.domain.quote import Quote
-from tradingcz.model.domain.trade import Trade
+from pydantic import BaseModel, ConfigDict
+
+from tradingcz.model.ingestion.bar import Bar
+from tradingcz.model.ingestion.quote import Quote
+from tradingcz.model.ingestion.trade import Trade
 
 
-@dataclass(slots=True, frozen=True)
-class Snapshot:
+class Snapshot(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     symbol: str
     latest_trade: Trade | None = None
     latest_quote: Quote | None = None

@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0",
+    "confluent-kafka~=2.12.2",
 ]
 
 [project.optional-dependencies]
@@ -68,10 +69,6 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-v --tb=short"
 
 [tool.pylint.messages_control]
 disable = [

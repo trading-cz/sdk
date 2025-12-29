@@ -1,8 +1,3 @@
-"""Timeframe enumeration for historical data.
-Providers must map these to their native timeframe format.
-Only includes timeframes that most providers support.
-"""
-
 from enum import Enum
 
 

@@ -1,8 +1,3 @@
-"""Adjustment enumeration for corporate actions.
-Corporate action adjustment for historical bars.
-Critical for accurate backtesting - unadjusted data causes false signals.
-"""
-
 from enum import Enum
 
 

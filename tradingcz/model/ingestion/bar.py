@@ -1,12 +1,14 @@
 """Bar (OHLCV candlestick) domain model."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(slots=True, frozen=True)
-class Bar:
+
+class Bar(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     symbol: str
     timestamp: datetime       # Opening time, tz-aware UTC
     open: float

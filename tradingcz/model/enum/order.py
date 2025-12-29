@@ -1,5 +1,3 @@
-"""Order-related enumerations."""
-
 from enum import Enum
 
 
