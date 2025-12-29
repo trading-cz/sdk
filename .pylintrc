@@ -12,6 +12,7 @@ disable=
     R0913,  # too-many-arguments
     R0801,  # duplicate-code (common __all__ patterns across response models)
     C0415,  # import-outside-toplevel (lazy imports in conversion functions)
+    E0401,  # import-error (MegaLinter CI subprocess isolation prevents package visibility)
 
 [FORMAT]
 max-line-length=100
