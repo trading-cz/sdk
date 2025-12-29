@@ -32,7 +32,7 @@ class KafkaReader(Reader[KafkaKey, Any]):
                     continue
 
                 if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                    if msg.error().code() == KafkaError._PARTITION_EOF:  # pylint: disable=protected-access
                         continue
                     logger.error("Consumer error on %s: %s", self.topic, msg.error())
                     break
