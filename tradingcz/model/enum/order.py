@@ -20,6 +20,14 @@ class OrderType(str, Enum):
     STOP = "stop"               # Trigger market order at stop price
     STOP_LIMIT = "stop_limit"   # Trigger limit order at stop price
 
+class OrderClass(str, Enum):
+    """Order class, e.g. simple or bracket order."""
+    SIMPLE = "simple"       # Simple order, also ""
+    BRACKET = "bracket"     # Bracket order with either take_profit or stop_loss or both
+    OCO = "oco"             # OCO order
+    OTO = "oto"             # OTO limit order
+    MLEG = "mleg"           # For multi-leg options
+
 
 class TimeInForce(str, Enum):
     """Time for which is order live"""
