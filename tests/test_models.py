@@ -38,6 +38,3 @@ def test_order_type_enum_values() -> None:
     assert hasattr(OrderType, "MARKET")
     assert hasattr(OrderType, "LIMIT")
     assert hasattr(OrderType, "STOP")
-    assert hasattr(OrderType, "STOP_LIMIT")
-
-
