@@ -1,6 +1,6 @@
 """Basic test to verify trading-sdk imports work correctly."""
 
-from tradingcz.model import Bar, Quote, Trade, Timeframe, Adjustment
+from tradingcz.model import Adjustment, Bar, OrderSide, OrderType, Quote, Timeframe, Trade
 
 
 def test_model_imports() -> None:
@@ -27,3 +27,14 @@ def test_adjustment_enum_values() -> None:
     """Test Adjustment enum has expected values."""
     assert hasattr(Adjustment, "RAW")
     assert hasattr(Adjustment, "ALL")
+
+def test_order_side_enum_values() -> None:
+    """Test Order enum has expected values."""
+    assert hasattr(OrderSide, "BUY")
+    assert hasattr(OrderSide, "SELL")
+
+def test_order_type_enum_values() -> None:
+    """Test Order enum has expected values."""
+    assert hasattr(OrderType, "MARKET")
+    assert hasattr(OrderType, "LIMIT")
+    assert hasattr(OrderType, "STOP")
