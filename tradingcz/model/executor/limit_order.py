@@ -13,7 +13,7 @@ class LimitOrder(BaseModel):
     side: OrderSide
     time_in_force: TimeInForce
     limit_price: float
-    type: OrderType | None
+    # type: OrderType | None
     order_class: OrderClass | None
     stop_loss: dict[str, float] | None
     take_profit: dict[str, float] | None

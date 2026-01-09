@@ -12,6 +12,6 @@ class MarketOrder(BaseModel):
     qty: float
     side: OrderSide
     time_in_force: TimeInForce
-    type: OrderType | None
+    # type: OrderType | None
     order_class: OrderClass | None
     stop_loss: dict[str, float] | None
