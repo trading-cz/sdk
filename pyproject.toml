@@ -33,6 +33,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["tradingcz"]
+packages = ["tradingcz/py.typed"]
 
 [tool.hatch.build.targets.sdist]
 include = [
