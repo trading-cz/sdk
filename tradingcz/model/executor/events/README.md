@@ -1,7 +1,7 @@
 # OCA BREAKOUT STRATEGY EXAMPLE
-import uuid6
 
 # Short leg configuration
+```python
 oto_short_leg_oca_breakout = {
     "id": str(uuid6.uuid7()),
     "symbol": "SPY",
@@ -13,8 +13,9 @@ oto_short_leg_oca_breakout = {
     "order_class": "oto",
     "sl_stop_price": 648.01,
 }
-
+```
 # Long leg configuration
+```python
 oto_long_leg_oca_breakout = {
     "id": str(uuid6.uuid7()),
     "symbol": "SPY",
@@ -26,15 +27,16 @@ oto_long_leg_oca_breakout = {
     "order_class": "oto",
     "sl_stop_price": 657.99,
 }
-
+```
 # Execution request object
+```python
 execution_request_oca_breakout = {
     "id": str(uuid6.uuid7()),
     "event_type": "execution_request",
     "strategy_type": "oca_breakout",
     "market_orders": [oto_short_leg_oca_breakout, oto_long_leg_oca_breakout],
 }
-
+```
 """
 NOTE: API Validation Error Reference
 alpaca.common.exceptions.APIError: {
