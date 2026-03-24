@@ -11,6 +11,8 @@ disable=
     R0903,  # too-few-public-methods (domain models intentionally data-only)
     R0913,  # too-many-arguments
     R0801,  # duplicate-code (common __all__ patterns across response models)
+    C0301,  # line too long
+    C0305,  # trailing newlines
     C0415,  # import-outside-toplevel (lazy imports in conversion functions)
     E0401,  # import-error (MegaLinter CI subprocess isolation prevents package visibility)
 
