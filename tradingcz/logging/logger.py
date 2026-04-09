@@ -1,61 +1,55 @@
-"""Global logging for the application."""
+"""Logging setup"""
 
 import logging
 import sys
-from typing import Any
 
-_ALLOWED_PREFIXES = ("tradingcz", "__main__")
-
-
-class AllowlistFilter(logging.Filter):
-    """Only pass log records whose logger name starts with an allowed prefix."""
-
-    def __init__(self, allowed_prefixes: list[str]) -> None:
-        super().__init__()
-        self.allowed_prefixes = tuple(allowed_prefixes)
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        return record.name.startswith(self.allowed_prefixes)
+_INTERNAL_PREFIXES = ["tradingcz", "__main__"]
 
 
-def setup_logging() -> None:  # env: str) -> None:
-    """Configure application-wide logging.
+# class DynamicAllowlistFilter(logging.Filter):
+#     """Only pass log records whose name starts with an allowed prefix."""
 
-    Writes INFO and below to stdout, WARNING and above to stderr.
-    Restricts output to log records whose logger name starts
-    with one of the provided prefixes.
+#     def __init__(self, allowed_prefixes: list[str]) -> None:
+#         super().__init__()
+#         self.allowed_prefixes = tuple(allowed_prefixes)
+
+#     def filter(self, record: logging.LogRecord) -> bool:
+#         # startswith() handles sub-loggers (e.g., 'kafka.producer') automatically
+#         return record.name.startswith(self.allowed_prefixes)
+
+
+def setup_logging(app_level: str = "INFO", external_loggers: dict[str, str] | None = None) -> None:
     """
+    Configure logging with a dynamic allowlist.
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
 
-    formatter: logging.Formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    Args:
+        app_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        external_loggers: Optional dict of external logger names and their desired log level
+                         (e.g.,: {"kafka": "WARNING", "alpaca": "DEBUG"}
+    """
+    format_string = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-    allowlist = AllowlistFilter(_ALLOWED_PREFIXES)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    if external_loggers:
+        for name, level_str in external_loggers.items():
+            level = getattr(logging, level_str.upper(), logging.WARNING)
+            logging.getLogger(name).setLevel(level)
+
+    for prefix in _INTERNAL_PREFIXES:
+        logging.getLogger(prefix).setLevel(getattr(logging, app_level.upper()))
 
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(formatter)
-    stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
-    stdout_handler.addFilter(allowlist)
-    logger.addHandler(stdout_handler)
 
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setFormatter(formatter)
-    stderr_handler.setLevel(logging.WARNING)
-    stderr_handler.addFilter(allowlist)
-    logger.addHandler(stderr_handler)
+    stdout_handler.setFormatter(format_string)
+
+    root_logger.addHandler(stdout_handler)
 
     logging.captureWarnings(True)
-    logging.getLogger("py.warnings").addHandler(stderr_handler)
-
     sys.excepthook = handle_exception
 
-
-def handle_exception(
-    exc_type: type[BaseException],
-    exc_value: BaseException,
-    exc_traceback: Any,
-) -> None:
+def handle_exception(exc_type, exc_value, exc_traceback):
     """Handle uncaught exceptions."""
-
-    logging.error("Uncaught exception (be custom)", exc_info=(exc_type, exc_value, exc_traceback))
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
