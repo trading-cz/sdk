@@ -52,7 +52,7 @@ class EventBus:
         async for msg in self._channel.receive():
             try:
                 event = parse_event(msg.payload)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 logger.warning("Failed to parse event: %s", msg.payload[:200])
                 continue
             if match(event):

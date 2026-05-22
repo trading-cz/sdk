@@ -2,7 +2,7 @@
 """
 from pydantic import BaseModel, ConfigDict
 
-from tradingcz.model.enum.order import OrderClass, OrderSide, OrderType, TimeInForce
+from tradingcz.model.enum.order import OrderClass, OrderSide, TimeInForce
 
 
 class MarketOrder(BaseModel):

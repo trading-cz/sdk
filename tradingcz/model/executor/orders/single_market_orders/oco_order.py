@@ -5,7 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from tradingcz.executor.sdk.enum.enums import OrderClass, OrderSide, TimeInForce
+from tradingcz.model.enum.order import OrderClass, OrderSide, TimeInForce
 
 
 class OcoOrderRequest(BaseModel):

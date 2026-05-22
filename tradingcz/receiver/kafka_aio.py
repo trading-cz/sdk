@@ -148,7 +148,7 @@ class AioKafkaReceiverTransport:
             async for msg in self._consumer:
                 try:
                     event = parse_event(msg.value)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     logger.debug("Skipping unparseable event message")
                     continue
 
@@ -161,5 +161,5 @@ class AioKafkaReceiverTransport:
                         fut.set_result(event)
         except asyncio.CancelledError:
             pass
-        except Exception:
-            logger.exception("Response listener crashed")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.exception("Response listener crashed: %s", exc)
