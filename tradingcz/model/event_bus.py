@@ -28,8 +28,7 @@ class EventBus:
     async def send(self, event: BaseModel) -> None:
         """Serialize and publish an event to the events channel.
 
-        Key is a JSON object with routing metadata — built here so app code
-        never touches Kafka key formatting directly.
+        Key is a JSON object with routing metadata — built here so app code never touches Kafka key formatting directly.
         """
         payload = event.model_dump_json().encode()
         key = json.dumps({
