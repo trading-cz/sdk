@@ -44,7 +44,7 @@ class KafkaReader(Reader[KafkaKey, Any]):
                     key = KafkaKey.from_json(msg.key())
                     value = json.loads(msg.value())
                     callback(key, value)
-                except Exception as exc:  # noqa: BLE001 - callbacks may raise
+                except Exception as exc:  # pylint: disable=broad-exception-caught
                     logger.exception("Error processing message on %s: %s", self.topic, exc)
                     continue
 

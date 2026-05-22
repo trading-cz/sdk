@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
-from tradingcz.executor.sdk.enum.enums import (
+from tradingcz.model.enum.order import (
     OrderClass,
     OrderSide,
     OrderStatus,

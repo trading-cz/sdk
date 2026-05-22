@@ -8,10 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tradingcz.model.enum.order import OrderClass, OrderSide, OrderStatus, TimeInForce
 
-# will not use sdk in dev
-# from tradingcz.model.enum.order import OrderClass, OrderSide, TimeInForce
-
-
 # TODO Fields number and format is not final
 # TODO na poradi orderu nezalezi
 
@@ -27,7 +23,7 @@ class SingleOrderRequest(BaseModel):
     order_status: OrderStatus | None = Field(default=None, description="Order status")
     timestamp_placeholder: datetime | None = Field(
         default=None,
-        description="Timestamp for something TBD",  # TODO
+        description="Timestamp for something TBD",
     )
     # Basic order fields for simple orders
     symbol: str = Field(..., description="Ticker symbol", min_length=1)

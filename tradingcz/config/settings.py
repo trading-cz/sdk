@@ -1,4 +1,7 @@
-"""Application configuration settings."""
+"""Application configuration settings.
+
+Shared settings classes used by ingestion, strategy, and other services.
+"""
 
 from __future__ import annotations
 
@@ -19,3 +22,18 @@ class LoggingSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="LOG_", extra="ignore")
     level: str = Field("INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)")
+
+
+class KafkaSettings(BaseSettings):
+    """Kafka transport configuration.
+
+    Environment variables:
+        KAFKA_BOOTSTRAP_SERVERS  — broker addresses (default: localhost:9092)
+        KAFKA_EVENTS_TOPIC       — control-plane topic name (default: event)
+        KAFKA_CONSUMER_GROUP     — consumer group id (default: service)
+    """
+
+    model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
+    bootstrap_servers: str = "localhost:9092"
+    events_topic: str = "event"
+    consumer_group: str = "service"
