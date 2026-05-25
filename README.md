@@ -45,8 +45,8 @@ sdk/
 │   │   ├── events.py            # DataRequest, DataReady, DataError, parse_event
 │   │   ├── signal.py            # TradingSignal, build_signal
 │   │   ├── event_bus.py         # EventBus (JSON send/listen over Channel)
-│   │   ├── kafka_key.py         # KafkaKey helper
-│   │   └── encoder/             # JSON serialization mixins
+│   │   ├── kafka_key.py         # KafkaKey helper (support for multiple topic keys)
+│   │   └── executor/            # Executor-specific models (reserved for future)
 │   │
 │   ├── transport/
 │   │   ├── __init__.py          # Exports: Channel, Message, Transport, KafkaChannel, KafkaTransport
@@ -57,13 +57,9 @@ sdk/
 │   │   ├── __init__.py          # Exports: AioKafkaReceiverTransport
 │   │   └── kafka_aio.py         # Async Kafka request/response transport (aiokafka)
 │   │
-│   ├── indicators/
-│   │   ├── __init__.py          # Exports: calculate_atr
-│   │   └── atr.py               # ATR indicator (Wilder method)
-│   │
-│   ├── io/                      # Reader/Writer ABCs (legacy)
-│   ├── lang/                    # Version/utility helpers
-│   └── logging/                 # setup_logging utility
+│   └── indicators/
+│       ├── __init__.py          # Exports: calculate_atr
+│       └── atr.py               # ATR indicator (Wilder method)
 ```
 
 ---
