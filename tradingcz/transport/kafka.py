@@ -11,6 +11,7 @@ import logging
 from collections.abc import AsyncIterator
 
 from confluent_kafka import Consumer, Producer
+from confluent_kafka.admin import AdminClient, NewTopic
 
 from tradingcz.transport.protocol import Channel, Message, Transport
 
@@ -29,10 +30,24 @@ class KafkaSettings:
         bootstrap_servers: str = "localhost:9092",
         events_topic: str = "event",
         consumer_group: str = "service",
+        auto_offset_reset: str = "latest",
+        consumer_poll_timeout: float = 1.0,
+        default_num_partitions: int = 5,
+        default_replication_factor: int = 1,
+        default_retention_ms: int = 432000000,
+        producer_overrides: dict[str, str] | None = None,
+        consumer_overrides: dict[str, str] | None = None,
     ) -> None:
         self.bootstrap_servers = bootstrap_servers
         self.events_topic = events_topic
         self.consumer_group = consumer_group
+        self.auto_offset_reset = auto_offset_reset
+        self.consumer_poll_timeout = consumer_poll_timeout
+        self.default_num_partitions = default_num_partitions
+        self.default_replication_factor = default_replication_factor
+        self.default_retention_ms = default_retention_ms
+        self.producer_overrides: dict[str, str] = producer_overrides or {}
+        self.consumer_overrides: dict[str, str] = consumer_overrides or {}
 
 
 class KafkaChannel(Channel):
@@ -52,37 +67,41 @@ class KafkaChannel(Channel):
         return self._topic
 
     async def send(self, payload: bytes, *, key: str = "") -> None:
-        """Produce a message to the Kafka topic."""
+        """Produce a message to the Kafka topic.
+
+        produce() is a fast local enqueue into librdkafka's internal buffer —
+        it never blocks (raises BufferError if queue is full). Calling it
+        directly on the asyncio thread is safe and avoids executor overhead.
+        poll(0) drains delivery callbacks without blocking.
+        Actual network delivery is done by librdkafka's background thread.
+        For guaranteed delivery on shutdown, call transport.close().
+        """
         key_bytes = key.encode() if key else None
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: self._producer.produce(
-                self._topic,
-                value=payload,
-                key=key_bytes,
-            ),
-        )
+        self._producer.produce(self._topic, value=payload, key=key_bytes)
         self._producer.poll(0)
 
     async def receive(self) -> AsyncIterator[Message]:
         """Subscribe and yield messages from this Kafka topic.
 
-        Creates a new consumer with a unique group suffix for fan-out.
+        Consumer config is built from settings base values merged with
+        consumer_overrides, allowing any librdkafka parameter to be tuned
+        at runtime via KAFKA_CONSUMER_OVERRIDES env var.
         Runs poll in a thread executor to avoid blocking asyncio.
         """
-        consumer = Consumer({
+        base_consumer_config: dict[str, str | bool] = {
             "bootstrap.servers": self._settings.bootstrap_servers,
             "group.id": f"{self._settings.consumer_group}-{self._topic}",
-            "auto.offset.reset": "latest",
-            "enable.auto.commit": True,
-        })
+            "auto.offset.reset": self._settings.auto_offset_reset,
+            "enable.auto.commit": "true",
+        }
+        consumer = Consumer({**base_consumer_config, **self._settings.consumer_overrides})
         consumer.subscribe([self._topic])
         loop = asyncio.get_running_loop()
+        poll_timeout = self._settings.consumer_poll_timeout
 
         try:
             while True:
-                msg = await loop.run_in_executor(None, lambda: consumer.poll(1.0))
+                msg = await loop.run_in_executor(None, lambda: consumer.poll(poll_timeout))
                 if msg is None:
                     continue
                 if msg.error():
@@ -98,19 +117,63 @@ class KafkaChannel(Channel):
 
 
 class KafkaTransport(Transport):
-    """Kafka-backed transport — one shared producer, cached channels."""
+    """Kafka-backed transport — one shared producer, cached channels.
+
+    Topics are created on first use via Admin API if they don't already exist,
+    ensuring the correct partition count and replication factor.
+    """
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
-        self._producer = Producer({
+        base_producer_config: dict[str, str] = {
             "bootstrap.servers": settings.bootstrap_servers,
-        })
+            "linger.ms": "5",  # default: micro-batch window; override via KAFKA_PRODUCER_OVERRIDES
+        }
+        self._producer = Producer({**base_producer_config, **settings.producer_overrides})
+        self._admin = AdminClient({"bootstrap.servers": settings.bootstrap_servers})
         self._channels: dict[str, KafkaChannel] = {}
+        self._topics_created: set[str] = set()
 
-    async def channel(self, name: str) -> Channel:
+    async def channel(self, name: str, num_partitions: int | None = None) -> Channel:
+        """Get or create a Kafka channel for *name*.
+
+        If the topic does not exist, it is created with *num_partitions*
+        (defaulting to ``settings.default_num_partitions``).
+        """
         if name not in self._channels:
+            partitions = num_partitions if num_partitions is not None else self._settings.default_num_partitions
+            await self._ensure_topic(name, partitions)
             self._channels[name] = KafkaChannel(name, self._producer, self._settings)
         return self._channels[name]
+
+    async def _ensure_topic(self, name: str, num_partitions: int) -> None:
+        """Create the topic via Admin API if it doesn't already exist."""
+        if name in self._topics_created:
+            return
+        loop = asyncio.get_running_loop()
+        # Check if topic already exists
+        metadata = await loop.run_in_executor(None, lambda: self._admin.list_topics(timeout=10))
+        if name in metadata.topics:
+            self._topics_created.add(name)
+            return
+        # Create the topic
+        new_topic = NewTopic(
+            name,
+            num_partitions=num_partitions,
+            replication_factor=self._settings.default_replication_factor,
+            config={"retention.ms": str(self._settings.default_retention_ms)},
+        )
+        futures = await loop.run_in_executor(
+            None,
+            lambda: self._admin.create_topics([new_topic]),
+        )
+        for topic, future in futures.items():
+            try:
+                future.result()
+                logger.info("Created Kafka topic: %s (partitions=%d)", topic, num_partitions)
+            except Exception as exc:
+                logger.warning("Topic %s may already exist: %s", topic, exc)
+        self._topics_created.add(name)
 
     async def close(self) -> None:
         """Flush producer and close all channels."""

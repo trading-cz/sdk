@@ -48,11 +48,19 @@ class EventBus:
         Deserializes each message and applies the predicate.
         Creates an independent subscriber (fan-out).
         """
+        logger.info("EventBus listen() starting on channel %s", self._channel.name)
+        msg_count = 0
         async for msg in self._channel.receive():
+            msg_count += 1
+            if msg_count % 100 == 0 or msg_count <= 5:
+                logger.debug("EventBus: received message #%d from %s", msg_count, self._channel.name)
             try:
                 event = parse_event(msg.payload)
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.warning("Failed to parse event: %s", msg.payload[:200])
                 continue
             if match(event):
+                logger.debug("EventBus: event matched, yielding: %s", event.event_type)
                 yield event
+            else:
+                logger.debug("EventBus: event not matched: %s", event.event_type)
