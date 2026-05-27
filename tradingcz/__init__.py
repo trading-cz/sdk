@@ -20,8 +20,6 @@ Public SDK API (stable):
     - tradingcz.indicators  — ATR, SMA, etc.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from pkgutil import extend_path
 

@@ -5,15 +5,10 @@ Layer 1 of the transport stack — sits above ``Channel`` (bytes)
 and below ``TypedProducer`` / ``TypedConsumer`` (typed models).
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
 
 
-class Serializer(ABC, Generic[T]):
+class Serializer[T](ABC):
     """Serialize typed values to raw bytes."""
 
     @abstractmethod
@@ -24,8 +19,16 @@ class Serializer(ABC, Generic[T]):
     def content_type(self) -> str:
         """MIME type of the serialized form (e.g. ``"application/json"``)."""
 
+    def serialize_batch(self, values: list[T]) -> list[bytes]:
+        """Serialize a batch of values.
 
-class Deserializer(ABC, Generic[T]):
+        Default implementation calls ``serialize()`` for each value.
+        Override for more efficient bulk serialization.
+        """
+        return [self.serialize(v) for v in values]
+
+
+class Deserializer[T](ABC):
     """Deserialize raw bytes to typed values."""
 
     @abstractmethod
@@ -33,5 +36,5 @@ class Deserializer(ABC, Generic[T]):
         """Parse *payload* into a typed value."""
 
 
-class Codec(Serializer[T], Deserializer[T], ABC):
+class Codec[T](Serializer[T], Deserializer[T], ABC):
     """Combined serializer + deserializer for a given type ``T``."""

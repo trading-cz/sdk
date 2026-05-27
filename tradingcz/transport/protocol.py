@@ -4,8 +4,6 @@ Layer 0: moves bytes through named channels.
 No knowledge of events, models, or serialization.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass

@@ -5,8 +5,6 @@ All models carry ``event_type`` as a literal discriminator for
 Pydantic discriminated-union parsing.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import uuid4

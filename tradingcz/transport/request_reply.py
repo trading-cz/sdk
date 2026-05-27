@@ -24,23 +24,17 @@ Usage::
         response = await client.request(my_data_request)
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Generic, TypeVar
 
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.protocol import Channel
 
 logger = logging.getLogger(__name__)
 
-Req = TypeVar("Req")
-Resp = TypeVar("Resp")
 
-
-class RequestReplyClient(Generic[Req, Resp]):
+class RequestReplyClient[Req, Resp]:
     """Async request-reply over a shared transport Channel.
 
     Publish requests with ``request()`` and await correlated responses.

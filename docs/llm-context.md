@@ -69,4 +69,8 @@ async for request in consumer.consume():              # natively async
 ```
 
 ---
+to use venv in python we used this command
+ls -la .venv 2>/dev/null || echo "No .venv found" && python3.14 -m venv .venv 2>&1 && .venv/bin/pip install -e ".[dev]" 2>&1
+
+
 **Next task**: [PASTE YOUR STEP HERE]

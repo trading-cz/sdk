@@ -10,18 +10,12 @@ Usage::
     bar2 = codec.deserialize(payload)       # Bar
 """
 
-from __future__ import annotations
-
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel
 
 from tradingcz.serialization.protocol import Codec
 
-T = TypeVar("T", bound=BaseModel)
 
-
-class JsonCodec(Codec[T], Generic[T]):
+class JsonCodec[T: BaseModel](Codec[T]):
     """JSON codec backed by Pydantic ``model_dump_json`` / ``model_validate_json``.
 
     Type parameter ``T`` must be a Pydantic ``BaseModel`` subclass.

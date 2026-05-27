@@ -2,7 +2,6 @@
 Individual trade (tick) - for tick-level analysis.
 Represents a single executed trade at a point in time.
 """
-from __future__ import annotations
 
 from datetime import datetime
 

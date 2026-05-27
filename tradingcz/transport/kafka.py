@@ -7,8 +7,6 @@ One ``KafkaChannel`` per topic, one shared ``AIOProducer`` per transport.
 All librdkafka parameters are configurable via ``KafkaSettings`` overrides.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import AsyncIterator

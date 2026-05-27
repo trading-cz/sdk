@@ -4,7 +4,6 @@ Level 1 market data (best bid/ask) useful for spread analysis and order routing.
 Represents the best bid and ask prices (and sometimes sizes) at a point in time.
 """
 # pylint: disable=duplicate-code
-from __future__ import annotations
 
 from datetime import datetime
 

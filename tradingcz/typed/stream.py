@@ -14,18 +14,13 @@ Services compose these for their specific needs::
     await producer.send(signal)
 """
 
-from __future__ import annotations
-
-from collections.abc import AsyncIterator
-from typing import Callable, Generic, TypeVar
+from collections.abc import AsyncIterator, Callable
 
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.protocol import Channel
 
-T = TypeVar("T")
 
-
-class TypedProducer(Generic[T]):
+class TypedProducer[T]:
     """Publish typed values to a channel.
 
     Generic in the message type ``T``.  Uses a ``Serializer[T]`` to
@@ -59,7 +54,7 @@ class TypedProducer(Generic[T]):
         await self._channel.send(payload, key=key)
 
 
-class TypedConsumer(Generic[T]):
+class TypedConsumer[T]:
     """Consume typed values from a channel.
 
     Generic in the message type ``T``.  Uses a ``Deserializer[T]``

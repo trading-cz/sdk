@@ -15,8 +15,6 @@ Usage (in any service)::
     key = TopicRegistry.partition_key("ingestion", "AAPL")
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 

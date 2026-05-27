@@ -11,8 +11,6 @@ Or with overrides:
     KAFKA_BOOTSTRAP_SERVERS=46.224.59.47:30002 .venv/bin/python smoke_test.py
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import os

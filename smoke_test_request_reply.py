@@ -20,8 +20,6 @@ Usage:
     kcat -b 46.224.59.47:30002 -t dev-event -C -f 'key=%k\\nvalue=%s\\n---\\n'
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import sys
