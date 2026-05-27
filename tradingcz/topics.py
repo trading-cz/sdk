@@ -4,6 +4,13 @@ Replaces the previously lost ``tradingcz.kafka.Topics`` and ``tradingcz.kafka.ke
 modules.  Provides hyphen-separated, K8s-safe, environment-scoped topic names
 (e.g. ``dev-event``, ``dev-market-data``).
 
+Topic names are environment-scoped for security isolation
+(``dev-market-data`` and ``prd-market-data`` are separate topics).
+
+JSON Key helpers produce Pydantic-serialized JSON keys for each topic type.
+All message keys MUST be JSON — never plain strings — for consistent tooling
+and schema validation.
+
 Usage (in any service)::
 
     from tradingcz.topics import TopicConfig, TopicRegistry
@@ -11,11 +18,12 @@ Usage (in any service)::
     topics = TopicRegistry(env="dev")
     channel = await transport.channel(topics.market_data.name)
 
-    # Partition key for symbol-grouped data:
-    key = TopicRegistry.partition_key("ingestion", "AAPL")
+    # Market-data JSON key (NOT a plain string):
+    key = topics.market_data_key("ingestion", "alpaca", "AAPL")
+    # → '{"source":"ingestion","broker":"alpaca","symbol":"AAPL","ts":"...",}'
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,39 +87,68 @@ class TopicRegistry:
         return f"{self.market_data.name}-historical-{request_id}"
 
     # ------------------------------------------------------------------
-    # Partition key helpers
+    # JSON key generators — one per topic type
     # ------------------------------------------------------------------
 
     @staticmethod
-    def partition_key(source: str, symbol: str) -> str:
-        """Deterministic partition key for symbol-grouped data.
+    def control_plane_key(
+        event_type: str,
+        source: str,
+        request_id: str,
+    ) -> str:
+        """JSON key for control-plane messages on the events topic.
 
-        Co-locates all messages for a given (source, symbol) pair on
-        the same Kafka partition, preserving order within that partition.
+        Used for DataRequest, DataReady, and DataError messages.
 
         Args:
-            source: Origin service name (e.g. ``"ingestion"``).
-            symbol: Ticker symbol (e.g. ``"AAPL"``).
+            event_type: ``"data_request"``, ``"data_ready"``, or ``"data_error"``.
+            source: App identifier (e.g. ``"smoke_test"``, ``"ingestion"``).
+            request_id: Correlation ID linking request to response.
 
         Returns:
-            A string key suitable for Kafka message keys.
+            JSON string like ``'{"event_type":"data_request","source":"smoke_test",...}'``.
 
         Example::
 
-            key = TopicRegistry.partition_key("ingestion", "AAPL")
-            # key == "ingestion:AAPL"
+            key = TopicRegistry.control_plane_key(
+                "data_request", "smoke_test", request_id,
+            )
         """
-        return f"{source}:{symbol}"
+        from tradingcz.model.kafka_key import ControlPlaneKey  # pylint: disable=import-outside-toplevel
+
+        return ControlPlaneKey(
+            event_type=event_type,
+            source=source,
+            request_id=request_id,
+        ).model_dump_json()
 
     @staticmethod
-    def signal_key(strategy_id: str, symbol: str) -> str:
-        """Partition key for trading signals.
+    def market_data_key(
+        source: str,
+        broker: str,
+        symbol: str,
+    ) -> str:
+        """JSON key for market-data messages (Trade, Quote, Bar).
+
+        Co-locates all data for a given (broker, symbol) pair on the same
+        Kafka partition.
 
         Args:
-            strategy_id: Strategy identifier (e.g. ``"pcb_breakout"``).
-            symbol: Ticker symbol.
+            source: Origin service (e.g. ``"ingestion"``).
+            broker: Broker identifier (e.g. ``"alpaca"``).
+            symbol: Ticker symbol (e.g. ``"AAPL"``).
 
         Returns:
-            Key string like ``"pcb_breakout:AAPL"``.
+            JSON string like ``'{"source":"ingestion","broker":"alpaca","symbol":"AAPL",...}'``.
+
+        Example::
+
+            key = TopicRegistry.market_data_key("ingestion", "alpaca", "AAPL")
         """
-        return f"{strategy_id}:{symbol}"
+        from tradingcz.model.kafka_key import MarketDataKey  # pylint: disable=import-outside-toplevel
+
+        return MarketDataKey(
+            source=source,
+            broker=broker,
+            symbol=symbol,
+        ).model_dump_json()

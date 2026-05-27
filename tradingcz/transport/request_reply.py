@@ -71,6 +71,7 @@ class RequestReplyClient[Req, Resp]:
         response_deserializer: Deserializer[Resp],
         request_id_of: Callable[[Req], str],
         response_id_of: Callable[[Resp], str],
+        key_fn: Callable[[Req], str] | None = None,
         timeout: float = 30.0,
     ) -> None:
         """Create a new request-reply client.
@@ -82,6 +83,11 @@ class RequestReplyClient[Req, Resp]:
             response_deserializer: Parses bytes into ``Resp``.
             request_id_of: Extract the correlation ID from a request.
             response_id_of: Extract the correlation ID from a response.
+            key_fn: Optional function to compute the Kafka message key
+                    from a request.  If omitted, ``request_id_of(req)``
+                    is used as the key (plain string).  Provide a JSON
+                    key function (e.g. ``TopicRegistry.control_plane_key``)
+                    for typed, tooling-friendly keys.
             timeout: Per-request timeout in seconds.
         """
         self._channel = channel
@@ -89,6 +95,7 @@ class RequestReplyClient[Req, Resp]:
         self._response_deserializer = response_deserializer
         self._request_id_of = request_id_of
         self._response_id_of = response_id_of
+        self._key_fn: Callable[[Req], str] = key_fn or request_id_of
         self._timeout = timeout
         self._pending: dict[str, asyncio.Future[Resp]] = {}
         self._listen_task: asyncio.Task[None] | None = None
@@ -135,9 +142,10 @@ class RequestReplyClient[Req, Resp]:
     async def request(self, req: Req) -> Resp:
         """Publish *req* and wait for a correlated response.
 
-        The request is serialized and published to the channel with
-        the correlation ID as the message key.  The background listener
-        matches incoming responses by ID.
+        The request is serialized and published to the channel.
+        The message key is computed by ``key_fn(req)`` (defaults to
+        ``request_id_of(req)``).  The background listener matches
+        incoming responses by ID extracted from the response value.
 
         Returns:
             The matched response of type ``Resp``.
@@ -147,7 +155,8 @@ class RequestReplyClient[Req, Resp]:
         """
         payload = self._request_serializer.serialize(req)
         req_id = self._request_id_of(req)
-        await self._channel.send(payload, key=req_id)
+        msg_key = self._key_fn(req)
+        await self._channel.send(payload, key=msg_key)
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
         self._pending[req_id] = future
