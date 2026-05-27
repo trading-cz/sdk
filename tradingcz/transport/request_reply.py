@@ -120,7 +120,7 @@ class RequestReplyClient[Req, Resp]:
             try:
                 await self._listen_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("RequestReplyClient listener task cancelled")
         for future in self._pending.values():
             if not future.done():
                 future.cancel()

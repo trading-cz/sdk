@@ -223,5 +223,5 @@ class KafkaTransport(Transport):
             try:
                 await self._producer.close()  # type: ignore[attr-defined]
             except AttributeError:
-                pass
+                logger.debug("AIOProducer.close() not available — skipping")
         self._channels.clear()
