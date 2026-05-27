@@ -81,26 +81,6 @@ class TopicRegistry:
         return f"{self.market_data.name}-historical-{request_id}"
 
     # ------------------------------------------------------------------
-    # Backward-compatibility aliases (match the old tradingcz.kafka.Topics)
-    # ------------------------------------------------------------------
-
-    @property
-    def stream_data(self) -> str:
-        """Deprecated alias for ``market_data.name``.
-
-        .. deprecated:: 0.1.0
-            Use ``registry.market_data.name`` instead.
-        """
-        import warnings  # pylint: disable=import-outside-toplevel
-
-        warnings.warn(
-            "TopicRegistry.stream_data is deprecated; use registry.market_data.name",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.market_data.name
-
-    # ------------------------------------------------------------------
     # Partition key helpers
     # ------------------------------------------------------------------
 
@@ -137,40 +117,3 @@ class TopicRegistry:
             Key string like ``"pcb_breakout:AAPL"``.
         """
         return f"{strategy_id}:{symbol}"
-
-
-# ------------------------------------------------------------------
-# Backward-compatibility function aliases (match old tradingcz.kafka.keys)
-# ------------------------------------------------------------------
-
-
-def data_key(source: str, symbol: str) -> str:
-    """Build a Kafka message key for market data.
-
-    .. deprecated:: 0.1.0
-        Use ``TopicRegistry.partition_key(source, symbol)`` instead.
-    """
-    import warnings  # pylint: disable=import-outside-toplevel
-
-    warnings.warn(
-        "data_key() is deprecated; use TopicRegistry.partition_key(source, symbol)",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return TopicRegistry.partition_key(source, symbol)
-
-
-def signal_key(strategy_id: str, symbol: str) -> str:
-    """Build a Kafka message key for trading signals.
-
-    .. deprecated:: 0.1.0
-        Use ``TopicRegistry.signal_key(strategy_id, symbol)`` instead.
-    """
-    import warnings  # pylint: disable=import-outside-toplevel
-
-    warnings.warn(
-        "signal_key() is deprecated; use TopicRegistry.signal_key(strategy_id, symbol)",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return TopicRegistry.signal_key(strategy_id, symbol)
