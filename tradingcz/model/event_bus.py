@@ -1,9 +1,40 @@
 """EventBus — send and listen for typed events over the events channel.
 
+.. deprecated:: 0.1.0
+    ``EventBus`` is deprecated.  Use ``TypedProducer`` and ``TypedConsumer``
+    from ``tradingcz.typed`` instead.  They are generic, work with any model
+    type, and don't couple the transport layer to specific event schemas.
+
+    Before::
+
+        bus = EventBus(channel)
+        await bus.send(event)
+        async for e in bus.listen(match_fn):
+            ...
+
+    After::
+
+        producer = TypedProducer(channel, JsonCodec(MyEvent), key_fn=...)
+        await producer.send(event)
+
+        consumer = TypedConsumer(channel, JsonCodec(MyEvent))
+        async for e in consumer.consume():
+            if match_fn(e):
+                ...
+
 Thin layer over a Channel that adds JSON serialization and
 predicate-based filtering. No request/response correlation —
 that logic lives in handlers.
 """
+
+import warnings
+
+warnings.warn(
+    "EventBus is deprecated; use tradingcz.typed.TypedProducer and "
+    "tradingcz.typed.TypedConsumer instead. See docs/transport-redesign-plan.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from __future__ import annotations
 

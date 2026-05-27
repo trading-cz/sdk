@@ -9,6 +9,15 @@ When installing in editable mode from a local checkout, the project root is on
 `sys.path`, but `generated/` is not necessarily on `sys.path`. This shim ensures
 that `generated/tradingcz` is discoverable, making `import tradingcz.model...`
 work consistently for local development.
+
+Public SDK API (stable):
+    - tradingcz.transport   — Channel, Transport, KafkaTransport
+    - tradingcz.serialization — Serializer, Deserializer, Codec, JsonCodec
+    - tradingcz.typed       — TypedProducer, TypedConsumer
+    - tradingcz.topics      — TopicConfig, TopicRegistry
+    - tradingcz.config      — KafkaSettings, ServerSettings
+    - tradingcz.model       — Bar, Quote, Trade, TradingSignal, etc.
+    - tradingcz.indicators  — ATR, SMA, etc.
 """
 
 from __future__ import annotations
