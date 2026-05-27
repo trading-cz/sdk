@@ -5,5 +5,9 @@ plus ephemeral data-topic consumption for receiving market data.
 """
 
 from tradingcz.receiver.kafka_aio import AioKafkaReceiverTransport
+from tradingcz.receiver.kafka_confluent import ConfluenceKafkaReceiverTransport
 
-__all__ = ["AioKafkaReceiverTransport"]
+__all__ = [
+    "AioKafkaReceiverTransport",  # Legacy: aiokafka-based
+    "ConfluenceKafkaReceiverTransport",  # New: confluent-kafka-based
+]
