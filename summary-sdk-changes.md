@@ -7,34 +7,53 @@ Use this when updating SDK client apps (simple-strategy, ingestion, executor, et
 
 ---
 
-## 1. `topics.py` Moved to `transport/topics.py`
+## 1. Transport Package Restructured — `kafka/` Subpackage
 
-**Rationale**: `topics.py` is 100% Kafka-specific (topic names, partitions, replication factor,
-retention policies). These concepts don't exist in REST/WebSocket/gRPC transports.
-Moving it into `transport/` groups all transport-layer code together and keeps the
-abstract protocol (`protocol.py`) cleanly separated from Kafka implementation details.
+**Rationale**: The `transport/` package now has a clean separation:
+- **Transport-agnostic** (`transport/*.py`): `protocol.py`, `stream.py`, `request_reply.py`
+- **Kafka-specific** (`transport/kafka/`): `channel.py`, `topics.py`
 
-### Import change
+If REST, gRPC, or WebSocket transports are added later, they go into sibling subpackages
+(`transport/rest/`, `transport/grpc/`, etc.).
+
+### New package layout
+```
+tradingcz/transport/
+├── __init__.py           # Re-exports all public API
+├── protocol.py           # Abstract: Channel, Transport, Message
+├── stream.py             # TypedProducer[T], TypedConsumer[T]  (was typed/)
+├── request_reply.py      # RequestReplyClient[Req, Resp]
+└── kafka/
+    ├── __init__.py       # Re-exports KafkaChannel, KafkaTransport, TopicRegistry
+    ├── channel.py        # KafkaChannel, KafkaTransport  (was transport/kafka.py)
+    └── topics.py         # TopicRegistry, TopicConfig    (was transport/topics.py)
+```
+
+### Import changes
 
 ```python
 # Before
-from tradingcz.topics import TopicRegistry, TopicConfig
+from tradingcz.topics import TopicRegistry                              # old top-level
+from tradingcz.transport.topics import TopicRegistry                    # after first move
+from tradingcz.typed import TypedProducer, TypedConsumer                # old typed/
 
 # After
-from tradingcz.transport.topics import TopicRegistry, TopicConfig
+from tradingcz.transport.kafka import TopicRegistry                     # Kafka-specific
+from tradingcz.transport import TypedProducer, TypedConsumer            # transport-agnostic
 ```
 
-Also available via the transport package re-export:
+All symbols are also re-exported from `tradingcz.transport` for convenience:
 ```python
-from tradingcz.transport import TopicRegistry, TopicConfig
+from tradingcz.transport import (
+    KafkaTransport, TopicRegistry,       # from kafka/
+    TypedProducer, TypedConsumer,        # from stream.py
+    RequestReplyClient,                  # from request_reply.py
+    Channel, Transport, Message,         # from protocol.py
+)
 ```
 
-### Files affected (all repos)
-| Repo | File |
-|------|------|
-| sdk | `smoke_test.py`, `smoke_test_request_reply.py` |
-| simple-strategy | `tradingcz/strategy/atr3_open_stop/app.py`, `tradingcz/strategy/pcb_breakout/integration.py` |
-| ingestion | `main.py`, `smoke_test.py`, `ingestion/handlers/historical.py`, `ingestion/handlers/stream.py` |
+### `tradingcz.typed` package removed
+The `typed/` package no longer exists. Use `from tradingcz.transport import TypedProducer, TypedConsumer`.
 
 ---
 
@@ -179,7 +198,9 @@ from confluent_kafka.aio import AIOConsumer
 
 ## Migration Checklist for SDK Consumers
 
-- [ ] Update `from tradingcz.topics` → `from tradingcz.transport.topics`
+- [ ] Update `from tradingcz.topics` → `from tradingcz.transport.kafka`
+- [ ] Update `from tradingcz.transport.topics` → `from tradingcz.transport.kafka`
+- [ ] Update `from tradingcz.typed` → `from tradingcz.transport` (TypedProducer, TypedConsumer)
 - [ ] Rename `TopicRegistry.control_plane_key(...)` → `TopicRegistry.event_key(...)`
 - [ ] Rename `ControlPlaneKey` → `EventKey` in imports and type hints
 - [ ] Remove any `ServerSettings` imports (dead code)

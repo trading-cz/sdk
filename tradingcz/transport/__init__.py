@@ -1,13 +1,16 @@
-"""Transport layer — abstract channel and concrete Kafka implementations.
+"""Transport layer — abstract channel and concrete implementations.
 
 Layer 0: moves bytes through named channels.
 No knowledge of events, models, or serialization.
+
+Subpackages:
+    - kafka/  — Kafka-specific Channel, Transport, and topic registry
 """
 
 from tradingcz.transport.protocol import Channel, Message, Transport
-from tradingcz.transport.kafka import KafkaChannel, KafkaTransport
+from tradingcz.transport.kafka import KafkaChannel, KafkaTransport, TopicConfig, TopicRegistry
 from tradingcz.transport.request_reply import RequestReplyClient
-from tradingcz.transport.topics import TopicConfig, TopicRegistry
+from tradingcz.transport.stream import TypedConsumer, TypedProducer
 
 __all__ = [
     "Channel",
@@ -15,7 +18,9 @@ __all__ = [
     "Transport",
     "KafkaChannel",
     "KafkaTransport",
-    "RequestReplyClient",
     "TopicConfig",
     "TopicRegistry",
+    "RequestReplyClient",
+    "TypedConsumer",
+    "TypedProducer",
 ]

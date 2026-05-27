@@ -24,9 +24,8 @@ from pydantic import BaseModel
 
 from tradingcz.config import KafkaSettings
 from tradingcz.serialization import JsonCodec
-from tradingcz.transport.topics import TopicRegistry
-from tradingcz.transport import KafkaTransport
-from tradingcz.typed import TypedConsumer, TypedProducer
+from tradingcz.transport.kafka import TopicRegistry
+from tradingcz.transport import KafkaTransport, TypedConsumer, TypedProducer
 
 # ── Config ──────────────────────────────────────────────────────────────────
 BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "46.224.59.47:30002")

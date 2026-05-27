@@ -11,3 +11,8 @@
 
 ✅ request_reply.py → narrowed exception handling, listeners now reject pending futures on crash
 ✅ kafka.py → simplified AIOConsumer import (confluent_kafka.aio, no fallback needed with >=2.14.0)
+
+✅ Transport package restructured:
+   - transport/kafka/ subpackage (channel.py, topics.py) — all Kafka-specific code
+   - transport/stream.py — TypedProducer, TypedConsumer (moved from typed/, transport-agnostic)
+   - tradingcz.typed package removed

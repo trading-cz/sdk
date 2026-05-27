@@ -29,7 +29,7 @@ from tradingcz.config import KafkaSettings
 from tradingcz.model.events import DataError, DataReady, DataRequest, parse_event
 from tradingcz.serialization import JsonCodec
 from tradingcz.serialization.protocol import Deserializer
-from tradingcz.transport.topics import TopicRegistry
+from tradingcz.transport.kafka import TopicRegistry
 from tradingcz.transport import KafkaTransport, RequestReplyClient
 
 # Configure logging

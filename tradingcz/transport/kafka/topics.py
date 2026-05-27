@@ -13,7 +13,7 @@ and schema validation.
 
 Usage (in any service)::
 
-    from tradingcz.transport.topics import TopicConfig, TopicRegistry
+    from tradingcz.transport.kafka import TopicConfig, TopicRegistry
 
     topics = TopicRegistry(env="dev")
     channel = await transport.channel(topics.market_data.name)
