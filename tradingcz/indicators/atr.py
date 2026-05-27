@@ -1,7 +1,5 @@
 """Average True Range (ATR) indicator — Wilder's method."""
 
-from __future__ import annotations
-
 from tradingcz.model.ingestion import Bar
 
 

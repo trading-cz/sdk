@@ -3,7 +3,6 @@
 Combines the latest trade, quote, minute bar, and daily bar in one call.
     More efficient than calling individual methods separately.
 """
-from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
