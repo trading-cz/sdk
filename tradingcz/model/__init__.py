@@ -6,7 +6,7 @@ from tradingcz.model.enum import (
     Timeframe,
 )
 from tradingcz.model.ingestion import Bar, Quote, Snapshot, Trade
-from tradingcz.model.kafka_key import ControlPlaneKey, MarketDataKey
+from tradingcz.model.kafka_key import EventKey, MarketDataKey
 from tradingcz.model.events import DataError, DataReady, DataRequest, parse_event
 from tradingcz.model.signal import (
     SignalEnvelope,
@@ -30,7 +30,7 @@ __all__ = [
     "Trade",
     "Snapshot",
     # Kafka keys
-    "ControlPlaneKey",
+    "EventKey",
     "MarketDataKey",
     # Control-plane events
     "DataRequest",

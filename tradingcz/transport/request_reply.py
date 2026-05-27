@@ -86,7 +86,7 @@ class RequestReplyClient[Req, Resp]:
             key_fn: Optional function to compute the Kafka message key
                     from a request.  If omitted, ``request_id_of(req)``
                     is used as the key (plain string).  Provide a JSON
-                    key function (e.g. ``TopicRegistry.control_plane_key``)
+                    key function (e.g. ``TopicRegistry.event_key``)
                     for typed, tooling-friendly keys.
             timeout: Per-request timeout in seconds.
         """
@@ -182,9 +182,15 @@ class RequestReplyClient[Req, Resp]:
             async for msg in self._channel.receive():
                 try:
                     resp = self._response_deserializer.deserialize(msg.payload)
-                except Exception:
-                    # Skip messages that don't deserialize as a response
+                except (ValueError, TypeError, LookupError):
+                    # Expected: message on shared topic not meant for us
                     # (e.g. requests from other services on the same topic)
+                    continue
+                except Exception:
+                    logger.warning(
+                        "Unexpected error deserializing message on %s",
+                        self._channel.name, exc_info=True,
+                    )
                     continue
 
                 resp_id = self._response_id_of(resp)
@@ -193,5 +199,15 @@ class RequestReplyClient[Req, Resp]:
                     future.set_result(resp)
         except asyncio.CancelledError:
             logger.debug("RequestReplyClient listener cancelled")
+            # Cancel all pending futures so callers don't hang forever
+            for future in self._pending.values():
+                if not future.done():
+                    future.cancel()
         except Exception:
             logger.exception("RequestReplyClient listener error — restart recommended")
+            # Reject all pending futures so callers get an error immediately
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(
+                        RuntimeError("RequestReplyClient listener crashed")
+                    )

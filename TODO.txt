@@ -1,0 +1,13 @@
+✅ topics.py → moved to transport/topics.py (Kafka-specific, belongs with transport layer)
+✅ control_plane_key → renamed to event_key (consistent with topic name)
+✅ ControlPlaneKey → renamed to EventKey (consistent with topic name)
+
+✅ ServerSettings → removed (dead code, zero usages across all repos)
+✅ KafkaSettings.bootstrap_servers, consumer_group → mandatory (no defaults)
+✅ auto.offset.reset default → "earliest" (was "latest")
+✅ Duplicate KafkaSettings class in transport/kafka.py → removed, imports from config
+
+✅ model/events.py → NO CHANGE (event_type is Pydantic discriminated union discriminator, not redundant)
+
+✅ request_reply.py → narrowed exception handling, listeners now reject pending futures on crash
+✅ kafka.py → simplified AIOConsumer import (confluent_kafka.aio, no fallback needed with >=2.14.0)

@@ -11,90 +11,13 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 
-from confluent_kafka.aio import AIOProducer
+from confluent_kafka.aio import AIOConsumer, AIOProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from tradingcz.config.settings import KafkaSettings
 from tradingcz.transport.protocol import Channel, Message, Transport
 
 logger = logging.getLogger(__name__)
-
-# We need an async consumer — try the aio module first, fall back.
-# AIOConsumer may be in confluent_kafka directly (version-dependent).
-try:
-    from confluent_kafka.aio import AIOConsumer  # type: ignore[attr-defined]
-except ImportError:
-    from confluent_kafka import AIOConsumer  # type: ignore[attr-defined, no-redef]
-
-
-class KafkaSettings:
-    """Kafka connection settings — fully configurable.
-
-    Every librdkafka parameter can be tuned via the overrides dicts.
-    Base defaults provide sensible production defaults.
-
-    Attributes:
-        bootstrap_servers: Comma-separated broker addresses.
-        consumer_group: Base consumer group id (topic names are appended).
-        consumer_poll_timeout: Seconds between consumer poll attempts (default 1.0).
-        default_num_partitions: Partition count for auto-created topics.
-        default_replication_factor: Replication factor for auto-created topics.
-        default_retention_ms: Retention in ms for auto-created topics.
-        default_cleanup_policy: Cleanup policy for auto-created topics.
-        producer_overrides: Dict merged on top of base producer config.
-        consumer_overrides: Dict merged on top of base consumer config.
-    """
-
-    def __init__(
-        self,
-        bootstrap_servers: str = "localhost:9092",
-        consumer_group: str = "service",
-        consumer_poll_timeout: float = 1.0,
-        default_num_partitions: int = 5,
-        default_replication_factor: int = 1,
-        default_retention_ms: int = 432_000_000,
-        default_cleanup_policy: str = "delete",
-        producer_overrides: dict[str, str] | None = None,
-        consumer_overrides: dict[str, str] | None = None,
-    ) -> None:
-        self.bootstrap_servers = bootstrap_servers
-        self.consumer_group = consumer_group
-        self.consumer_poll_timeout = consumer_poll_timeout
-        self.default_num_partitions = default_num_partitions
-        self.default_replication_factor = default_replication_factor
-        self.default_retention_ms = default_retention_ms
-        self.default_cleanup_policy = default_cleanup_policy
-        self.producer_overrides: dict[str, str] = producer_overrides or {}
-        self.consumer_overrides: dict[str, str] = consumer_overrides or {}
-
-    def producer_config(self) -> dict[str, str]:
-        """Build the full producer config (base + overrides).
-
-        Base defaults include linger.ms=5 for micro-batching.
-        Override via ``KAFKA_PRODUCER_OVERRIDES`` env var
-        (e.g. ``{"compression.type": "snappy", "batch.size": "65536"}``).
-        """
-        base: dict[str, str] = {
-            "bootstrap.servers": self.bootstrap_servers,
-            "linger.ms": "5",
-        }
-        return {**base, **self.producer_overrides}
-
-    def consumer_config(self, *, group_id: str) -> dict[str, str]:
-        """Build the full consumer config (base + overrides).
-
-        Callers MUST supply *group_id*.
-        All other tuning goes through ``consumer_overrides`` dict
-        (e.g. ``{"auto.offset.reset": "earliest", "fetch.min.bytes": "1000"}``).
-
-        Override via ``KAFKA_CONSUMER_OVERRIDES`` env var.
-        """
-        base: dict[str, str] = {
-            "bootstrap.servers": self.bootstrap_servers,
-            "group.id": group_id,
-            "auto.offset.reset": "latest",
-            "enable.auto.commit": "true",
-        }
-        return {**base, **self.consumer_overrides}
 
 
 class KafkaChannel(Channel):

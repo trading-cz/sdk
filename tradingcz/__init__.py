@@ -14,8 +14,8 @@ Public SDK API (stable):
     - tradingcz.transport   — Channel, Transport, KafkaTransport
     - tradingcz.serialization — Serializer, Deserializer, Codec, JsonCodec
     - tradingcz.typed       — TypedProducer, TypedConsumer
-    - tradingcz.topics      — TopicConfig, TopicRegistry
-    - tradingcz.config      — KafkaSettings, ServerSettings
+    - tradingcz.transport.topics — TopicConfig, TopicRegistry
+    - tradingcz.config      — KafkaSettings, LoggingSettings
     - tradingcz.model       — Bar, Quote, Trade, TradingSignal, etc.
     - tradingcz.indicators  — ATR, SMA, etc.
 """

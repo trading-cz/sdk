@@ -71,7 +71,7 @@ sdk/tradingcz/
 ## Migration Steps
 
 ### Step 1: SDK ✅ DONE
-- [x] Recover `Topics`/`keys` as `tradingcz/topics.py` tracked in git
+- [x] Recover `Topics`/`keys` as `tradingcz/transport/topics.py` tracked in git
 - [x] Add `tradingcz/serialization/` package (protocol.py, json_codec.py)
 - [x] Add `tradingcz/typed/` package (stream.py)
 - [x] Deprecate `tradingcz/receiver/` (add deprecation warnings)
@@ -93,7 +93,7 @@ sdk/tradingcz/
 ### Step 3: Simple-Strategy ✅ DONE
 - [x] Remove `import confluent_kafka` — use `TypedProducer[TradingSignal]` for signal emission
 - [x] Replace `ConfluenceKafkaReceiverTransport` → `KafkaTransport` + `RequestCorrelator` (thin, ~80 LOC helper in `tradingcz/strategy/common/correlator.py`)
-- [x] Replace `from tradingcz.kafka import Topics` → `from tradingcz.topics import TopicRegistry`
+- [x] Replace `from tradingcz.kafka import Topics` → `from tradingcz.transport.topics import TopicRegistry`
 - [x] Replace `from tradingcz.kafka.keys import signal_key` → `TopicRegistry.signal_key()`
 - [x] Rewrite `atr3_open_stop/app.py` — zero confluent-kafka references
 - [x] Rewrite `pcb_breakout/integration.py` — zero confluent-kafka references

@@ -7,14 +7,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class ServerSettings(BaseSettings):
-    """Network configuration shared across services."""
-
-    model_config = SettingsConfigDict(env_prefix="SERVER_", extra="ignore")
-    host: str = Field("127.0.0.1", description="Host to bind")
-    port: int = Field(8000, description="Port to bind")
-
-
 class LoggingSettings(BaseSettings):
     """Application logging configuration."""
 
@@ -26,8 +18,8 @@ class KafkaSettings(BaseSettings):
     """Kafka transport configuration.
 
     Semantic settings (named fields):
-        KAFKA_BOOTSTRAP_SERVERS        — broker addresses (default: localhost:9092)
-        KAFKA_CONSUMER_GROUP           — consumer group id (default: service)
+        KAFKA_BOOTSTRAP_SERVERS        — broker addresses (REQUIRED, no default)
+        KAFKA_CONSUMER_GROUP           — consumer group id (REQUIRED, no default)
         KAFKA_CONSUMER_POLL_TIMEOUT    — seconds between consumer poll attempts (default: 1.0)
         KAFKA_DEFAULT_NUM_PARTITIONS   — partitions for auto-created topics (default: 5)
         KAFKA_DEFAULT_REPLICATION_FACTOR — replication for auto-created topics (default: 1)
@@ -44,8 +36,8 @@ class KafkaSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
 
-    bootstrap_servers: str = "localhost:9092"
-    consumer_group: str = "service"
+    bootstrap_servers: str = Field(..., description="Kafka broker addresses (env: KAFKA_BOOTSTRAP_SERVERS)")
+    consumer_group: str = Field(..., description="Consumer group id (env: KAFKA_CONSUMER_GROUP)")
     consumer_poll_timeout: float = Field(1.0, description="Seconds between consumer poll attempts (env: KAFKA_CONSUMER_POLL_TIMEOUT)")
     default_num_partitions: int = Field(5, description="Default partition count for auto-created topics (env: KAFKA_DEFAULT_NUM_PARTITIONS)")
     default_replication_factor: int = Field(1, description="Default replication factor for auto-created topics (env: KAFKA_DEFAULT_REPLICATION_FACTOR)")
@@ -86,7 +78,7 @@ class KafkaSettings(BaseSettings):
         base: dict[str, str] = {
             "bootstrap.servers": self.bootstrap_servers,
             "group.id": group_id,
-            "auto.offset.reset": "latest",
+            "auto.offset.reset": "earliest",
             "enable.auto.commit": "true",
         }
         return {**base, **self.consumer_overrides}

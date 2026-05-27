@@ -25,8 +25,8 @@ from pydantic import BaseModel, ConfigDict, Field
 # ── Control-plane key (dev-event topic) ──────────────────────────────────────
 
 
-class ControlPlaneKey(BaseModel):
-    """Key for all messages on the control-plane event topic.
+class EventKey(BaseModel):
+    """Key for all messages on the event topic (``dev-event``, ``prd-event``).
 
     Used by ``DataRequest``, ``DataReady``, and ``DataError`` messages.
     The ``request_id`` field enables request/reply correlation.

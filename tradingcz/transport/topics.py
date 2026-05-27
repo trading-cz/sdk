@@ -13,7 +13,7 @@ and schema validation.
 
 Usage (in any service)::
 
-    from tradingcz.topics import TopicConfig, TopicRegistry
+    from tradingcz.transport.topics import TopicConfig, TopicRegistry
 
     topics = TopicRegistry(env="dev")
     channel = await transport.channel(topics.market_data.name)
@@ -40,7 +40,7 @@ class TopicConfig:
 
     name: str
     partitions: int = 5
-    replication_factor: int = 1
+    replication_factor: int = 2
     retention_ms: int = 432_000_000  # 5 days
     cleanup_policy: str = "delete"
 
@@ -74,10 +74,10 @@ class TopicRegistry:
             retention_ms=86_400_000,  # 1 day for live data
         )
 
-        self.signals = TopicConfig(name=f"{env}-raw-signal", partitions=5)
-        self.execution_requests = TopicConfig(name=f"{env}-execution-request", partitions=5)
-        self.execution_responses = TopicConfig(name=f"{env}-execution-response", partitions=5)
-        self.positions = TopicConfig(name=f"{env}-position-events", partitions=3)
+        self.signals = TopicConfig(name=f"{env}-raw-signal", partitions=1)
+        self.execution_requests = TopicConfig(name=f"{env}-execution-request", partitions=1)
+        self.execution_responses = TopicConfig(name=f"{env}-execution-response", partitions=1)
+        self.positions = TopicConfig(name=f"{env}-position-events", partitions=1)
 
     def historical(self, request_id: str) -> str:
         """Return ephemeral topic name for a historical data request.
@@ -91,7 +91,7 @@ class TopicRegistry:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def control_plane_key(
+    def event_key(
         event_type: str,
         source: str,
         request_id: str,
@@ -110,13 +110,13 @@ class TopicRegistry:
 
         Example::
 
-            key = TopicRegistry.control_plane_key(
+            key = TopicRegistry.event_key(
                 "data_request", "smoke_test", request_id,
             )
         """
-        from tradingcz.model.kafka_key import ControlPlaneKey  # pylint: disable=import-outside-toplevel
+        from tradingcz.model.kafka_key import EventKey  # pylint: disable=import-outside-toplevel
 
-        return ControlPlaneKey(
+        return EventKey(
             event_type=event_type,
             source=source,
             request_id=request_id,

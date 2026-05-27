@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from tradingcz.config import KafkaSettings
 from tradingcz.serialization import JsonCodec
-from tradingcz.topics import TopicRegistry
+from tradingcz.transport.topics import TopicRegistry
 from tradingcz.transport import KafkaTransport
 from tradingcz.typed import TypedConsumer, TypedProducer
 

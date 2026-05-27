@@ -7,6 +7,7 @@ No knowledge of events, models, or serialization.
 from tradingcz.transport.protocol import Channel, Message, Transport
 from tradingcz.transport.kafka import KafkaChannel, KafkaTransport
 from tradingcz.transport.request_reply import RequestReplyClient
+from tradingcz.transport.topics import TopicConfig, TopicRegistry
 
 __all__ = [
     "Channel",
@@ -15,4 +16,6 @@ __all__ = [
     "KafkaChannel",
     "KafkaTransport",
     "RequestReplyClient",
+    "TopicConfig",
+    "TopicRegistry",
 ]
