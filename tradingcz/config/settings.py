@@ -28,15 +28,15 @@ class KafkaSettings(BaseSettings):
     """Kafka transport configuration.
 
     Semantic settings (named fields):
-        KAFKA_BOOTSTRAP_SERVERS      — broker addresses (default: localhost:9092)
-        KAFKA_EVENTS_TOPIC           — control-plane topic name (default: event)
-        KAFKA_CONSUMER_GROUP         — consumer group id (default: service)
-        KAFKA_AUTO_OFFSET_RESET      — consumer offset reset policy (default: latest)
-        KAFKA_CONSUMER_POLL_TIMEOUT  — consumer poll block time in seconds (default: 1.0)
+        KAFKA_BOOTSTRAP_SERVERS        — broker addresses (default: localhost:9092)
+        KAFKA_CONSUMER_GROUP           — consumer group id (default: service)
+        KAFKA_DEFAULT_NUM_PARTITIONS   — partitions for auto-created topics (default: 5)
+        KAFKA_DEFAULT_REPLICATION_FACTOR — replication for auto-created topics (default: 1)
+        KAFKA_DEFAULT_RETENTION_MS     — retention in ms for auto-created topics (default: 5 days)
 
     librdkafka escape hatches (JSON strings, merged over built-in defaults):
-        KAFKA_PRODUCER_OVERRIDES     — e.g. '{"linger.ms": "50", "compression.type": "snappy"}'
-        KAFKA_CONSUMER_OVERRIDES     — e.g. '{"fetch.min.bytes": "1000"}'
+        KAFKA_PRODUCER_OVERRIDES       — e.g. '{"linger.ms": "50", "compression.type": "snappy"}'
+        KAFKA_CONSUMER_OVERRIDES       — e.g. '{"fetch.min.bytes": "1000", "auto.offset.reset": "earliest"}'
 
     The override dicts let you tune any librdkafka parameter from a Kubernetes
     ConfigMap/deployment YAML without touching Python code.
@@ -44,14 +44,8 @@ class KafkaSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
 
-    # Semantic settings — own naming, required by all services
     bootstrap_servers: str = "localhost:9092"
-    events_topic: str = "event"
     consumer_group: str = "service"
-    auto_offset_reset: str = "latest"
-
-    # Behaviour knob (our code, not librdkafka)
-    consumer_poll_timeout: float = Field(1.0, description="Seconds to block on consumer.poll(); 0 = non-blocking")
     default_num_partitions: int = Field(5, description="Default partition count for auto-created topics (env: KAFKA_DEFAULT_NUM_PARTITIONS)")
     default_replication_factor: int = Field(1, description="Default replication factor for auto-created topics (env: KAFKA_DEFAULT_REPLICATION_FACTOR)")
     default_retention_ms: int = Field(432000000, description="Default retention in ms for auto-created topics, 5 days (env: KAFKA_DEFAULT_RETENTION_MS)")
