@@ -37,9 +37,11 @@ class KafkaSettings:
     Attributes:
         bootstrap_servers: Comma-separated broker addresses.
         consumer_group: Base consumer group id (topic names are appended).
+        consumer_poll_timeout: Seconds between consumer poll attempts (default 1.0).
         default_num_partitions: Partition count for auto-created topics.
         default_replication_factor: Replication factor for auto-created topics.
         default_retention_ms: Retention in ms for auto-created topics.
+        default_cleanup_policy: Cleanup policy for auto-created topics.
         producer_overrides: Dict merged on top of base producer config.
         consumer_overrides: Dict merged on top of base consumer config.
     """
@@ -48,21 +50,21 @@ class KafkaSettings:
         self,
         bootstrap_servers: str = "localhost:9092",
         consumer_group: str = "service",
+        consumer_poll_timeout: float = 1.0,
         default_num_partitions: int = 5,
         default_replication_factor: int = 1,
         default_retention_ms: int = 432_000_000,
+        default_cleanup_policy: str = "delete",
         producer_overrides: dict[str, str] | None = None,
         consumer_overrides: dict[str, str] | None = None,
-        # Deprecated — kept for callers that still pass them (ignored):
-        events_topic: str = "",          # pylint: disable=unused-argument
-        auto_offset_reset: str = "",     # pylint: disable=unused-argument
-        consumer_poll_timeout: float = 0,  # pylint: disable=unused-argument
     ) -> None:
         self.bootstrap_servers = bootstrap_servers
         self.consumer_group = consumer_group
+        self.consumer_poll_timeout = consumer_poll_timeout
         self.default_num_partitions = default_num_partitions
         self.default_replication_factor = default_replication_factor
         self.default_retention_ms = default_retention_ms
+        self.default_cleanup_policy = default_cleanup_policy
         self.producer_overrides: dict[str, str] = producer_overrides or {}
         self.consumer_overrides: dict[str, str] = consumer_overrides or {}
 
@@ -137,6 +139,10 @@ class KafkaChannel(Channel):
         Creates a dedicated ``AIOConsumer`` per call for fan-out.
         Consumer config is fully driven by ``KafkaSettings``:
         base defaults merged with ``consumer_overrides``.
+
+        Poll interval is controlled by ``KafkaSettings.consumer_poll_timeout``
+        (default 1.0 s).  Override via ``KAFKA_CONSUMER_POLL_TIMEOUT`` env var
+        or the ``consumer_overrides`` dict for librdkafka-level tuning.
         """
         group_id = f"{self._settings.consumer_group}-{self._topic}"
         config = self._settings.consumer_config(group_id=group_id)
@@ -145,7 +151,7 @@ class KafkaChannel(Channel):
 
         try:
             while True:
-                msg = await consumer.poll(1.0)
+                msg = await consumer.poll(self._settings.consumer_poll_timeout)
                 if msg is None:
                     continue
                 if msg.error():
@@ -166,6 +172,11 @@ class KafkaTransport(Transport):
     """Kafka-backed transport — one shared ``AIOProducer``, cached channels.
 
     Topics are created on first use via Admin API if they don't already exist.
+
+    Per-topic configuration overrides are accepted by ``channel()`` and
+    fall back to ``KafkaSettings`` defaults when omitted.  This lets the
+    config repository (Kustomize/Helm) tune individual topics without
+    touching source code.
     """
 
     def __init__(self, settings: KafkaSettings) -> None:
@@ -181,21 +192,56 @@ class KafkaTransport(Transport):
             self._producer = AIOProducer(self._settings.producer_config())
         return self._producer
 
-    async def channel(self, name: str, num_partitions: int | None = None) -> Channel:
-        """Get or create a Kafka channel for *name*."""
+    async def channel(
+        self,
+        name: str,
+        num_partitions: int | None = None,
+        replication_factor: int | None = None,
+        retention_ms: int | None = None,
+        cleanup_policy: str | None = None,
+    ) -> Channel:
+        """Get or create a Kafka channel for *name*.
+
+        Args:
+            name: Kafka topic name.
+            num_partitions: Override default partition count.
+            replication_factor: Override default replication factor.
+            retention_ms: Override default retention in milliseconds.
+            cleanup_policy: Override default cleanup policy (``"delete"`` or ``"compact"``).
+
+        All topic-config overrides are optional — when ``None``, the
+        ``KafkaSettings`` default is used.  Channels are cached by name,
+        so topic config only applies on first call for a given name.
+        """
         if name not in self._channels:
             partitions = (
                 num_partitions
                 if num_partitions is not None
                 else self._settings.default_num_partitions
             )
-            await self._ensure_topic(name, partitions)
+            await self._ensure_topic(
+                name,
+                num_partitions=partitions,
+                replication_factor=replication_factor,
+                retention_ms=retention_ms,
+                cleanup_policy=cleanup_policy,
+            )
             producer = await self._get_producer()
             self._channels[name] = KafkaChannel(name, producer, self._settings)
         return self._channels[name]
 
-    async def _ensure_topic(self, name: str, num_partitions: int) -> None:
-        """Create the topic via Admin API if it doesn't already exist."""
+    async def _ensure_topic(
+        self,
+        name: str,
+        num_partitions: int,
+        replication_factor: int | None = None,
+        retention_ms: int | None = None,
+        cleanup_policy: str | None = None,
+    ) -> None:
+        """Create the topic via Admin API if it doesn't already exist.
+
+        Per-topic overrides take precedence over ``KafkaSettings`` defaults.
+        """
         if name in self._topics_created:
             return
 
@@ -207,11 +253,31 @@ class KafkaTransport(Transport):
             self._topics_created.add(name)
             return
 
+        rf = (
+            replication_factor
+            if replication_factor is not None
+            else self._settings.default_replication_factor
+        )
+        ret = (
+            retention_ms
+            if retention_ms is not None
+            else self._settings.default_retention_ms
+        )
+        cp = (
+            cleanup_policy
+            if cleanup_policy is not None
+            else self._settings.default_cleanup_policy
+        )
+
+        topic_config: dict[str, str] = {"retention.ms": str(ret)}
+        if cp:
+            topic_config["cleanup.policy"] = cp
+
         new_topic = NewTopic(
             name,
             num_partitions=num_partitions,
-            replication_factor=self._settings.default_replication_factor,
-            config={"retention.ms": str(self._settings.default_retention_ms)},
+            replication_factor=rf,
+            config=topic_config,
         )
         futures = await loop.run_in_executor(
             None, lambda: self._admin.create_topics([new_topic]),
@@ -220,7 +286,8 @@ class KafkaTransport(Transport):
             try:
                 future.result()
                 logger.info(
-                    "Created Kafka topic: %s (partitions=%d)", topic, num_partitions,
+                    "Created Kafka topic: %s (partitions=%d, rf=%d, retention=%dms)",
+                    topic, num_partitions, rf, ret,
                 )
             except Exception as exc:
                 logger.warning("Topic %s may already exist: %s", topic, exc)

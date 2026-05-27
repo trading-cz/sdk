@@ -24,10 +24,10 @@ from uuid import uuid4
 from confluent_kafka.admin import AdminClient
 from pydantic import BaseModel
 
+from tradingcz.config import KafkaSettings
 from tradingcz.serialization import JsonCodec
 from tradingcz.topics import TopicRegistry
 from tradingcz.transport import KafkaTransport
-from tradingcz.transport.kafka import KafkaSettings
 from tradingcz.typed import TypedConsumer, TypedProducer
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -105,6 +105,7 @@ async def test_producer_consumer_roundtrip() -> bool:
     settings = KafkaSettings(
         bootstrap_servers=BOOTSTRAP_SERVERS,
         consumer_group=GROUP_ID,
+        consumer_poll_timeout=0.5,  # faster polls for smoke test
         consumer_overrides={
             "auto.offset.reset": "earliest",
             "enable.auto.commit": "true",
@@ -113,9 +114,13 @@ async def test_producer_consumer_roundtrip() -> bool:
     transport = KafkaTransport(settings)
 
     try:
-        # Channel
-        channel = await transport.channel(TEST_TOPIC, num_partitions=1)
-        print(f"  ✓ Channel created: {channel.name}")
+        # Channel — demonstrates per-topic overrides (retention=60s for test topic)
+        channel = await transport.channel(
+            TEST_TOPIC,
+            num_partitions=1,
+            retention_ms=60_000,  # 1 minute — test topic, short-lived
+        )
+        print(f"  ✓ Channel created: {channel.name} (poll_timeout={settings.consumer_poll_timeout}s, retention=60s)")
 
         # Producer
         producer = TypedProducer(
@@ -195,11 +200,12 @@ async def test_kcat_produce_consume() -> None:
     settings = KafkaSettings(
         bootstrap_servers=BOOTSTRAP_SERVERS,
         consumer_group=f"{GROUP_ID}-kcat",
+        consumer_poll_timeout=0.5,
         consumer_overrides={"auto.offset.reset": "earliest"},
     )
     transport = KafkaTransport(settings)
     try:
-        channel = await transport.channel(TEST_TOPIC, num_partitions=1)
+        channel = await transport.channel(TEST_TOPIC, num_partitions=1, retention_ms=60_000)
         consumer = TypedConsumer(channel=channel, deserializer=JsonCodec(Ping))
 
         received: Ping | None = None
