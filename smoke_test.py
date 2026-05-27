@@ -24,7 +24,6 @@ from pydantic import BaseModel
 
 from tradingcz.config import KafkaSettings
 from tradingcz.serialization import JsonCodec
-from tradingcz.transport.kafka import TopicRegistry
 from tradingcz.transport import KafkaTransport, TypedConsumer, TypedProducer
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -50,7 +49,7 @@ def run_kcat(args: list[str], timeout: int = 10) -> str:
     try:
         result = subprocess.run(
             ["kcat", "-b", BOOTSTRAP_SERVERS, *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, timeout=timeout, check=False,
         )
         return result.stdout + result.stderr
     except FileNotFoundError:
@@ -184,7 +183,7 @@ async def test_kcat_produce_consume() -> None:
     try:
         result = subprocess.run(
             ["kcat", "-b", BOOTSTRAP_SERVERS, "-t", TEST_TOPIC, "-P"],
-            input=msg_line, capture_output=True, text=True, timeout=10,
+            input=msg_line, capture_output=True, text=True, timeout=10, check=False,
         )
         out = result.stdout + result.stderr
     except FileNotFoundError:
@@ -289,7 +288,7 @@ async def main() -> None:
         sys.exit(1)
 
     # Cleanup
-    print(f"\n  🧹 Final cleanup...")
+    print("\n  🧹 Final cleanup...")
     clear_test_topic()
     print("  ✓ Done")
 

@@ -70,9 +70,6 @@ def _make_data_client(
     timeout: float = TIMEOUT,
 ) -> RequestReplyClient[DataRequest, _Response]:
     """Create a RequestReplyClient configured for DataRequest → DataReady|DataError."""
-    # pylint: disable=import-outside-toplevel
-    from tradingcz.transport.protocol import Channel  # noqa: F811
-
     return RequestReplyClient[DataRequest, _Response](
         channel=channel,  # type: ignore[arg-type]
         request_serializer=JsonCodec(DataRequest),
@@ -160,7 +157,7 @@ async def test_historical_request() -> bool:
                 # Try to consume a few bars to verify the data channel works
                 data_channel = await transport.channel(response.data_topic)
                 bar_count = 0
-                async for msg in data_channel.receive():
+                async for _ in data_channel.receive():
                     bar_count += 1
                     if bar_count >= 3 or bar_count >= (response.bar_count or 0):
                         break
