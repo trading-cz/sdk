@@ -1,26 +1,21 @@
-"""Top-level `tradingcz` namespace for the trading-model repo.
-
-The generated models live under `generated/tradingcz/...`.
-
-When installing from a built wheel, Hatch packages `generated/tradingcz` directly,
-so `import tradingcz.model` works normally.
-
-When installing in editable mode from a local checkout, the project root is on
-`sys.path`, but `generated/` is not necessarily on `sys.path`. This shim ensures
-that `generated/tradingcz` is discoverable, making `import tradingcz.model...`
-work consistently for local development.
+"""Top-level `tradingcz` namespace for the trading SDK.
 
 Public SDK API (stable):
-    - tradingcz.transport        — Channel, Transport, TypedProducer, TypedConsumer, RequestReplyClient
+    - tradingcz.transport        — KafkaChannel, KafkaTransport, TypedProducer, TypedConsumer
     - tradingcz.transport.kafka  — KafkaTransport, KafkaChannel, TopicRegistry
     - tradingcz.serialization    — Serializer, Deserializer, Codec, JsonCodec
     - tradingcz.config           — KafkaSettings, LoggingSettings
-    - tradingcz.model       — Bar, Quote, Trade, TradingSignal, etc.
-    - tradingcz.indicators  — ATR, SMA, etc.
+    - tradingcz.model            — Bar, Quote, Trade, TradingSignal, etc.
+    - tradingcz.indicators       — ATR, SMA, etc.
+    - tradingcz.sdk              — TradingApp, DataClient, SignalPublisher, etc. (business layer)
+    - tradingcz.errors           — SdkError, TransportError, etc.
 """
 
 from pathlib import Path
 from pkgutil import extend_path
+
+# Schema version — embedded in every Kafka message header for compatibility checks.
+SCHEMA_VERSION = "1.0"
 
 # Allow `tradingcz.*` portions from multiple distributions.
 __path__ = extend_path(__path__, __name__)

@@ -1,370 +1,348 @@
-# SDK Simplification Proposal
+# SDK Simplification — Final Design
 
 > **Date:** 2026-05-28
-> **Scope:** `trading-sdk` repository
-> **Key constraint change:** Kafka is the permanent transport. No switching to REST/gRPC/WS.
-> **Goals:** Simplicity, easy business-level API, high performance, clean layering.
+> **Branch:** `feature/simplification-sdk`
+> **Decision:** Kafka permanent. Remove transport ABCs. Add business-layer clients. Headers for metadata. Plain-string keys for routing.
 
 ---
 
 ## Table of Contents
 
-1. [Response to Previous Analysis Feedback](#response-to-previous-analysis-feedback)
-2. [Core Design Principles (Revised)](#core-design-principles-revised)
-3. [What Gets Removed](#what-gets-removed)
-4. [What Gets Simplified](#what-gets-simplified)
-5. [Proposed Architecture](#proposed-architecture)
-6. [Public API — The "Business Layer"](#public-api--the-business-layer)
-7. [Migration Path](#migration-path)
-8. [Before/After Comparison](#beforeafter-comparison)
+1. [Core Principles](#core-principles)
+2. [Three-Topic Architecture](#three-topic-architecture)
+3. [Client Architecture](#client-architecture)
+4. [Internal Helpers (Not Public)](#internal-helpers-not-public)
+5. [Topics: Key / Value / Headers Design](#topics-key--value--headers-design)
+6. [TradingApp Builder](#tradingapp-builder)
+7. [Client Specifications](#client-specifications)
+8. [File Structure After Refactor](#file-structure-after-refactor)
+9. [What Gets Removed](#what-gets-removed)
+10. [Implementation Phases](#implementation-phases)
 
 ---
 
-## Response to Previous Analysis Feedback
+## Core Principles
 
-### Point (a): `Message` should NOT carry `offset`, `partition`, `topic`
-
-**You are correct.** Adding Kafka-internal fields (`offset`, `partition`, `topic`) to a generic `Message` dataclass violates the abstraction. Those fields have no meaning outside Kafka.
-
-**Revised position:**
-
-If we accept Kafka as the only transport, the `Message` dataclass and the `Channel`/`Transport` ABCs become unnecessary indirection. We should work with Kafka-native types directly:
-
-- `KafkaChannel.send()` and `KafkaChannel.receive()` use Kafka's own message types
-- Metadata like `offset` and `partition` are accessed through Kafka-specific paths when needed (e.g., `KafkaMessage.offset`)
-- Consumers that need offset tracking get it from a Kafka-aware wrapper, not from a pretend-generic type
-
-**What IS transport-agnostic and worth keeping:**
-- `headers: dict[str, str]` — every messaging system has metadata
-- `key: str` — most messaging systems have a routing key concept
-- `payload: bytes` — universal
-
-But we don't need a `Message` dataclass to enforce this. We can just pass these as parameters to `send()` and yield them from `receive()`.
+| Principle | Meaning |
+|-----------|---------|
+| **Kafka is permanent** | No `Channel`/`Transport` ABCs. `KafkaChannel`/`KafkaTransport` are the concrete foundation. |
+| **Users write business logic** | One import, one builder, typed methods like `stream_quotes()`, `get_positions()`. Zero Kafka knowledge. |
+| **Concrete specialized clients** | `DataClient`, `SignalPublisher`, `PositionClient`, `BalanceClient` — each has precise, narrow methods. Internally they reuse `_RequestReply` and `_FireAndForget` helpers. |
+| **Headers = metadata, Key = routing, Value = payload** | Three cleanly separated concerns per Kafka message. |
+| **No self-typing in value** | Message type is in the header (`message_type`). Value is pure domain payload — no `event_type` discriminator field. |
+| **Sequence numbers in headers** | Every message gets `sequence` (monotonic per source). Guarantees ordering even with timestamp collisions. |
+| **Serialization ABCs stay** | `Serializer`/`Deserializer`/`Codec` are pure data conversion. Transport-independent. Useful for future non-JSON formats. |
+| **Performance uncompromised** | Business layer is zero-cost wrappers. Same `AIOProducer`/`AIOConsumer` underneath. |
 
 ---
 
-## Core Design Principles (Revised)
+## Three-Topic Architecture
 
-| Principle | What it means |
-|-----------|---------------|
-| **Kafka is the substrate** | No abstract transport layer. `KafkaChannel` and `KafkaTransport` are the concrete foundation. |
-| **Users write business logic, not plumbing** | SDK consumers import ONE thing, call ONE setup, and get typed business-level APIs. Zero Kafka knowledge required. |
-| **Power users can go deeper** | The lower-level `TypedProducer`/`TypedConsumer`/`KafkaChannel` are still public for advanced use cases. |
-| **Keep serialization abstract** | `Serializer[T]`/`Deserializer[T]`/`Codec[T]` ABCs stay — they're pure data conversion, no transport dependency. |
-| **Headers are first-class** | Every `send()` accepts optional `headers: dict[str, str]`. Metadata lives in headers, not in JSON keys. |
-| **Keys are for routing only** | Plain strings (`"AAPL"`, `"abc123"`), not JSON blobs. |
-| **Performance is not compromised** | No unnecessary copies, no extra serialization hops. Direct Kafka → Pydantic → Business logic. |
+The system has exactly three topics. All control-plane and signal messages share the event topic. No separate signal topic.
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌───────────────────────────┐
+│   dev-event      │    │  dev-market-data  │    │  dev-market-data-         │
+│   1 partition    │    │  N partitions     │    │  historical-{request_id}  │
+│                  │    │                   │    │  1 partition              │
+│   DataRequest    │    │  Trade            │    │                           │
+│   DataReady      │    │  Quote            │    │  Bar                      │
+│   DataError      │    │  StreamQuote      │    │                           │
+│   TradingSignal  │    │  Bar              │    │                           │
+│   ServiceRequest │    │                   │    │                           │
+│   PositionList   │    │                   │    │                           │
+│   BalanceResp    │    │                   │    │                           │
+│   ...            │    │                   │    │                           │
+└─────────────────┘    └──────────────────┘    └───────────────────────────┘
+    Control plane          Streaming data           Ephemeral (per-request)
+    Request/reply          Keyed by symbol           Keyed by symbol
+    Fire-and-forget        High volume               Low volume
+```
+
+**Why one event topic?** Intentional — operational simplicity. One ACL, one retention policy, one place to monitor. Total ordering via single partition. Volume is hundreds/day — splitting is premature.
+
+**Why one ephemeral historical partition?** Low volume (max thousands/hour). Single consumer per request. Timestamp ordering via sequence numbers — partitions aren't needed for parallelism.
 
 ---
 
-## What Gets Removed
+## Client Architecture
 
-### 1. `Channel` ABC and `Transport` ABC
-
-```python
-# REMOVED — tradingcz/transport/protocol.py
-class Channel(ABC): ...
-class Transport(ABC): ...
-class Message: ...
+```
+┌──────────────────────────────────────────────────────────────┐
+│  PUBLIC API (what users import and use)                      │
+│                                                              │
+│  TradingApp  — builder, one-stop setup                       │
+│  ├── DataClient       — stream_quotes, request_historical    │
+│  ├── SignalPublisher  — publish(trading_signal)              │
+│  ├── PositionClient   — get_positions, get_position          │
+│  ├── BalanceClient    — get_balance, get_buying_power        │
+│  └── OrderClient      — get_orders, get_order_status         │
+│                                                              │
+│  All clients are concrete. Each has specific typed methods.  │
+│  Users see domain operations, never Kafka internals.         │
+├──────────────────────────────────────────────────────────────┤
+│  INTERNAL HELPERS (used by clients, NOT exported publicly)   │
+│                                                              │
+│  _RequestReply  — send request, await correlated response    │
+│  _FireAndForget — send message, don't wait                   │
+│  _StreamFanout  — single consumer → multiple async iterators │
+│                                                              │
+│  These are the "base types" that eliminate code duplication. │
+│  Users NEVER import them directly.                           │
+├──────────────────────────────────────────────────────────────┤
+│  TYPED LAYER (public for power users)                        │
+│                                                              │
+│  TypedProducer[T]   — send typed values                      │
+│  TypedConsumer[T]   — consume typed values                   │
+│  TypedParser        — header-based dispatch to model types   │
+├──────────────────────────────────────────────────────────────┤
+│  KAFKA LAYER (concrete, no ABCs)                             │
+│                                                              │
+│  KafkaChannel       — send/receive with headers              │
+│  KafkaTransport     — channel factory + shared producer      │
+│  KafkaMessage       — honest wrapper (offset, partition etc) │
+│  TopicRegistry      — topic naming + header factories        │
+├──────────────────────────────────────────────────────────────┤
+│  SERIALIZATION (abstract, pure data)                         │
+│                                                              │
+│  Serializer / Deserializer / Codec  [ABCs]                   │
+│  JsonCodec[T]                                                    │
+├──────────────────────────────────────────────────────────────┤
+│  MODELS (pure Pydantic, no I/O, no transport)                │
+│                                                              │
+│  Bar, Trade, Quote, StreamQuote, TradingSignal,              │
+│  DataRequest, DataReady, DataError, ServiceRequest,          │
+│  Position, Balance, OrderStatus, ...                         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-**Why:** There is only one transport implementation (Kafka) and will never be another. The ABCs add 3 files of indirection (`protocol.py`, abstract methods, docstrings explaining "transport-agnostic") without delivering value. Python's duck typing already enables mocking for tests.
-
-**Replacement:** `KafkaChannel` and `KafkaTransport` become the direct API. If you need a mock for testing, mock `KafkaChannel` — no ABC needed.
-
-### 2. `tradingcz/transport/protocol.py` (the file)
-
-The entire file goes. The only surviving abstraction is in `tradingcz/serialization/protocol.py` (`Serializer`, `Deserializer`, `Codec`), which is pure data conversion with no transport knowledge.
-
-### 3. Transport-agnostic language in docstrings
-
-All mentions of "REST, gRPC, WebSockets" and "transport-agnostic" are removed. The SDK is explicitly Kafka-based. Docstrings say what IS, not what might hypothetically be.
-
-### 4. JSON blob keys
-
-`EventKey` and `MarketDataKey` Pydantic models are removed (or repurposed as header models). Keys become plain strings:
+### Clients reuse internal helpers — example
 
 ```python
-# Before (removed):
-key = '{"source":"ingestion","broker":"alpaca","symbol":"AAPL","ts":"..."}'
+# Internal — not exported
+class _RequestReply:
+    """Send a typed request, await correlated typed response.
 
-# After:
-key = "AAPL"
-headers = {"source": "ingestion", "broker": "alpaca", "message_type": "trade", "schema_version": "1.0"}
-```
+    Used internally by: DataClient, PositionClient, BalanceClient, OrderClient.
+    """
+    def __init__(self, channel: KafkaChannel, service_id: str): ...
 
-### 5. `tradingcz/model/kafka_key.py`
-
-Renamed to `tradingcz/model/message_headers.py` — models that were previously used as Kafka keys become header schemas.
-
----
-
-## What Gets Simplified
-
-### 1. Bootstrap: from ~40 lines to ~3 lines
-
-**Before (current — every service copies this):**
-```python
-from tradingcz.config import KafkaSettings
-from tradingcz.transport.kafka import TopicRegistry
-from tradingcz.transport import KafkaTransport, TypedConsumer, TypedProducer, RequestReplyClient
-from tradingcz.model.events import DataError, DataReady, DataRequest
-from tradingcz.serialization import JsonCodec
-from tradingcz.serialization.protocol import Deserializer
-from tradingcz.model.ingestion import Bar
-
-# ~40 lines of wiring...
-settings = AppSettings()
-kafka = KafkaSettings(bootstrap_servers=settings.bootstrap_servers, consumer_group=f"strategy-{settings.strategy_id}")
-transport = KafkaTransport(kafka)
-topics = TopicRegistry(env=settings.environment)
-events_channel = await transport.channel(topics.events.name)
-# ... TypedConsumer, TypedProducer, RequestReplyClient, key_fn lambdas ...
-# ... 20 more lines ...
-```
-
-**After (proposed):**
-```python
-from tradingcz.sdk import TradingApp
-
-app = TradingApp(env="dev", service_id="my-strategy")
-await app.start()
-
-# Business logic goes here — no Kafka knowledge needed
-bars = await app.data.request_historical(["AAPL", "TSLA"], days=14)
-```
-
-### 2. TypedProducer/Consumer: no more manual key_fn lambdas
-
-**Before:**
-```python
-ready_producer = TypedProducer(
-    channel=events_channel,
-    serializer=JsonCodec(DataReady),
-    key_fn=lambda e: TopicRegistry.event_key("data_ready", "ingestion", e.request_id),
-)
-```
-
-**After:**
-```python
-# key_fn is derived automatically from the topic + model type
-ready_producer = app.events.producer(DataReady)  # key="ingestion", headers auto-populated
-await ready_producer.send(data_ready)
-```
-
-### 3. `KafkaChannel` gets headers natively
-
-No `Message` dataclass. `send()` and `receive()` work with explicit parameters:
-
-```python
-class KafkaChannel:
-    async def send(
+    async def request[Req: BaseModel, Resp: BaseModel](
         self,
-        payload: bytes,
+        req: Req,
         *,
-        key: str = "",
-        headers: dict[str, str] | None = None,
-    ) -> None: ...
+        response_type: type[Resp],
+        timeout: float = 30.0,
+    ) -> Resp: ...
 
-    async def receive(self) -> AsyncIterator[KafkaMessage]: ...
-```
 
-`KafkaMessage` is a lightweight wrapper that exposes what Kafka actually provides:
-```python
-@dataclass(frozen=True, slots=True)
-class KafkaMessage:
-    payload: bytes
-    key: str
-    headers: dict[str, str]
-    offset: int          # Kafka-native, not pretending to be generic
-    partition: int       # Kafka-native, not pretending to be generic
-    topic: str           # Kafka-native, not pretending to be generic
-```
+class _FireAndForget:
+    """Send a typed message, don't wait.
 
-This is honest: it's a Kafka message, named as such. No pretense of being "transport-agnostic."
+    Used internally by: SignalPublisher, DataClient (for DataRequest when
+    the response is handled separately).
+    """
+    def __init__(self, channel: KafkaChannel, service_id: str): ...
 
-### 4. `TopicRegistry` — simpler, with `key_fn` and `headers_fn` built in
+    async def send(self, message: BaseModel, *, message_type: str) -> None: ...
 
-```python
-class TopicRegistry:
-    def __init__(self, env: str = "dev") -> None:
-        self.events = TopicConfig(name=f"{env}-event", partitions=1)
-        self.market_data = TopicConfig(name=f"{env}-market-data", partitions=5)
-        self.signals = TopicConfig(name=f"{env}-raw-signal", partitions=1)
 
-    # Factory methods that return pre-configured functions — no lambdas needed
-    def market_data_key(self, symbol: str) -> str:
-        """Return the partition key for a market-data message."""
-        return symbol  # plain string, not JSON
+# Public — what users see
+class DataClient:
+    def __init__(self, rr: _RequestReply, faf: _FireAndForget,
+                 transport: KafkaTransport, topics: TopicRegistry): ...
 
-    def market_data_headers(self, *, source: str, broker: str, message_type: str) -> dict[str, str]:
-        """Return standard headers for a market-data message."""
-        return {
-            "source": source,
-            "broker": broker,
-            "message_type": message_type,
-            "schema_version": SCHEMA_VERSION,
-        }
+    async def request_historical(self, symbols, *, days=14):
+        req = DataRequest(type="historic", symbols=symbols, ...)
+        resp = await self._rr.request(req, response_type=DataReady)
+        # ... channel management, bar consumption ...
+
+
+class SignalPublisher:
+    def __init__(self, faf: _FireAndForget): ...
+
+    async def publish(self, signal: TradingSignal, *, tracking_id: str):
+        await self._faf.send(signal, message_type="trading_signal")
 ```
 
 ---
 
-## Proposed Architecture
+## Topics: Key / Value / Headers Design
+
+### Event topic (`dev-event`, 1 partition)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  BUSINESS LAYER  (NEW — what 90% of users touch)        │
-│                                                         │
-│  TradingApp    — one-stop setup + lifecycle              │
-│  DataClient    — request_bars(), stream_quotes(), etc.  │
-│  SignalClient  — publish(trading_signal)                │
-│  EventClient   — request(), on_event(), etc.            │
-│                                                         │
-│  Usage: from tradingcz.sdk import TradingApp            │
-│         app = TradingApp(env="dev", service_id="x")     │
-│         await app.data.request_historical(["AAPL"])     │
-├─────────────────────────────────────────────────────────┤
-│  TYPED LAYER  (for power users & internal use)          │
-│                                                         │
-│  TypedProducer[T]    — send typed values                │
-│  TypedConsumer[T]    — consume typed values             │
-│  RequestReplyClient[Req, Resp]  — async req/reply       │
-│                                                         │
-│  These work directly with KafkaChannel (no ABC needed)  │
-├─────────────────────────────────────────────────────────┤
-│  KAFKA LAYER  (concrete, no abstraction)                │
-│                                                         │
-│  KafkaChannel       — one topic, send/receive           │
-│  KafkaTransport     — channel factory + shared producer │
-│  KafkaMessage       — honest wrapper around Kafka msg   │
-│  TopicRegistry      — topic naming + config             │
-│  KafkaSettings      — Pydantic settings                 │
-├─────────────────────────────────────────────────────────┤
-│  SERIALIZATION LAYER  (abstract, pure data)             │
-│                                                         │
-│  Serializer[T] / Deserializer[T] / Codec[T]  (ABCs)    │
-│  JsonCodec[T]      — Pydantic ↔ JSON bytes             │
-├─────────────────────────────────────────────────────────┤
-│  MODEL LAYER  (pure Pydantic, no I/O)                   │
-│                                                         │
-│  tradingcz.model.ingestion   — Bar, Trade, Quote, etc.  │
-│  tradingcz.model.events      — DataRequest, DataReady   │
-│  tradingcz.model.signal      — TradingSignal, SignalKey │
-│  tradingcz.model.executor    — ExecutionRequestEvent    │
-│  tradingcz.model.message_headers  — standard header models │
-├─────────────────────────────────────────────────────────┤
-│  CONFIG LAYER                                            │
-│                                                         │
-│  KafkaSettings   — bootstrap, consumer_group, overrides │
-│  AppSettings     — (optional) batteries-included setup  │
-└─────────────────────────────────────────────────────────┘
+Key:     (not set — 1 partition, routing is moot)
+Headers:
+  message_type: "data_request"          ← WHAT class to deserialize into
+  source_app: "strategy-atr3"           ← WHO sent it
+  request_id: "abc123"                  ← correlation (present for req/reply, absent for fire-and-forget)
+  schema_version: "1.0"                 ← schema evolution
+  sequence: "1"                         ← monotonic per source_app (ordering)
+Value:   {"symbols":["AAPL"],"type":"historic","timeframe":"1d",...}
+         ↑ pure domain payload — no event_type field
 ```
 
-### Key architectural decisions:
+**Why no `event_type` in value?** The `message_type` header already tells the consumer which Pydantic model to deserialize into. Putting the same string in the value is redundant. The class name (DataRequest) is the type — no discriminator field needed.
 
-1. **No `Channel`/`Transport` ABCs.** `KafkaChannel` and `KafkaTransport` are the API. Test with mocks.
+**How does parsing work?** A type registry maps `message_type` → model class:
 
-2. **Business layer is NEW.** It wraps the typed layer to provide operations named in business terms: `request_historical()`, `stream_quotes()`, `publish_signal()`.
+```python
+_MESSAGE_TYPES: dict[str, type[BaseModel]] = {
+    "data_request": DataRequest,
+    "data_ready": DataReady,
+    "data_error": DataError,
+    "trading_signal": TradingSignal,
+    "service_request": ServiceRequest,
+    "position_response": PositionList,
+    "balance_response": BalanceResponse,
+    # ... registered by each client at init time
+}
 
-3. **Typed layer stays.** `TypedProducer[T]`, `TypedConsumer[T]`, `RequestReplyClient` are proven abstractions. They now depend directly on `KafkaChannel` (concrete), not `Channel` (abstract).
+def parse_message(message_type: str, payload: bytes) -> BaseModel:
+    model_type = _MESSAGE_TYPES[message_type]
+    return model_type.model_validate_json(payload)
+```
 
-4. **Serialization ABCs stay.** `Serializer`/`Deserializer`/`Codec` are pure data conversion. No transport dependency. Genuinely useful for future non-JSON formats (Avro, Protobuf).
+**What about `_RequestReply` correlation?** The helper reads `request_id` from both the request model AND the response model. Since `DataRequest`, `DataReady`, `DataError` all have `request_id: str`, the helper extracts it generically via `getattr(msg, "request_id")`. This convention-based approach avoids the need for explicit `request_id_of` / `response_id_of` callbacks.
 
-5. **Models stay pure.** No changes to `tradingcz.model.*` except renaming `kafka_key.py` → `message_headers.py`.
+### Stream topic (`dev-market-data`, N partitions)
 
-6. **`KafkaMessage` is honest.** Named `KafkaMessage`, not `Message`. Carries Kafka-specific fields because it IS Kafka-specific. No pretense.
+```
+Key:     "AAPL"                         ← plain symbol, UTF-8, for partition co-location
+Headers:
+  message_type: "trade"                 ← "trade" | "quote" | "bar"
+  source: "ingestion"
+  broker: "alpaca"
+  symbol: "AAPL"                        ← also in value for self-contained deserialization
+  schema_version: "1.0"
+  sequence: "42"                        ← per-symbol, per-message_type monotonic
+Value:   {"symbol":"AAPL","price":150.25,"size":100,"timestamp":"...",...}
+```
+
+**Why symbol in key AND header AND value?**
+- **Key:** For Kafka partition routing. Plain string, Murmur2 hashed.
+- **Header:** For filtering without deserializing the value (e.g., skip non-AAPL messages in consumer loop).
+- **Value:** For self-contained Pydantic deserialization. The model is complete without reading headers.
+
+This is a deliberate minor duplication. Each copy serves a different layer and a different consumer.
+
+### Historical topic (`dev-market-data-historical-{request_id}`, 1 partition)
+
+```
+Key:     "AAPL"                         ← same pattern as stream, for consistency
+Headers:
+  message_type: "bar"
+  source: "ingestion"
+  broker: "alpaca"
+  request_id: "abc123"                  ← consumer filters by this
+  schema_version: "1.0"
+  sequence: "1"                         ← ordering within this request
+Value:   {"symbol":"AAPL","open":150.0,"high":152.0,...}
+```
+
+**Consumer filtering:** Read all messages from the channel. Skip any where `headers["request_id"] != my_request_id`. Sort remaining by `sequence`. This is safe because `KafkaChannel.receive()` preserves partition ordering, and we have 1 partition.
+
+### Sequence number design
+
+Every message on every topic gets a `sequence` header. The sequence is:
+
+- **Monotonic per `(source_app, topic)`** — resets on restart is acceptable (it's for ordering, not global uniqueness).
+- **String-formatted integer** — headers are `str → str` in our design, so `"1"`, `"2"`, etc.
+- **Consumed for ordering, not deduplication** — consumers sort by sequence when reading from multiple partitions or historical topics. The sequence guarantees correct order even when timestamps collide.
+
+Who assigns sequences?
+- **Ingestion** assigns sequences for market-data and historical messages.
+- **SDK `_FireAndForget` and `_RequestReply`** assign sequences for event topic messages (monotonic counter per client instance).
 
 ---
 
-## Public API — The "Business Layer"
-
-### `TradingApp` — One-stop setup
+## TradingApp Builder
 
 ```python
 """The single entry point for SDK consumers.
 
-Usage:
+Usage — all features enabled by default:
     from tradingcz.sdk import TradingApp
 
-    app = TradingApp(env="dev", service_id="my-strategy")
+    app = (TradingApp(env="dev", service_id="my-strategy")
+           .build())
     await app.start()
 
-    # Use business-level APIs:
+    # Business-level APIs:
     bars = await app.data.request_historical(["AAPL"])
-    async for quote in app.data.stream_quotes(["AAPL"]):
+    async for quote in app.data.stream_quotes(["TSLA"]):
         ...
+    positions = await app.positions.get_positions()
 
     await app.close()
+
+Usage — selective features:
+    app = (TradingApp(env="dev", service_id="risk-checker")
+           .with_data(False)
+           .with_signals(False)
+           .build())
+    await app.start()
+    # Only app.positions, app.balance, app.orders available
 """
 
-from dataclasses import dataclass
-from tradingcz.config import KafkaSettings
-from tradingcz.transport.kafka import KafkaTransport, TopicRegistry
-
-@dataclass
 class TradingApp:
-    """Batteries-included SDK entry point.
+    """Builder for a fully wired trading application."""
 
-    Creates transport, channels, producers, consumers, and business-level
-    clients.  The user does NOT need to know about Kafka topics, partitions,
-    serializers, or key functions.
-    """
+    def __init__(self, *, env: str = "dev", service_id: str,
+                 bootstrap_servers: str = "localhost:9092"):
+        self._env = env
+        self._service_id = service_id
+        self._bootstrap_servers = bootstrap_servers
+        self._enable_data = True
+        self._enable_signals = True
+        self._enable_positions = True
+        self._enable_balance = True
+        self._enable_orders = True
 
-    env: str = "dev"
-    service_id: str = "sdk-app"
-    bootstrap_servers: str = "localhost:9092"
+    def with_data(self, enable: bool = True) -> "TradingApp": ...
+    def with_signals(self, enable: bool = True) -> "TradingApp": ...
+    def with_positions(self, enable: bool = True) -> "TradingApp": ...
+    def with_balance(self, enable: bool = True) -> "TradingApp": ...
+    def with_orders(self, enable: bool = True) -> "TradingApp": ...
 
-    # --- created by start() ---
-    _transport: KafkaTransport | None = None
-    _topics: TopicRegistry | None = None
-    data: "DataClient | None" = None
-    signals: "SignalClient | None" = None
-    events: "EventClient | None" = None
+    def build(self) -> "TradingApp":
+        """Validate and freeze configuration. Call before start()."""
+        ...
 
     async def start(self) -> None:
-        """Initialize transport and all business clients."""
-        settings = KafkaSettings(
-            bootstrap_servers=self.bootstrap_servers,
-            consumer_group=self.service_id,
-        )
-        self._transport = KafkaTransport(settings)
-        self._topics = TopicRegistry(env=self.env)
-
-        # Create business-level clients
-        self.data = DataClient(
-            transport=self._transport,
-            topics=self._topics,
-            service_id=self.service_id,
-        )
-        self.signals = SignalClient(
-            transport=self._transport,
-            topics=self._topics,
-        )
-        self.events = EventClient(
-            transport=self._transport,
-            topics=self._topics,
-            service_id=self.service_id,
-        )
+        """Initialize transport and enabled clients."""
+        ...
 
     async def close(self) -> None:
         """Graceful shutdown."""
-        if self._transport:
-            await self._transport.close()
+        ...
+
+    # Public attributes (available after start())
+    data: DataClient | None
+    signals: SignalPublisher | None
+    positions: PositionClient | None
+    balance: BalanceClient | None
+    orders: OrderClient | None
 ```
 
-### `DataClient` — Request market data
+---
+
+## Client Specifications
+
+### DataClient
 
 ```python
-"""Business-level API for requesting and consuming market data.
-
-Users think in terms of "I need 14 days of AAPL bars" or "stream me TSLA quotes."
-They do NOT think about topics, channels, serializers, or key functions.
-"""
-
 class DataClient:
-    """High-level market data operations."""
+    """Request and consume market data (historical + streaming).
 
-    def __init__(self, transport: KafkaTransport, topics: TopicRegistry, service_id: str) -> None: ...
+    Handles the full lifecycle:
+      1. Send DataRequest via event topic (_RequestReply)
+      2. Await DataReady (contains data_topic for historical,
+         or market_data topic for streaming)
+      3. Manage ephemeral channel or subscribe to stream channel
+      4. Filter, order, parse, and yield typed results
+    """
 
     async def request_historical(
         self,
@@ -375,19 +353,10 @@ class DataClient:
         broker: str = "alpaca",
         timeout: float = 30.0,
     ) -> dict[str, list[Bar]]:
-        """Request historical daily bars for *symbols*.
+        """Request historical daily bars.
 
-        Returns a dict mapping symbol → list of Bar, sorted by timestamp.
-
-        Under the hood:
-          1. Sends DataRequest(type="historic", ...) via RequestReplyClient
-          2. Waits for DataReady response
-          3. Consumes Bar messages from the ephemeral data channel
-          4. Returns parsed results
-
-        The caller writes ZERO lines of Kafka code.
+        Returns: {symbol: [Bar sorted by timestamp]}
         """
-        ...
 
     async def stream_quotes(
         self,
@@ -396,83 +365,234 @@ class DataClient:
         broker: str = "alpaca",
         timeout: float = 30.0,
     ) -> AsyncIterator[StreamQuote]:
-        """Stream live quotes for *symbols*.
-
-        Yields StreamQuote objects as they arrive. The caller controls
-        when to stop by breaking out of the async for loop.
-
-        Under the hood:
-          1. Sends DataRequest(type="stream", stream_type="quotes", ...)
-          2. Waits for DataReady response
-          3. Subscribes to the market-data channel
-          4. Yields parsed StreamQuote objects
-
-        The caller writes ZERO lines of Kafka code.
-        """
-        ...
+        """Stream live quotes. Yields StreamQuote objects."""
 
     async def stream_trades(
-        self, symbols: list[str], *, broker: str = "alpoca", timeout: float = 30.0
+        self,
+        symbols: list[str],
+        *,
+        broker: str = "alpaca",
+        timeout: float = 30.0,
     ) -> AsyncIterator[Trade]:
-        """Stream live trades for *symbols*. Same pattern as stream_quotes()."""
-        ...
+        """Stream live trades. Yields Trade objects."""
+
+    # Internal: stream_quotes and stream_trades share one underlying
+    # consumer via _StreamFanout. Users can call both simultaneously.
 ```
 
-### `SignalClient` — Publish trading signals
+**Simultaneous streams:** When a user calls both `stream_quotes` and `stream_trades`, the first call sends a `DataRequest` with both stream types and starts the internal consumer loop. The second call registers an additional handler. Both iterators receive their respective message types from the same Kafka consumer — no duplicate broker subscriptions.
+
+### SignalPublisher
 
 ```python
-class SignalClient:
-    """Publish trading signals to the signals topic."""
+class SignalPublisher:
+    """Publish trading signals (fire-and-forget on event topic)."""
 
-    async def publish(self, signal: TradingSignal, *, tracking_id: str) -> None:
+    async def publish(
+        self,
+        signal: TradingSignal,
+        *,
+        tracking_id: str,
+    ) -> None:
         """Publish a trading signal.
 
-        The signal is serialized as a SignalEnvelope and sent to the
-        signals topic.  Key = symbol, headers = {strategy_id, tracking_id, ...}.
-
-        The caller writes ZERO lines of Kafka code.
+        Sends to the event topic with:
+          message_type = "trading_signal"
+          key = signal.symbol
         """
-        ...
 ```
 
-### `EventClient` — Request/reply on events topic
+### PositionClient
 
 ```python
-class EventClient:
-    """Send requests and await responses on the events topic."""
+class PositionClient:
+    """Query open positions via event topic (request/reply)."""
 
-    async def request(self, req: DataRequest, *, timeout: float = 30.0) -> DataReady | DataError:
-        """Send a DataRequest and wait for DataReady or DataError.
+    async def get_positions(self) -> list[Position]:
+        """Return all currently open positions."""
 
-        Uses RequestReplyClient internally. Correlation by request_id.
+    async def get_position(self, symbol: str) -> Position | None:
+        """Return position for a single symbol, or None."""
 
-        The caller writes ZERO lines of Kafka code.
-        """
-        ...
 
-    def producer(self, model_type: type[T]) -> TypedProducer[T]:
-        """Get a pre-configured TypedProducer for the events topic.
+class Position(BaseModel):
+    """A single open position."""
+    model_config = ConfigDict(frozen=True)
+    symbol: str
+    qty: float
+    avg_entry_price: float
+    asset_type: Literal["stock", "option"] = "stock"
 
-        Power-user escape hatch: use this if you need to send custom
-        event types not covered by the high-level API.
-        """
-        ...
+
+class PositionList(BaseModel):
+    """Response to a get_positions request."""
+    request_id: str
+    positions: list[Position]
+    source_app: str = "executor"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+```
+
+### BalanceClient
+
+```python
+class BalanceClient:
+    """Query account balance via event topic (request/reply)."""
+
+    async def get_balance(self) -> Balance:
+        """Return current account balance."""
+
+    async def get_buying_power(self) -> float:
+        """Return available buying power (convenience)."""
+
+
+class Balance(BaseModel):
+    """Account balance snapshot."""
+    model_config = ConfigDict(frozen=True)
+    cash: float
+    buying_power: float
+    portfolio_value: float
+    currency: str = "USD"
+
+
+class BalanceResponse(BaseModel):
+    """Response to a balance query."""
+    request_id: str
+    balance: Balance
+    source_app: str = "executor"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+```
+
+### OrderClient
+
+```python
+class OrderClient:
+    """Query order status via event topic (request/reply)."""
+
+    async def get_orders(
+        self, *, status: str | None = None, symbol: str | None = None
+    ) -> list[OrderSummary]:
+        """Return orders, optionally filtered by status or symbol."""
+
+    async def get_order_status(self, order_id: str) -> OrderSummary | None:
+        """Return status of a single order."""
+```
+
+### ServiceRequest — the unified request model
+
+All position/balance/order queries share one request model:
+
+```python
+class ServiceRequest(BaseModel):
+    """General-purpose request to the executor service.
+
+    Sent on the event topic with message_type = "service_request".
+    The executor responds with the corresponding response type
+    (PositionList, BalanceResponse, OrderList, etc.).
+    """
+    request_id: str = Field(default_factory=lambda: uuid4().hex)
+    source_app: str = ""
+    service: Literal[
+        "get_positions",
+        "get_position",
+        "get_balance",
+        "get_buying_power",
+        "get_orders",
+        "get_order_status",
+    ]
+    symbol: str | None = None
+    order_id: str | None = None
+    order_status: str | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 ```
 
 ---
 
-## What Stays the Same
+## Internal Helpers (Not Public)
 
-| Component | Status | Reason |
-|-----------|--------|--------|
-| `JsonCodec[T]` | Unchanged | Perfect as-is. |
-| `Serializer/Deserializer/Codec` ABCs | Unchanged | Pure data conversion. Useful when adding Avro/Protobuf later. |
-| `TypedProducer[T]` / `TypedConsumer[T]` | Simplified | Drop `Channel` dependency, use `KafkaChannel` directly. Add `headers_fn`. |
-| `RequestReplyClient[Req, Resp]` | Simplified | Drop `Channel` dependency. Add `headers_fn`. |
-| `KafkaSettings` | Unchanged | Perfect as-is. |
-| `TopicRegistry` | Simplified | Add `key_fn`/`headers_fn` factories. Remove JSON key models. |
-| `tradingcz.model.*` | Minor rename | `kafka_key.py` → `message_headers.py`. |
-| `tradingcz.indicators` | Unchanged | Pure functions. No transport dependency. |
+These are the reusable "base types" that all clients share. They are NOT exported from `tradingcz.sdk`. Documented here for maintainers.
+
+### `_RequestReply`
+
+```python
+class _RequestReply:
+    """Send a typed request on the event topic, await a correlated response.
+
+    Correlation is by `request_id` — both request and response models
+    must have a `request_id: str` field (enforced by convention, not by Protocol).
+
+    The `message_type` header on the response is used to dispatch to the
+    correct Pydantic model for deserialization.
+    """
+
+    def __init__(self, channel: KafkaChannel, service_id: str, *,
+                 message_types: dict[str, type[BaseModel]] | None = None):
+        self._channel = channel
+        self._service_id = service_id
+        self._seq = 0  # monotonic sequence counter
+        self._types = message_types or {}
+        self._pending: dict[str, asyncio.Future[BaseModel]] = {}
+        self._listen_task: asyncio.Task | None = None
+
+    def register_type(self, message_type: str, model: type[BaseModel]) -> None:
+        """Register a message_type → model mapping for deserialization."""
+        self._types[message_type] = model
+
+    async def start(self) -> None:
+        """Start the background listener (idempotent)."""
+
+    async def request[Resp: BaseModel](
+        self, req: BaseModel, *, response_type: type[Resp], timeout: float = 30.0,
+    ) -> Resp:
+        """Send *req*, wait for a correlated *Resp*.
+
+        The request model must have `request_id: str`.
+        Responses are matched by request_id.
+        Non-matching messages (other services' traffic on the event topic)
+        are silently skipped with a debug log.
+        """
+        self._seq += 1
+        headers = {
+            "message_type": self._infer_type(req),
+            "source_app": self._service_id,
+            "request_id": req.request_id,
+            "schema_version": SCHEMA_VERSION,
+            "sequence": str(self._seq),
+        }
+        payload = req.model_dump_json().encode()
+        await self._channel.send(payload, key="", headers=headers)
+        # ... await future, match by request_id ...
+
+    async def close(self) -> None: ...
+
+    @staticmethod
+    def _infer_type(model: BaseModel) -> str:
+        """Infer message_type from model class name → snake_case."""
+        # DataRequest → "data_request"
+        return re.sub(r'(?<!^)(?=[A-Z])', '_', type(model).__name__).lower()
+```
+
+### `_FireAndForget`
+
+```python
+class _FireAndForget:
+    """Send a typed message on the event topic. No response expected."""
+
+    def __init__(self, channel: KafkaChannel, service_id: str):
+        self._channel = channel
+        self._service_id = service_id
+        self._seq = 0
+
+    async def send(self, message: BaseModel, *, message_type: str) -> None:
+        self._seq += 1
+        headers = {
+            "message_type": message_type,
+            "source_app": self._service_id,
+            "schema_version": SCHEMA_VERSION,
+            "sequence": str(self._seq),
+        }
+        payload = message.model_dump_json().encode()
+        await self._channel.send(payload, key="", headers=headers)
+```
 
 ---
 
@@ -480,24 +600,26 @@ class EventClient:
 
 ```
 tradingcz/
-├── __init__.py              # SCHEMA_VERSION constant
+├── __init__.py              # SCHEMA_VERSION = "1.0"
 ├── py.typed
 │
 ├── sdk/                     # NEW — business layer
 │   ├── __init__.py          # exports: TradingApp
-│   ├── app.py               # TradingApp (one-stop setup)
+│   ├── _app.py              # TradingApp builder
+│   ├── _helpers.py          # _RequestReply, _FireAndForget, _StreamFanout (INTERNAL)
 │   ├── data.py              # DataClient
-│   ├── signals.py           # SignalClient
-│   └── events.py            # EventClient
+│   ├── signals.py           # SignalPublisher
+│   ├── positions.py         # PositionClient, Position, PositionList
+│   ├── balance.py           # BalanceClient, Balance, BalanceResponse
+│   └── orders.py            # OrderClient, OrderSummary
 │
-├── transport/               # SIMPLIFIED — Kafka-concrete, no ABCs
-│   ├── __init__.py          # exports: KafkaChannel, KafkaTransport, ...
-│   ├── kafka_channel.py     # KafkaChannel + KafkaTransport
-│   ├── kafka_message.py     # KafkaMessage (honest Kafka wrapper)
-│   ├── typed.py             # TypedProducer, TypedConsumer
-│   ├── request_reply.py     # RequestReplyClient
-│   ├── topics.py            # TopicRegistry, TopicConfig
-│   └── hash.py              # Murmur2 + partition_for() utility
+├── transport/               # SIMPLIFIED — Kafka-concrete
+│   ├── __init__.py          # exports: KafkaChannel, KafkaTransport, KafkaMessage, ...
+│   ├── kafka_channel.py     # KafkaChannel + KafkaTransport (with headers)
+│   ├── kafka_message.py     # KafkaMessage dataclass
+│   ├── typed.py             # TypedProducer, TypedConsumer, TypedParser
+│   ├── topics.py            # TopicRegistry, TopicConfig (+ header factories)
+│   └── hash.py              # Murmur2, partition_for()
 │
 ├── serialization/           # UNCHANGED
 │   ├── __init__.py
@@ -506,226 +628,114 @@ tradingcz/
 │
 ├── config/                  # UNCHANGED
 │   ├── __init__.py
-│   └── settings.py          # KafkaSettings, LoggingSettings
+│   └── settings.py          # KafkaSettings
 │
-├── model/                   # MINOR CHANGES
+├── model/
 │   ├── __init__.py
 │   ├── enum/                # Unchanged
-│   ├── ingestion/           # Unchanged + add StreamQuote
-│   ├── executor/            # Populated __init__.py
-│   ├── events.py            # Unchanged
-│   ├── signal.py            # Unchanged (remove build_signal → moved to serialization)
-│   └── message_headers.py   # RENAMED from kafka_key.py — header models, not key models
+│   ├── ingestion/           # + StreamQuote model
+│   ├── executor/            # Populated __init__.py files
+│   ├── events.py            # DataRequest, DataReady, DataError (NO event_type)
+│   ├── signal.py            # TradingSignal, SignalKey, SignalValue (NO build_signal)
+│   └── message_headers.py   # RENAMED from kafka_key.py — header schema models
 │
 ├── indicators/              # UNCHANGED
 │   ├── __init__.py
 │   └── atr.py
 │
-└── errors.py                # NEW — shared error types
+└── errors.py                # NEW — SdkError, TransportError, etc.
 ```
 
-### Files removed:
+### Files removed
 
-| Removed File | Reason |
-|-------------|--------|
-| `tradingcz/transport/protocol.py` | `Channel`/`Transport` ABCs no longer needed |
+| File | Reason |
+|------|--------|
+| `tradingcz/transport/protocol.py` | `Channel`/`Transport`/`Message` ABCs — unnecessary indirection |
 | `tradingcz/transport/stream.py` | Merged into `transport/typed.py` |
+| `tradingcz/transport/request_reply.py` | Replaced by internal `_RequestReply` helper |
 | `tradingcz/model/kafka_key.py` | Renamed to `message_headers.py` |
 
-### Files added:
+### Files added
 
-| New File | Purpose |
-|----------|---------|
-| `tradingcz/sdk/app.py` | `TradingApp` — one-stop setup |
-| `tradingcz/sdk/data.py` | `DataClient` — request historical, stream |
-| `tradingcz/sdk/signals.py` | `SignalClient` — publish signals |
-| `tradingcz/sdk/events.py` | `EventClient` — request/reply on events |
-| `tradingcz/transport/kafka_message.py` | `KafkaMessage` — honest Kafka wrapper |
+| File | Purpose |
+|------|---------|
+| `tradingcz/sdk/_app.py` | `TradingApp` builder |
+| `tradingcz/sdk/_helpers.py` | `_RequestReply`, `_FireAndForget`, `_StreamFanout` |
+| `tradingcz/sdk/data.py` | `DataClient` |
+| `tradingcz/sdk/signals.py` | `SignalPublisher` |
+| `tradingcz/sdk/positions.py` | `PositionClient` + models |
+| `tradingcz/sdk/balance.py` | `BalanceClient` + models |
+| `tradingcz/sdk/orders.py` | `OrderClient` + models |
+| `tradingcz/transport/kafka_message.py` | `KafkaMessage` dataclass |
 | `tradingcz/transport/hash.py` | Murmur2 + `partition_for()` |
 | `tradingcz/errors.py` | Shared error types |
+| `tradingcz/model/message_headers.py` | Renamed from kafka_key.py |
 
 ---
 
-## Performance Considerations
+## What Gets Removed
 
-The simplification does NOT introduce overhead:
+### 1. `Channel` / `Transport` ABCs (`tradingcz/transport/protocol.py`)
 
-1. **No extra serialization hops.** `TradingApp.data.request_historical()` uses the same `JsonCodec` → `KafkaChannel.send()` path as the current manual code. It's just packaged.
+No abstract transport layer. `KafkaChannel` and `KafkaTransport` are the direct concrete API. Test with mocks — Python doesn't need ABCs for that.
 
-2. **No extra copies.** `KafkaMessage` is a thin dataclass wrapping librdkafka's message object. Headers are decoded lazily.
+### 2. `Message` dataclass
 
-3. **Same async patterns.** `TypedProducer` and `RequestReplyClient` use the same `AIOProducer`/`AIOConsumer` under the hood.
+Replaced by `KafkaMessage` — an honest Kafka wrapper with `offset`, `partition`, `topic`, `key`, `headers`, `payload`. Named what it is.
 
-4. **Business layer is zero-cost.** `DataClient.stream_quotes()` is just a generator wrapper around `TypedConsumer`. No buffering, no transformation.
+### 3. `event_type` discriminator field from all Pydantic models
 
-5. **Headers are encoded once.** When using `TradingApp`, headers are pre-computed at client creation time, not per-message. The `headers_fn` pattern is only used for dynamic headers (e.g., per-message `trace_id`).
+`DataRequest`, `DataReady`, `DataError` no longer have `event_type: Literal[...]`. Type is identified by `message_type` header. A type registry maps header value → model class.
 
----
+### 4. `build_signal()` from `tradingcz/model/signal.py`
 
-## Migration Path
+Moved to `tradingcz/sdk/signals.py` as part of `SignalPublisher.publish()`.
 
-### Phase 1: Add the new code (non-breaking)
+### 5. JSON blob keys
 
-1. Add `tradingcz/transport/kafka_message.py` — `KafkaMessage` dataclass
-2. Add `tradingcz/transport/typed.py` — `TypedProducer`/`TypedConsumer` refactored to use `KafkaChannel` directly
-3. Add `tradingcz/transport/hash.py` — Murmur2 utility
-4. Add `tradingcz/errors.py` — shared error types
-5. Add `tradingcz/sdk/` — business layer (`TradingApp`, `DataClient`, etc.)
-6. Add `tradingcz/model/message_headers.py` — renamed from `kafka_key.py`
-7. Add headers support to `KafkaChannel.send()` and `KafkaChannel.receive()` (additive, non-breaking)
-8. Deprecate `tradingcz/transport/protocol.py` — add `DeprecationWarning` on import
-9. Deprecate `tradingcz/model/kafka_key.py` — re-export from `message_headers.py` with warning
+`EventKey` and `MarketDataKey` Pydantic models are removed. Keys are plain strings (`"AAPL"`, `""`). All metadata moves to headers.
 
-### Phase 2: Migrate consumers (one service at a time)
+### 6. `RequestReplyClient` public class
 
-1. **simple-strategy** — easiest migration (smallest codebase):
-   ```python
-   # Before (~40 lines):
-   settings = StrategySettings()
-   kafka = KafkaSettings(...)
-   transport = KafkaTransport(kafka)
-   topics = TopicRegistry(env=settings.environment)
-   events_channel = await transport.channel(topics.events.name)
-   # ... 20 more lines ...
-
-   # After (~4 lines):
-   app = TradingApp(env="dev", service_id=settings.strategy_id)
-   await app.start()
-   bars = await app.data.request_historical(settings.symbols, days=settings.lookback_days)
-   ```
-
-2. **ingestion** — slightly more complex (produces data, doesn't consume it):
-   ```python
-   app = TradingApp(env=settings.environment, service_id="ingestion")
-   await app.start()
-   # Use TypedProducer directly for control-plane responses
-   ready_producer = app.events.producer(DataReady)
-   ```
-
-3. **executor** — needs version bump first (v0.0.10 → latest), then adopt `TradingApp`.
-
-### Phase 3: Remove deprecated code
-
-1. Remove `tradingcz/transport/protocol.py`
-2. Remove `tradingcz/model/kafka_key.py`
-3. Update all imports
+Replaced by internal `_RequestReply` helper. Users access request/reply through specialized clients (`PositionClient.get_positions()`) — never directly.
 
 ---
 
-## Before/After Comparison
+## Implementation Phases
 
-### Scenario: A new developer writes a strategy that needs historical bars and live quotes
+### Phase 1: Foundation (shared infrastructure)
+- [x] Create feature branch `feature/simplification-sdk`
+- [ ] Add `tradingcz/errors.py` — shared error hierarchy
+- [ ] Add `tradingcz/transport/kafka_message.py` — `KafkaMessage` dataclass
+- [ ] Add `tradingcz/transport/hash.py` — Murmur2 + `partition_for()`
+- [ ] Update `KafkaChannel.send()` to accept `headers: dict[str, str]`
+- [ ] Update `KafkaChannel.receive()` to yield `KafkaMessage` (with headers)
+- [ ] Add `SCHEMA_VERSION` to `tradingcz/__init__.py`
+- [ ] Remove `event_type` from `DataRequest`, `DataReady`, `DataError`, `TradingSignal`
+- [ ] Add `StreamQuote` model to `tradingcz/model/ingestion/`
+- [ ] Rename `kafka_key.py` → `message_headers.py` (with deprecation re-export)
+- [ ] Populate empty executor model `__init__.py` files
+- [ ] Delete outdated tests
 
-**Before (current SDK):**
-```python
-import asyncio
-from datetime import UTC, datetime, timedelta
-from tradingcz.config import KafkaSettings
-from tradingcz.transport.kafka import TopicRegistry
-from tradingcz.transport import KafkaTransport, RequestReplyClient
-from tradingcz.model.events import DataError, DataReady, DataRequest
-from tradingcz.model.ingestion import Bar, StreamQuote
-from tradingcz.serialization import JsonCodec
-from tradingcz.serialization.protocol import Deserializer
+### Phase 2: Remove ABCs
+- [ ] Remove `tradingcz/transport/protocol.py`
+- [ ] Update `TypedProducer`/`TypedConsumer` to use `KafkaChannel` directly
+- [ ] Add `TypedParser` — header-based dispatch to model types
+- [ ] Merge `stream.py` into `typed.py`
 
-# Developer must understand:
-# - KafkaSettings, bootstrap_servers, consumer_group
-# - KafkaTransport, channels, topic naming
-# - TypedProducer, TypedConsumer, serializers
-# - RequestReplyClient, key_fn, request_id_of, response_id_of
-# - TopicRegistry, event_key, market_data_key
-# - The DataRequest/DataReady/DataError protocol
-# - Ephemeral channel lifecycle
-# - Bar/StreamQuote parsing from raw bytes
+### Phase 3: Add internal helpers
+- [ ] Add `tradingcz/sdk/_helpers.py` — `_RequestReply`, `_FireAndForget`
+- [ ] Add header factories to `TopicRegistry`
 
-class _DataResponseDeserializer(Deserializer):
-    def deserialize(self, payload: bytes):
-        from tradingcz.model.events import parse_event
-        event = parse_event(payload)
-        if isinstance(event, (DataReady, DataError)):
-            return event
-        raise ValueError(...)
-    def content_type(self): return "application/json"
+### Phase 4: Add business clients
+- [ ] Add `tradingcz/sdk/_app.py` — `TradingApp` builder
+- [ ] Add `tradingcz/sdk/data.py` — `DataClient`
+- [ ] Add `tradingcz/sdk/signals.py` — `SignalPublisher`
+- [ ] Add `tradingcz/sdk/positions.py` — `PositionClient`
+- [ ] Add `tradingcz/sdk/balance.py` — `BalanceClient`
+- [ ] Add `tradingcz/sdk/orders.py` — `OrderClient`
 
-async def run():
-    settings = StrategySettings()
-    kafka = KafkaSettings(
-        bootstrap_servers=settings.bootstrap_servers,
-        consumer_group=f"strategy-{settings.strategy_id}",
-    )
-    transport = KafkaTransport(kafka)
-    topics = TopicRegistry(env=settings.environment)
-    events_channel = await transport.channel(topics.events.name)
-
-    async with RequestReplyClient[DataRequest, DataReady|DataError](
-        channel=events_channel,
-        request_serializer=JsonCodec(DataRequest),
-        response_deserializer=_DataResponseDeserializer(),
-        request_id_of=lambda r: r.request_id,
-        response_id_of=lambda r: r.request_id,
-        key_fn=lambda r: TopicRegistry.event_key(
-            "data_request", f"strategy-{settings.strategy_id}", r.request_id,
-        ),
-        timeout=30.0,
-    ) as client:
-        # Phase 1: historical bars (~30 more lines of channel/receive/parse)
-        request = DataRequest(type="historic", symbols=["AAPL"], ...)
-        response = await client.request(request)
-        data_channel = await transport.channel(response.data_topic)
-        bars_by_symbol = {}
-        async for msg in data_channel.receive():
-            bar = Bar.model_validate_json(msg.payload)
-            ...
-
-        # Phase 2: stream quotes (~30 more lines)
-        ...
-```
-
-**After (proposed SDK):**
-```python
-import asyncio
-from tradingcz.sdk import TradingApp
-
-# Developer only needs to understand:
-# - TradingApp (one import, one setup call)
-# - DataClient methods named in business terms
-# - Bar, StreamQuote, TradingSignal (domain models they already know)
-
-async def run():
-    settings = StrategySettings()
-    app = TradingApp(env="dev", service_id=settings.strategy_id)
-    await app.start()
-
-    # Phase 1: historical bars — one line, typed return
-    bars_by_symbol = await app.data.request_historical(
-        ["AAPL", "TSLA"], days=settings.lookback_days,
-    )
-
-    # Phase 2: stream quotes — async for loop, typed values
-    async for quote in app.data.stream_quotes(["AAPL", "TSLA"]):
-        # quote is a StreamQuote — already parsed, typed
-        if quote.symbol in emitted:
-            continue
-        # ... business logic ...
-
-    await app.close()
-```
-
-**Lines of code:** ~65 → ~20
-**Kafka concepts exposed:** ~12 → 0
-**Import statements:** ~10 → 1
-
----
-
-## Summary
-
-| Design Decision | Rationale |
-|----------------|-----------|
-| Remove `Channel`/`Transport` ABCs | Only one transport. ABCs are indirection without value. Mock concrete classes for tests. |
-| Keep `Serializer`/`Deserializer`/`Codec` ABCs | Pure data conversion. Transport-independent. Genuinely useful. |
-| Add `TradingApp` business layer | Users should NOT think about Kafka. They think "I need bars" or "stream me quotes." |
-| `KafkaMessage` is honest about being Kafka | No pretense. Carries `offset`, `partition`, `topic` because it IS a Kafka message. |
-| Headers first-class, keys plain strings | Metadata in headers, routing in keys. Clean separation. |
-| `build_signal()` moved to serialization | Model layer stays pure. Serialization handles bytes. |
-| `TopicRegistry` provides factories | No more lambda boilerplate for `key_fn`/`headers_fn`. |
-| Keep `TypedProducer`/`TypedConsumer` public | Power-user escape hatch for custom message types/flows. |
+### Phase 5: Migrate services
+- [ ] Migrate `simple-strategy` to use `TradingApp`
+- [ ] Migrate `ingestion` to use `TradingApp`
+- [ ] Bump `executor` SDK version, adopt shared models

@@ -1,12 +1,7 @@
-"""Kafka transport implementation — concrete Channel and Transport.
+"""Kafka transport — concrete Channel, Transport, and topic registry.
 
-All Kafka-specific code lives here.  The parent ``transport`` package
-contains only transport-agnostic abstractions (Channel, Transport,
-TypedProducer, RequestReplyClient, etc.).
-
-Exports:
-    - KafkaChannel, KafkaTransport — concrete Channel/Transport implementations
-    - TopicConfig, TopicRegistry — Kafka topic naming and configuration
+All Kafka-specific code lives here.  Kafka is the permanent transport —
+no abstract ``Channel``/``Transport`` layer exists.
 """
 
 from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport

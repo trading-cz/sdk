@@ -1,10 +1,13 @@
-"""Kafka-backed transport implementation.
+"""Kafka-backed transport — concrete Channel and Transport.
 
 Uses Confluent's native async API (``AIOConsumer`` / ``AIOProducer``)
-for true non-blocking I/O — no thread executors needed.
+for true non-blocking I/O.
 
-One ``KafkaChannel`` per topic, one shared ``AIOProducer`` per transport.
+One ``KafkaChannel`` per topic, one shared ``AIOProducer`` per ``KafkaTransport``.
 All librdkafka parameters are configurable via ``KafkaSettings`` overrides.
+
+Kafka is the permanent transport.  There is no abstract ``Channel``/``Transport``
+layer — ``KafkaChannel`` and ``KafkaTransport`` are the direct concrete API.
 """
 
 import asyncio
@@ -15,16 +18,20 @@ from confluent_kafka.aio import AIOConsumer, AIOProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from tradingcz.config.settings import KafkaSettings
-from tradingcz.transport.protocol import Channel, Message, Transport
+from tradingcz.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 
 
-class KafkaChannel(Channel):
+class KafkaChannel:
     """Kafka-backed channel — one topic, fan-out receive.
 
     Uses a shared ``AIOProducer`` for sends and creates a dedicated
     ``AIOConsumer`` per ``receive()`` call for fan-out semantics.
+
+    All messages carry headers (``dict[str, str]``).  Headers are the
+    primary mechanism for metadata (message_type, source_app, request_id,
+    schema_version, sequence, etc.).
     """
 
     def __init__(
@@ -39,31 +46,54 @@ class KafkaChannel(Channel):
 
     @property
     def name(self) -> str:
+        """Kafka topic name."""
         return self._topic
 
-    async def send(self, payload: bytes, *, key: str = "") -> None:
-        """Produce a message to the Kafka topic — natively async.
+    # ------------------------------------------------------------------
+    # Send
+    # ------------------------------------------------------------------
 
-        ``AIOProducer.produce()`` returns a future; awaiting it delivers
-        the message asynchronously through librdkafka's event loop.
-        No thread executor or poll(0) hack needed.
+    async def send(
+        self,
+        payload: bytes,
+        *,
+        key: str = "",
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        """Publish a message to the Kafka topic.
+
+        Args:
+            payload: Message value as raw bytes (JSON in our system).
+            key: Routing key (plain string, e.g. ``"AAPL"``).  Empty/None
+                 means no key → round-robin across partitions.
+            headers: Message headers as ``{name: value}``.  Both are UTF-8
+                     encoded before sending.
         """
         key_bytes = key.encode() if key else None
+        header_list: list[tuple[str, bytes]] | None = None
+        if headers:
+            header_list = [(k, v.encode()) for k, v in headers.items()]
+
         delivery_future = await self._producer.produce(
-            self._topic, value=payload, key=key_bytes,
+            self._topic,
+            value=payload,
+            key=key_bytes,
+            headers=header_list,
         )
         await delivery_future
 
-    async def receive(self) -> AsyncIterator[Message]:
-        """Subscribe and yield messages — natively async consumer.
+    # ------------------------------------------------------------------
+    # Receive
+    # ------------------------------------------------------------------
 
-        Creates a dedicated ``AIOConsumer`` per call for fan-out.
-        Consumer config is fully driven by ``KafkaSettings``:
-        base defaults merged with ``consumer_overrides``.
+    async def receive(self) -> AsyncIterator[KafkaMessage]:
+        """Subscribe and yield ``KafkaMessage`` objects.
 
-        Poll interval is controlled by ``KafkaSettings.consumer_poll_timeout``
-        (default 1.0 s).  Override via ``KAFKA_CONSUMER_POLL_TIMEOUT`` env var
-        or the ``consumer_overrides`` dict for librdkafka-level tuning.
+        Creates a dedicated ``AIOConsumer`` per call for fan-out semantics.
+        Consumer config is fully driven by ``KafkaSettings``.
+
+        Each yielded ``KafkaMessage`` carries the raw payload, decoded key,
+        decoded headers, offset, partition, and topic.
         """
         group_id = f"{self._settings.consumer_group}-{self._topic}"
         config = self._settings.consumer_config(group_id=group_id)
@@ -77,11 +107,32 @@ class KafkaChannel(Channel):
                     continue
                 if msg.error():
                     logger.error(
-                        "Kafka consumer error on %s: %s", self._topic, msg.error(),
+                        "Kafka consumer error on %s: %s",
+                        self._topic,
+                        msg.error(),
                     )
                     continue
+
+                # Decode key
                 key = msg.key().decode() if msg.key() else ""
-                yield Message(payload=msg.value(), key=key)
+
+                # Decode headers
+                raw_headers = msg.headers() or []
+                headers: dict[str, str] = {}
+                for h_key, h_val in raw_headers:
+                    try:
+                        headers[h_key] = h_val.decode() if isinstance(h_val, bytes) else str(h_val)
+                    except (UnicodeDecodeError, AttributeError):
+                        headers[h_key] = repr(h_val)
+
+                yield KafkaMessage(
+                    payload=msg.value() if msg.value() is not None else b"",
+                    key=key,
+                    headers=headers,
+                    offset=msg.offset() if msg.offset() is not None else -1,
+                    partition=msg.partition() if msg.partition() is not None else -1,
+                    topic=msg.topic() if msg.topic() is not None else self._topic,
+                )
         finally:
             await consumer.close()
 
@@ -89,15 +140,11 @@ class KafkaChannel(Channel):
         """No-op — producer lifecycle managed by KafkaTransport."""
 
 
-class KafkaTransport(Transport):
+class KafkaTransport:
     """Kafka-backed transport — one shared ``AIOProducer``, cached channels.
 
     Topics are created on first use via Admin API if they don't already exist.
-
-    Per-topic configuration overrides are accepted by ``channel()`` and
-    fall back to ``KafkaSettings`` defaults when omitted.  This lets the
-    config repository (Kustomize/Helm) tune individual topics without
-    touching source code.
+    Per-topic configuration overrides are accepted by ``channel()``.
     """
 
     def __init__(self, settings: KafkaSettings) -> None:
@@ -120,7 +167,7 @@ class KafkaTransport(Transport):
         replication_factor: int | None = None,
         retention_ms: int | None = None,
         cleanup_policy: str | None = None,
-    ) -> Channel:
+    ) -> KafkaChannel:
         """Get or create a Kafka channel for *name*.
 
         Args:
@@ -128,11 +175,11 @@ class KafkaTransport(Transport):
             num_partitions: Override default partition count.
             replication_factor: Override default replication factor.
             retention_ms: Override default retention in milliseconds.
-            cleanup_policy: Override default cleanup policy (``"delete"`` or ``"compact"``).
+            cleanup_policy: Override default cleanup policy.
 
-        All topic-config overrides are optional — when ``None``, the
-        ``KafkaSettings`` default is used.  Channels are cached by name,
-        so topic config only applies on first call for a given name.
+        All overrides are optional — when ``None``, the ``KafkaSettings``
+        default is used.  Channels are cached by name, so topic config
+        only applies on first call for a given name.
         """
         if name not in self._channels:
             partitions = (
@@ -159,10 +206,7 @@ class KafkaTransport(Transport):
         retention_ms: int | None = None,
         cleanup_policy: str | None = None,
     ) -> None:
-        """Create the topic via Admin API if it doesn't already exist.
-
-        Per-topic overrides take precedence over ``KafkaSettings`` defaults.
-        """
+        """Create the topic via Admin API if it doesn't already exist."""
         if name in self._topics_created:
             return
 
@@ -200,28 +244,27 @@ class KafkaTransport(Transport):
             replication_factor=rf,
             config=topic_config,
         )
-        futures = await loop.run_in_executor(
-            None, lambda: self._admin.create_topics([new_topic]),
-        )
+        futures = self._admin.create_topics([new_topic])
         for topic, future in futures.items():
             try:
                 future.result()
-                logger.info(
-                    "Created Kafka topic: %s (partitions=%d, rf=%d, retention=%dms)",
-                    topic, num_partitions, rf, ret,
-                )
-            except Exception as exc:
-                logger.warning("Topic %s may already exist: %s", topic, exc)
+                logger.info("Created topic '%s'", topic)
+            except Exception:
+                logger.exception("Failed to create topic '%s'", topic)
+                raise
+
         self._topics_created.add(name)
 
     async def close(self) -> None:
-        """Flush producer and close all channels."""
-        if self._producer is not None:
-            await self._producer.flush()
-            # AIOProducer.close() is the proper async shutdown
-            # (type stubs may not be complete — suppress attr-error)
-            try:
-                await self._producer.close()  # type: ignore[attr-defined]
-            except AttributeError:
-                logger.debug("AIOProducer.close() not available — skipping")
+        """Close all channels and release transport resources."""
+        for channel in self._channels.values():
+            await channel.close()
         self._channels.clear()
+        # AIOProducer does not have an explicit async close in all versions;
+        # flush any outstanding messages and let GC handle cleanup.
+        if self._producer is not None:
+            try:
+                self._producer.flush()
+            except Exception:
+                pass
+            self._producer = None

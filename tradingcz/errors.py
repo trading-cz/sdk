@@ -1,0 +1,33 @@
+"""Shared error types for the trading SDK."""
+
+
+class SdkError(Exception):
+    """Base for all SDK-raised exceptions."""
+
+
+class TransportError(SdkError):
+    """Transport-level failure (connection, timeout, broker unreachable)."""
+
+
+class ConnectionError(TransportError):
+    """Cannot connect to the transport backend."""
+
+
+class TimeoutError(TransportError):
+    """Operation timed out at the transport level."""
+
+
+class SerializationError(SdkError):
+    """Serialization or deserialization failed."""
+
+
+class ConfigurationError(SdkError):
+    """Invalid SDK configuration."""
+
+
+class TopicNotFoundError(TransportError):
+    """The requested topic does not exist on the broker."""
+
+
+class MessageTypeError(SdkError):
+    """Received a message of an unexpected type."""
