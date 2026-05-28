@@ -1,27 +1,37 @@
 """TradingApp — batteries-included SDK entry point.
 
-Usage — all features enabled by default::
+Configuration is driven by environment variables (see ``KafkaSettings``).
+Minimal setup — just provide a ``service_id``::
 
     from tradingcz.sdk import TradingApp
 
-    app = (TradingApp(env="dev", service_id="my-strategy")
-           .build())
+    app = TradingApp(service_id="my-strategy")
     await app.start()
-
     bars = await app.data.request_historical(["AAPL"])
     await app.close()
 
-Usage — selective features::
+    # Or use the async context manager:
+    async with TradingApp(service_id="my-strategy") as app:
+        bars = await app.data.request_historical(["AAPL"])
 
-    app = (TradingApp(env="dev", service_id="risk-checker")
-           .with_data(False)
-           .with_signals(False)
-           .build())
+Feature flags::
+
+    app = TradingApp(service_id="risk-checker")
+    app.with_signals(False).with_data(False)
     await app.start()
     # Only app.positions, app.balance, app.orders available
+
+Environment variables::
+
+    KAFKA_BOOTSTRAP_SERVERS  — Kafka broker addresses (default: localhost:9092)
+    KAFKA_CONSUMER_GROUP     — Consumer group id (default: <service_id>)
+    SDK_ENV                  — Environment name (default: dev)
+    SDK_BROKER               — Broker identifier (default: alpaca)
 """
 
 from __future__ import annotations
+
+import os
 
 from tradingcz.config.settings import KafkaSettings
 from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
@@ -35,32 +45,48 @@ from tradingcz.transport.kafka.topics import TopicRegistry
 
 
 class TradingApp:
-    """Builder for a fully wired trading application.
+    """Batteries-included trading application.
 
     All client features are enabled by default.  Use ``.with_*(False)``
     to disable features you don't need.
+
+    Configuration via environment variables (all optional):
+        ``KAFKA_BOOTSTRAP_SERVERS``, ``KAFKA_CONSUMER_GROUP``,
+        ``SDK_ENV``, ``SDK_BROKER``.
+
+    Usage::
+
+        async with TradingApp(service_id="my-strategy") as app:
+            bars = await app.data.request_historical(["AAPL"])
+            await app.signals.publish(signal)
     """
 
     def __init__(
         self,
         *,
-        env: str = "dev",
         service_id: str,
-        bootstrap_servers: str = "localhost:9092",
-        broker: str = "alpaca",
+        env: str | None = None,
+        bootstrap_servers: str | None = None,
+        broker: str | None = None,
     ) -> None:
-        self._env = env
         self._service_id = service_id
-        self._bootstrap_servers = bootstrap_servers
-        self._broker = broker
+        self._env = env or os.environ.get("SDK_ENV", "dev")
+        self._broker = broker or os.environ.get("SDK_BROKER", "alpaca")
+
+        # Kafka settings — env vars take priority, else use reasonable defaults
+        self._kafka = KafkaSettings(
+            bootstrap_servers=bootstrap_servers
+            or os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+            consumer_group=os.environ.get("KAFKA_CONSUMER_GROUP", service_id),
+        )
+
         self._enable_data = True
         self._enable_signals = True
         self._enable_positions = True
         self._enable_balance = True
         self._enable_orders = True
-        self._built = False
 
-        # Set after build()/start()
+        # Set after start()
         self._transport: KafkaTransport | None = None
         self._topics: TopicRegistry | None = None
         self._events_channel: KafkaChannel | None = None
@@ -97,25 +123,17 @@ class TradingApp:
         self._enable_orders = enable
         return self
 
-    def build(self) -> "TradingApp":
-        """Validate and freeze configuration. Call before start()."""
-        self._built = True
-        return self
-
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Initialize transport and enabled clients."""
-        if not self._built:
-            raise RuntimeError("Call .build() before .start()")
+        """Initialize transport and enabled clients.
 
-        settings = KafkaSettings(
-            bootstrap_servers=self._bootstrap_servers,
-            consumer_group=self._service_id,
-        )
-        self._transport = KafkaTransport(settings)
+        Connects to Kafka, sets up channels, and starts background
+        listeners for request/reply correlation.
+        """
+        self._transport = KafkaTransport(self._kafka)
         self._topics = TopicRegistry(env=self._env)
         self._events_channel = await self._transport.channel(self._topics.events.name)
 
@@ -158,8 +176,17 @@ class TradingApp:
             self.orders = OrderClient(rr=self._rr)
 
     async def close(self) -> None:
-        """Graceful shutdown."""
+        """Graceful shutdown — flushes queued messages and closes connections."""
         if self._rr is not None:
             await self._rr.close()
         if self._transport is not None:
             await self._transport.close()
+
+    async def __aenter__(self) -> "TradingApp":
+        """Async context manager entry — calls ``start()``."""
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        """Async context manager exit — calls ``close()``."""
+        await self.close()

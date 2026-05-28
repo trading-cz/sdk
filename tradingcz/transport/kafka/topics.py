@@ -1,26 +1,21 @@
 """Topic registry — single source of truth for Kafka topic names and configs.
 
-Replaces the previously lost ``tradingcz.kafka.Topics`` and ``tradingcz.kafka.keys``
-modules.  Provides hyphen-separated, K8s-safe, environment-scoped topic names
+Provides hyphen-separated, K8s-safe, environment-scoped topic names
 (e.g. ``dev-event``, ``dev-market-data``).
 
 Topic names are environment-scoped for security isolation
 (``dev-market-data`` and ``prd-market-data`` are separate topics).
 
-JSON Key helpers produce Pydantic-serialized JSON keys for each topic type.
-All message keys MUST be JSON — never plain strings — for consistent tooling
-and schema validation.
+Message keys are plain strings (e.g. ``"AAPL"``) for partition routing.
+Metadata lives in headers via ``tradingcz.model.headers.make_headers()``.
 
 Usage (in any service)::
 
-    from tradingcz.transport.kafka import TopicConfig, TopicRegistry
+    from tradingcz.transport.kafka import TopicRegistry
 
     topics = TopicRegistry(env="dev")
     channel = await transport.channel(topics.market_data.name)
-
-    # Market-data JSON key (NOT a plain string):
-    key = topics.market_data_key("ingestion", "alpaca", "AAPL")
-    # → '{"source":"ingestion","broker":"alpaca","symbol":"AAPL","ts":"...",}'
+    await channel.send(payload, key="AAPL", headers=make_headers(...))
 """
 
 from dataclasses import dataclass
@@ -49,8 +44,7 @@ class TopicRegistry:
     """Central topic naming and configuration.
 
     Instantiate once per process with the target environment.
-    Topic names are environment-scoped for security isolation
-    (``dev-market-data`` and ``prd-market-data`` are separate topics).
+    Topic names are environment-scoped for security isolation.
 
     Example::
 
@@ -60,8 +54,6 @@ class TopicRegistry:
     """
 
     def __init__(self, env: str = "dev") -> None:
-        # Hyphen-separated naming: <env>-<topic> (K8s-safe, no dots or underscores)
-
         # Control plane: single partition ensures total ordering of
         # DataRequest/DataReady/DataError messages.
         self.events = TopicConfig(name=f"{env}-event", partitions=1)
@@ -85,70 +77,3 @@ class TopicRegistry:
         Example: ``\"dev-market-data-historical-abc123\"``
         """
         return f"{self.market_data.name}-historical-{request_id}"
-
-    # ------------------------------------------------------------------
-    # JSON key generators — one per topic type
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def event_key(
-        event_type: str,
-        source: str,
-        request_id: str,
-    ) -> str:
-        """JSON key for control-plane messages on the events topic.
-
-        Used for DataRequest, DataReady, and DataError messages.
-
-        Args:
-            event_type: ``"data_request"``, ``"data_ready"``, or ``"data_error"``.
-            source: App identifier (e.g. ``"smoke_test"``, ``"ingestion"``).
-            request_id: Correlation ID linking request to response.
-
-        Returns:
-            JSON string like ``'{"event_type":"data_request","source":"smoke_test",...}'``.
-
-        Example::
-
-            key = TopicRegistry.event_key(
-                "data_request", "smoke_test", request_id,
-            )
-        """
-        from tradingcz.model.kafka_key import EventKey  # pylint: disable=import-outside-toplevel
-
-        return EventKey(
-            event_type=event_type,
-            source=source,
-            request_id=request_id,
-        ).model_dump_json()
-
-    @staticmethod
-    def market_data_key(
-        source: str,
-        broker: str,
-        symbol: str,
-    ) -> str:
-        """JSON key for market-data messages (Trade, Quote, Bar).
-
-        Co-locates all data for a given (broker, symbol) pair on the same
-        Kafka partition.
-
-        Args:
-            source: Origin service (e.g. ``"ingestion"``).
-            broker: Broker identifier (e.g. ``"alpaca"``).
-            symbol: Ticker symbol (e.g. ``"AAPL"``).
-
-        Returns:
-            JSON string like ``'{"source":"ingestion","broker":"alpaca","symbol":"AAPL",...}'``.
-
-        Example::
-
-            key = TopicRegistry.market_data_key("ingestion", "alpaca", "AAPL")
-        """
-        from tradingcz.model.kafka_key import MarketDataKey  # pylint: disable=import-outside-toplevel
-
-        return MarketDataKey(
-            source=source,
-            broker=broker,
-            symbol=symbol,
-        ).model_dump_json()

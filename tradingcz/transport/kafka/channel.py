@@ -62,11 +62,12 @@ class KafkaChannel:
         key: str = "",
         headers: dict[str, str] | None = None,
     ) -> None:
-        """Publish a message to the Kafka topic.
+        """Queue a message for asynchronous delivery.  Does NOT flush.
 
-        Uses synchronous ``Producer.produce()`` + ``flush()`` wrapped in
-        a thread-pool executor for async await semantics with full headers
-        support.
+        Messages are batched by librdkafka (``linger.ms=5`` default).
+        Use ``flush()`` when you need a delivery guarantee before the
+        next operation (e.g. request/reply patterns).  All queued
+        messages are flushed on ``KafkaTransport.close()``.
 
         Args:
             payload: Message value as raw bytes (JSON in our system).
@@ -80,22 +81,39 @@ class KafkaChannel:
         if headers:
             header_list = [(k, v.encode()) for k, v in headers.items()]
 
-        def _produce_and_flush() -> None:
+        def _produce() -> None:
             self._producer.produce(
                 self._topic,
                 value=payload,
                 key=key_bytes,
                 headers=header_list,
             )
-            remaining = self._producer.flush(timeout=30)
-            if remaining > 0:
-                raise RuntimeError(
-                    f"Failed to deliver message to {self._topic}: "
-                    f"{remaining} message(s) still pending after flush"
-                )
 
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _produce_and_flush)
+        await loop.run_in_executor(None, _produce)
+
+    async def flush(self, timeout: float = 30.0) -> None:
+        """Wait for all queued messages to be delivered to Kafka.
+
+        Call this when you need a delivery guarantee — e.g. before
+        awaiting a response in a request/reply pattern.
+
+        Args:
+            timeout: Maximum seconds to wait for delivery.
+
+        Raises:
+            RuntimeError: If messages remain undelivered after timeout.
+        """
+        def _flush() -> int:
+            return self._producer.flush(timeout)
+
+        loop = asyncio.get_running_loop()
+        remaining = await loop.run_in_executor(None, _flush)
+        if remaining > 0:
+            raise RuntimeError(
+                f"Failed to deliver messages to {self._topic}: "
+                f"{remaining} message(s) still pending after flush"
+            )
 
     # ------------------------------------------------------------------
     # Receive
@@ -271,13 +289,15 @@ class KafkaTransport:
         self._topics_created.add(name)
 
     async def close(self) -> None:
-        """Close all channels and release transport resources."""
+        """Close all channels and release transport resources.
+
+        Flushes the producer to ensure all queued messages are delivered
+        before shutting down.
+        """
+        if self._producer is not None:
+            self._producer.flush(timeout=10)
+            self._producer.poll(0)
         for channel in self._channels.values():
             await channel.close()
         self._channels.clear()
-        if self._producer is not None:
-            # Flush and purge to ensure clean thread shutdown
-            self._producer.flush(timeout=10)
-            # Poll to process any pending delivery callbacks
-            self._producer.poll(0)
-            self._producer = None
+        self._producer = None

@@ -1,7 +1,8 @@
 """SDK business layer — high-level API for trading applications.
 
-Users import ``TradingApp``, call ``.build()``, ``.start()``, and use
-typed business methods like ``app.data.request_historical()``.
+Users import ``TradingApp``, call ``await app.start()`` (or use
+``async with``), and use typed business methods like
+``app.data.request_historical()``.
 
 No Kafka knowledge required.
 """

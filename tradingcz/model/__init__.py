@@ -6,12 +6,7 @@ from tradingcz.model.enum import (
     Timeframe,
 )
 from tradingcz.model.ingestion import Bar, Quote, Snapshot, StreamQuote, Trade
-from tradingcz.model.message_headers import (
-    EventHeaders,
-    MarketDataHeaders,
-    event_headers,
-    market_data_headers,
-)
+from tradingcz.model.headers import make_headers
 from tradingcz.model.events import (
     DataError,
     DataReady,
@@ -19,18 +14,7 @@ from tradingcz.model.events import (
     parse_by_message_type,
     parse_event,
 )
-from tradingcz.model.signal import (
-    SignalEnvelope,
-    SignalKey,
-    SignalMetadata,
-    SignalValue,
-    TradingSignal,
-    build_signal,
-)
-
-# Deprecated aliases for backward compatibility
-EventKey = EventHeaders  # type: ignore[assignment]
-MarketDataKey = MarketDataHeaders  # type: ignore[assignment]
+from tradingcz.model.signal import TradingSignal
 
 __all__ = [
     # Enums
@@ -45,25 +29,15 @@ __all__ = [
     "Trade",
     "Snapshot",
     "StreamQuote",
-    # Headers (replaces kafka_key)
-    "EventHeaders",
-    "MarketDataHeaders",
-    "event_headers",
-    "market_data_headers",
-    # Deprecated aliases
-    "EventKey",
-    "MarketDataKey",
-    # Control-plane events
+    # Headers
+    "make_headers",
+    # Events
     "DataRequest",
     "DataReady",
     "DataError",
-    "parse_event",
     "parse_by_message_type",
-    # Trading signals
+    "parse_event",
+    # Signals
     "TradingSignal",
-    "SignalKey",
-    "SignalValue",
-    "SignalMetadata",
-    "SignalEnvelope",
-    "build_signal",
 ]
+

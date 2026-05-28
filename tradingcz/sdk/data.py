@@ -15,8 +15,9 @@ from collections.abc import AsyncIterator
 
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.model.events import DataError, DataReady, DataRequest
-from tradingcz.model.message_headers import historical_headers
-from tradingcz.sdk._helpers import _DedupFilter, _RequestReply
+from tradingcz.model.headers import REQUEST_ID, SEQUENCE, SOURCE, SOURCE_APP
+from tradingcz.sdk._helpers import _RequestReply
+from tradingcz.transport._dedup import DedupFilter
 from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport
 from tradingcz.transport.kafka.topics import TopicRegistry
 
@@ -49,7 +50,7 @@ class DataClient:
         self._topics = topics
         self._service_id = service_id
         self._broker = broker
-        self._dedup = _DedupFilter(max_size=dedup_max_size)
+        self._dedup = DedupFilter(max_size=dedup_max_size)
         # Register response types
         rr.register_type("data_ready", DataReady)
         rr.register_type("data_error", DataError)
@@ -118,12 +119,12 @@ class DataClient:
         try:
             async for msg in channel.receive():
                 # Filter by request_id in headers
-                if msg.headers.get("request_id") != req.request_id:
+                if msg.headers.get(REQUEST_ID) != req.request_id:
                     continue
                 # Dedup by (source, sequence)
                 if self._dedup.is_duplicate(
-                    msg.headers.get("source", msg.headers.get("source_app", "")),
-                    msg.headers.get("sequence", "0"),
+                    msg.headers.get(SOURCE, msg.headers.get(SOURCE_APP, "")),
+                    msg.headers.get(SEQUENCE, "0"),
                 ):
                     continue
                 try:
@@ -213,8 +214,8 @@ class DataClient:
             async for msg in channel.receive():
                 # Dedup by (source, sequence) — skip re-delivered messages
                 if self._dedup.is_duplicate(
-                    msg.headers.get("source", msg.headers.get("source_app", "")),
-                    msg.headers.get("sequence", "0"),
+                    msg.headers.get(SOURCE, msg.headers.get(SOURCE_APP, "")),
+                    msg.headers.get(SEQUENCE, "0"),
                 ):
                     continue
                 try:

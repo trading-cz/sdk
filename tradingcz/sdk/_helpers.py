@@ -1,92 +1,23 @@
 """Internal helpers for the SDK business layer.
 
 These are NOT part of the public API.  They are used internally by
-DataClient, SignalPublisher, PositionClient, etc. to avoid code
-duplication.
+DataClient, SignalPublisher, PositionClient, etc.
 
 - ``_RequestReply``   — send a typed request, await correlated response
 - ``_FireAndForget``  — send a typed message, don't wait
-- ``_DedupFilter``    — skip duplicate messages by (source, sequence)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections import OrderedDict
-from collections.abc import Callable
-from typing import Any
 
 from pydantic import BaseModel
 
-from tradingcz import SCHEMA_VERSION
-from tradingcz.transport.kafka_message import KafkaMessage
+from tradingcz.model.headers import make_headers, REQUEST_ID
 from tradingcz.transport.kafka.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
-
-
-# ── Deduplication ───────────────────────────────────────────────────────────
-
-
-class _DedupFilter:
-    """Track seen (source_app, sequence) pairs to skip duplicates.
-
-    Kafka guarantees at-least-once delivery.  After a consumer restart
-    or offset reset, messages may be re-delivered.  This filter tracks
-    seen sequences and skips already-processed messages.
-
-    Sequence numbers are expected to be **globally monotonic per
-    (source_app, topic)** — not per symbol or message type.  This
-    simplifies dedup at the cost of losing per-symbol gap detection.
-
-    Memory is bounded by *max_size* (default 100k).  When the limit is
-    reached, the oldest entry is evicted (LRU).
-    """
-
-    def __init__(self, max_size: int = 100_000) -> None:
-        self._seen: OrderedDict[tuple[str, str], None] = OrderedDict()
-        self._max = max_size
-        self._hits = 0   # duplicates skipped
-        self._total = 0  # total checked
-
-    def is_duplicate(self, source_app: str, sequence: str) -> bool:
-        """Return True if this (source_app, sequence) was already seen.
-
-        Side effect: records the pair as seen if it wasn't already.
-        """
-        self._total += 1
-        key = (source_app, sequence)
-        if key in self._seen:
-            self._hits += 1
-            return True
-        self._seen[key] = None
-        if len(self._seen) > self._max:
-            self._seen.popitem(last=False)  # evict oldest (LRU)
-        return False
-
-    def clear(self) -> None:
-        """Reset all tracking state."""
-        self._seen.clear()
-        self._hits = 0
-        self._total = 0
-
-    @property
-    def skipped_count(self) -> int:
-        """Number of duplicates skipped so far."""
-        return self._hits
-
-    @property
-    def total_count(self) -> int:
-        """Total number of messages checked."""
-        return self._total
-
-
-def _extract_dedup_key(msg: KafkaMessage) -> tuple[str, str]:
-    """Extract (source, sequence) from a KafkaMessage's headers."""
-    source = msg.headers.get("source_app", msg.headers.get("source", ""))
-    seq = msg.headers.get("sequence", "0")
-    return (source, seq)
 
 
 class _FireAndForget:
@@ -112,20 +43,17 @@ class _FireAndForget:
 
         Args:
             message: Pydantic model to serialize.
-            message_type: Value for the ``message_type`` header (e.g. ``"trading_signal"``).
+            message_type: Value for the ``message_type`` header.
             key: Kafka message key (empty = no partitioning).
             extra_headers: Additional headers merged into standard set.
         """
         self._seq += 1
-        headers: dict[str, str] = {
-            "message_type": message_type,
-            "source_app": self._service_id,
-            "schema_version": SCHEMA_VERSION,
-            "sequence": str(self._seq),
-        }
-        if extra_headers:
-            headers.update(extra_headers)
-
+        headers = make_headers(
+            message_type=message_type,
+            source_app=self._service_id,
+            sequence=self._seq,
+            **(extra_headers or {}),
+        )
         payload = message.model_dump_json().encode()
         await self._channel.send(payload, key=key, headers=headers)
 
@@ -135,6 +63,10 @@ class _RequestReply:
 
     Correlation is by ``request_id`` — both request and response models
     must have a ``request_id: str`` field (convention, not Protocol).
+
+    Uses ``make_headers()`` for consistent header construction.
+    Flushes after each request to guarantee delivery before awaiting
+    the response.
 
     Used internally by: DataClient, PositionClient, BalanceClient, OrderClient.
     """
@@ -216,18 +148,19 @@ class _RequestReply:
         if not request_id:
             raise ValueError(f"Request model {type(req).__name__} has no request_id")
 
-        mt = request_type or self._infer_type(req)
+        mt = request_type or _infer_message_type(req)
         self._seq += 1
 
         payload = req.model_dump_json().encode()
-        headers: dict[str, str] = {
-            "message_type": mt,
-            "source_app": self._service_id,
-            "request_id": request_id,
-            "schema_version": SCHEMA_VERSION,
-            "sequence": str(self._seq),
-        }
+        headers = make_headers(
+            message_type=mt,
+            source_app=self._service_id,
+            sequence=self._seq,
+            request_id=request_id,
+        )
+        # Send + flush — request delivery must be guaranteed before awaiting response
         await self._channel.send(payload, key="", headers=headers)
+        await self._channel.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
         self._pending[request_id] = future  # type: ignore[arg-type]
@@ -258,7 +191,7 @@ class _RequestReply:
                     self._skipped += 1
                     continue
 
-                resp_id: str = getattr(parsed, "request_id", "")
+                resp_id: str = getattr(parsed, REQUEST_ID, "")
                 if not resp_id:
                     continue
 
@@ -275,8 +208,8 @@ class _RequestReply:
         """Number of messages skipped (not matching any registered type)."""
         return self._skipped
 
-    @staticmethod
-    def _infer_type(model: BaseModel) -> str:
-        """Infer message_type from model class name: DataRequest → 'data_request'."""
-        import re
-        return re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
+
+def _infer_message_type(model: BaseModel) -> str:
+    """Infer message_type from model class name: DataRequest → 'data_request'."""
+    import re
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()

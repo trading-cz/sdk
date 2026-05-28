@@ -33,8 +33,9 @@ from pydantic import BaseModel, Field
 from tradingcz import SCHEMA_VERSION
 from tradingcz.config import KafkaSettings
 from tradingcz.model.ingestion import Bar, Quote
-from tradingcz.model.message_headers import event_headers
-from tradingcz.sdk._helpers import _DedupFilter, _FireAndForget, _RequestReply
+from tradingcz.model.headers import make_headers
+from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
+from tradingcz.transport._dedup import DedupFilter
 from tradingcz.serialization import JsonCodec
 from tradingcz.transport import (
     KafkaChannel,
@@ -292,10 +293,10 @@ async def test_3_typed_parser_multiple_types() -> None:
 
 
 async def test_4_dedup_filter() -> None:
-    """_DedupFilter skips duplicate (source, sequence) pairs."""
+    """DedupFilter skips duplicate (source, sequence) pairs."""
     section("Test 4: DedupFilter — skip duplicate sequences")
 
-    d = _DedupFilter(max_size=100)
+    d = DedupFilter(max_size=100)
 
     # First occurrence — not duplicate
     assert d.is_duplicate("ingestion", "1") is False
@@ -461,7 +462,7 @@ async def test_7_dedup_in_channel_flow() -> None:
             )
 
         # Consume with dedup filter
-        dedup = _DedupFilter()
+        dedup = DedupFilter()
         received_seqs: list[int] = []
         async for msg in channel.receive():
             source = msg.headers.get("source_app", "")
