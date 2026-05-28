@@ -24,6 +24,8 @@ import logging
 import os
 import signal
 
+from pydantic import BaseModel
+
 from tradingcz.config import KafkaSettings
 from tradingcz.sdk._health import HealthPublisher
 from tradingcz.sdk._helpers import _FireAndForget
@@ -76,6 +78,7 @@ class ServiceApp:
         self.transport: KafkaTransport | None = None
         self.topics: TopicRegistry | None = None
         self.events_channel: KafkaChannel | None = None
+        self._faf: _FireAndForget | None = None
         self._health: HealthPublisher | None = None
 
     # ------------------------------------------------------------------
@@ -93,9 +96,9 @@ class ServiceApp:
         self.events_channel = await self.transport.channel(self.topics.events.name)
 
         # Health / heartbeat on the events channel
-        faf = _FireAndForget(self.events_channel, self.service_id)
+        self._faf = _FireAndForget(self.events_channel, self.service_id)
         self._health = HealthPublisher(
-            faf,
+            self._faf,
             self.service_id,
             interval=self._health_interval,
         )
@@ -139,6 +142,32 @@ class ServiceApp:
     def env(self) -> str:
         """Deployment environment (dev/prd)."""
         return self._env
+
+    async def publish(
+        self,
+        message: "BaseModel",
+        *,
+        message_type: str,
+        key: str = "",
+        **headers: str,
+    ) -> None:
+        """Publish a typed message on the events channel (fire-and-forget).
+
+        Convenience wrapper around ``_FireAndForget`` — one-line send
+        with standard headers.  The ``message_type`` is required;
+        additional kwargs become header fields.
+
+        Example::
+
+            await self.publish(
+                DataReady(request_id="...", ...),
+                message_type="data_ready",
+                key=request_id,
+            )
+        """
+        if self._faf is None:
+            raise RuntimeError("Call start() before publish()")
+        await self._faf.send(message, message_type=message_type, key=key, extra_headers=headers or None)
 
     # ------------------------------------------------------------------
     # Shutdown
