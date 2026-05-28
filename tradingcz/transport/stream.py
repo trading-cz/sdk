@@ -9,16 +9,27 @@ Usage::
     producer = TypedProducer(
         channel=channel,
         serializer=JsonCodec(TradingSignal),
+        source_app="my-strategy",
         key_fn=lambda s: s.symbol,
-        headers_fn=lambda s: {"message_type": "trading_signal", ...},
     )
     await producer.send(signal)
 """
 
 from collections.abc import AsyncIterator, Callable
 
+from tradingcz.model.headers import make_headers
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.kafka_message import KafkaMessage
+
+
+def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
+    """Return a headers_fn that auto-infers message_type from the value's class name."""
+    def _fn(value: T) -> dict[str, str]:
+        return make_headers(
+            message_type=type(value).__name__.lower(),
+            source_app=source_app,
+        )
+    return _fn
 
 
 class TypedProducer[T]:
@@ -26,7 +37,11 @@ class TypedProducer[T]:
 
     Generic in the message type ``T``.  Uses a ``Serializer[T]`` to
     convert values to bytes.  Optional ``key_fn`` for Kafka partition
-    routing and ``headers_fn`` for message metadata.
+    routing.
+
+    Headers are always included — by default, ``message_type`` is
+    auto-inferred from the value's class name (e.g. ``TradingSignal``
+    → ``"trading_signal"``).  Override via ``headers_fn``.
     """
 
     def __init__(
@@ -34,13 +49,16 @@ class TypedProducer[T]:
         channel: "KafkaChannel",
         serializer: Serializer[T],
         *,
+        source_app: str = "",
         key_fn: Callable[[T], str] | None = None,
         headers_fn: Callable[[T], dict[str, str]] | None = None,
     ) -> None:
         self._channel = channel
         self._serializer = serializer
         self._key_fn: Callable[[T], str] = key_fn or (lambda _: "")
-        self._headers_fn = headers_fn
+        self._headers_fn: Callable[[T], dict[str, str]] = (
+            headers_fn or _default_headers_fn(source_app)
+        )
 
     @property
     def channel(self) -> "KafkaChannel":
@@ -51,11 +69,12 @@ class TypedProducer[T]:
         """Serialize *value* and publish to the channel.
 
         Key is computed by ``key_fn(value)`` (default: empty string).
-        Headers are computed by ``headers_fn(value)`` if provided.
+        Headers are always set — by default, ``message_type`` is the
+        lowercased class name and ``source_app`` from the constructor.
         """
         payload = self._serializer.serialize(value)
         key = self._key_fn(value)
-        headers = self._headers_fn(value) if self._headers_fn else None
+        headers = self._headers_fn(value)
         await self._channel.send(payload, key=key, headers=headers)
 
 
