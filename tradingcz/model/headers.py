@@ -18,7 +18,7 @@ REQUEST_ID = "request_id"  # correlation ID for request/reply
 TRACKING_ID = "tracking_id"  # run identifier for signal correlation
 STRATEGY_ID = "strategy_id"  # strategy that produced a signal
 
-# ── Market-data topic ───────────────────────────────────────────────────────
+# ── Stock-market data topics ────────────────────────────────────────────────
 SOURCE = "source"  # origin service (e.g. "ingestion")
 BROKER = "broker"  # broker identifier (e.g. "alpaca")
 SYMBOL = "symbol"  # ticker symbol (also the Kafka key)

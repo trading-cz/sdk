@@ -2,7 +2,7 @@
 
 Handles the full lifecycle:
   1. Send DataRequest via _RequestReply
-  2. Await DataReady (contains data_topic or market_data topic)
+  2. Await DataReady (contains data_topic for stream/historical topics)
   3. Manage ephemeral channels or streaming subscriptions
   4. Filter, order, parse, and yield typed results
 """

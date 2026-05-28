@@ -120,25 +120,50 @@ class KafkaChannel:
     # Receive
     # ------------------------------------------------------------------
 
-    async def receive(self) -> AsyncIterator[KafkaMessage]:
+    async def receive(
+        self,
+        *,
+        group_suffix: str = "",
+        idle_timeout: float = 0.0,
+    ) -> AsyncIterator[KafkaMessage]:
         """Subscribe and yield ``KafkaMessage`` objects.
 
         Creates a dedicated ``AIOConsumer`` per call for fan-out semantics.
         Consumer config is fully driven by ``KafkaSettings``.
 
+        Args:
+            group_suffix: Appended to the consumer group id for isolation.
+                Use a unique suffix for replay-from-beginning (fresh group
+                with no committed offsets starts at ``auto.offset.reset``).
+                Use a stable suffix (e.g. ``"health"``) for ongoing
+                consumption that should resume from the last committed offset.
+            idle_timeout: If > 0, the iterator stops after this many seconds
+                of no messages.  Use for replay/drain scenarios where you
+                need to read all available messages and then stop.
+                Default 0 = run forever.
+
         Each yielded ``KafkaMessage`` carries the raw payload, decoded key,
         decoded headers, offset, partition, and topic.
         """
-        group_id = f"{self._settings.consumer_group}-{self._topic}"
+        base = f"{self._settings.consumer_group}-{self._topic}"
+        group_id = f"{base}-{group_suffix}" if group_suffix else base
         config = self._settings.consumer_config(group_id=group_id)
         consumer = AIOConsumer(config)
         await consumer.subscribe([self._topic])
 
+        poll_timeout = min(self._settings.consumer_poll_timeout, idle_timeout) if idle_timeout > 0 else self._settings.consumer_poll_timeout
+        idle_accum: float = 0.0
+
         try:
             while True:
-                msg = await consumer.poll(self._settings.consumer_poll_timeout)
+                msg = await consumer.poll(poll_timeout)
                 if msg is None:
+                    if idle_timeout > 0:
+                        idle_accum += poll_timeout
+                        if idle_accum >= idle_timeout:
+                            break
                     continue
+                idle_accum = 0.0  # reset on message
                 if msg.error():
                     logger.error(
                         "Kafka consumer error on %s: %s",

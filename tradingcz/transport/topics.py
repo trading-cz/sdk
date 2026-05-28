@@ -1,10 +1,11 @@
 """Topic registry — single source of truth for Kafka topic names and configs.
 
 Provides hyphen-separated, K8s-safe, environment-scoped topic names
-(e.g. ``dev-event``, ``dev-market-data``).
+(e.g. ``dev-event``, ``dev-stock-market-stream-data``).
 
 Topic names are environment-scoped for security isolation
-(``dev-market-data`` and ``prd-market-data`` are separate topics).
+(``dev-stock-market-stream-data`` and ``prd-stock-market-stream-data`` are
+separate topics).
 
 Message keys are plain strings (e.g. ``"AAPL"``) for partition routing.
 Metadata lives in headers via ``tradingcz.model.headers.make_headers()``.
@@ -26,7 +27,7 @@ class TopicConfig:
     """Immutable topic configuration.
 
     Attributes:
-        name: Kafka topic name (e.g. ``"dev-market-data"``).
+        name: Kafka topic name (e.g. ``"dev-stock-market-stream-data"``).
         partitions: Default partition count for auto-creation.
         replication_factor: Default replication factor.
         retention_ms: Retention in milliseconds (default 5 days).
@@ -49,7 +50,7 @@ class TopicRegistry:
     Example::
 
         registry = TopicRegistry(env=\"dev\")
-        assert registry.market_data.name == \"dev-market-data\"
+        assert registry.market_data.name == \"dev-stock-market-stream-data\"
         assert registry.events.name == \"dev-event\"
     """
 
@@ -58,22 +59,22 @@ class TopicRegistry:
         # DataRequest/DataReady/DataError messages.
         self.events = TopicConfig(name=f"{env}-event", partitions=1)
 
-        # Market data: 5 partitions, keyed by symbol for independent
-        # consumption by multiple strategies.
+        # Live stock streaming: 5 partitions, keyed by symbol for
+        # independent consumption by multiple strategies.
         self.market_data = TopicConfig(
-            name=f"{env}-market-data",
+            name=f"{env}-stock-market-stream-data",
             partitions=5,
             retention_ms=86_400_000,  # 1 day for live data
+        )
+
+        # Historical stock data: 5 partitions, shared across all
+        # historical requests (request_id used for filtering).
+        self.historical_data = TopicConfig(
+            name=f"{env}-stock-market-historical-data",
+            partitions=5,
         )
 
         self.signals = TopicConfig(name=f"{env}-raw-signal", partitions=1)
         self.execution_requests = TopicConfig(name=f"{env}-execution-request", partitions=1)
         self.execution_responses = TopicConfig(name=f"{env}-execution-response", partitions=1)
         self.positions = TopicConfig(name=f"{env}-position-events", partitions=1)
-
-    def historical(self, request_id: str) -> str:
-        """Return ephemeral topic name for a historical data request.
-
-        Example: ``\"dev-market-data-historical-abc123\"``
-        """
-        return f"{self.market_data.name}-historical-{request_id}"
