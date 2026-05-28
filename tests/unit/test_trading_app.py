@@ -1,12 +1,12 @@
 """Unit tests for TradingApp — lifecycle, health integration, feature flags."""
 
-import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tradingcz.sdk._app import TradingApp
+
 from tests.fake_kafka import FakeKafkaTransport
+from tradingcz.sdk._app import TradingApp
 
 
 @pytest.fixture
@@ -112,6 +112,7 @@ class TestTradingAppLifecycle:
 
             async def _tracking_health_close() -> None:
                 call_order.append("health_closed")
+
             mock_hp.close.side_effect = _tracking_health_close
 
             # Wrap FakeKafkaTransport.close to track call order

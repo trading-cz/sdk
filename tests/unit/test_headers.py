@@ -1,20 +1,17 @@
 """Unit tests for tradingcz.model.headers."""
 
-import pytest
+from tradingcz import SCHEMA_VERSION
 from tradingcz.model.headers import (
+    BROKER,
     MESSAGE_TYPE,
-    SOURCE_APP,
+    REQUEST_ID,
     SCHEMA_VERSION_KEY,
     SEQUENCE,
-    REQUEST_ID,
-    TRACKING_ID,
-    STRATEGY_ID,
-    SOURCE,
-    BROKER,
+    SOURCE_APP,
     SYMBOL,
+    TRACKING_ID,
     make_headers,
 )
-from tradingcz import SCHEMA_VERSION
 
 
 class TestMakeHeaders:
@@ -79,9 +76,16 @@ class TestHeaderConstants:
 
     def test_all_constants_are_strings(self) -> None:
         for name in [
-            "MESSAGE_TYPE", "SOURCE_APP", "SCHEMA_VERSION_KEY", "SEQUENCE",
-            "REQUEST_ID", "TRACKING_ID", "STRATEGY_ID",
-            "SOURCE", "BROKER", "SYMBOL",
+            "MESSAGE_TYPE",
+            "SOURCE_APP",
+            "SCHEMA_VERSION_KEY",
+            "SEQUENCE",
+            "REQUEST_ID",
+            "TRACKING_ID",
+            "STRATEGY_ID",
+            "SOURCE",
+            "BROKER",
+            "SYMBOL",
         ]:
             val = getattr(__import__("tradingcz.model.headers", fromlist=[name]), name)
             assert isinstance(val, str), f"{name} is not a string: {type(val)}"
@@ -89,12 +93,20 @@ class TestHeaderConstants:
     def test_no_duplicate_values(self) -> None:
         """Each constant should have a unique value (no accidental reuse)."""
         import tradingcz.model.headers as h
+
         values = [
-            h.MESSAGE_TYPE, h.SOURCE_APP, h.SCHEMA_VERSION_KEY, h.SEQUENCE,
-            h.REQUEST_ID, h.TRACKING_ID, h.STRATEGY_ID,
-            h.SOURCE, h.BROKER, h.SYMBOL,
+            h.MESSAGE_TYPE,
+            h.SOURCE_APP,
+            h.SCHEMA_VERSION_KEY,
+            h.SEQUENCE,
+            h.REQUEST_ID,
+            h.TRACKING_ID,
+            h.STRATEGY_ID,
+            h.SOURCE,
+            h.BROKER,
+            h.SYMBOL,
         ]
         # Some values are intentionally the same string (e.g. "source" vs "source_app")
         # Just check they're all non-empty
         for v in values:
-            assert v, f"Header constant is empty"
+            assert v, "Header constant is empty"

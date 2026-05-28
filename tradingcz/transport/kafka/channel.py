@@ -15,8 +15,8 @@ import logging
 from collections.abc import AsyncIterator
 
 from confluent_kafka import Producer as SyncProducer
-from confluent_kafka.aio import AIOConsumer
 from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka.aio import AIOConsumer
 
 from tradingcz.config.settings import KafkaSettings
 from tradingcz.transport.kafka_message import KafkaMessage
@@ -104,6 +104,7 @@ class KafkaChannel:
         Raises:
             RuntimeError: If messages remain undelivered after timeout.
         """
+
         def _flush() -> int:
             return self._producer.flush(timeout)
 
@@ -155,7 +156,7 @@ class KafkaChannel:
                 for h_key, h_val in raw_headers:
                     try:
                         headers[h_key] = h_val.decode() if isinstance(h_val, bytes) else str(h_val)
-                    except (UnicodeDecodeError, AttributeError):
+                    except UnicodeDecodeError, AttributeError:
                         headers[h_key] = repr(h_val)
 
                 yield KafkaMessage(
@@ -245,7 +246,8 @@ class KafkaTransport:
 
         loop = asyncio.get_running_loop()
         metadata = await loop.run_in_executor(
-            None, lambda: self._admin.list_topics(timeout=10),
+            None,
+            lambda: self._admin.list_topics(timeout=10),
         )
         if name in metadata.topics:
             self._topics_created.add(name)
@@ -256,16 +258,8 @@ class KafkaTransport:
             if replication_factor is not None
             else self._settings.default_replication_factor
         )
-        ret = (
-            retention_ms
-            if retention_ms is not None
-            else self._settings.default_retention_ms
-        )
-        cp = (
-            cleanup_policy
-            if cleanup_policy is not None
-            else self._settings.default_cleanup_policy
-        )
+        ret = retention_ms if retention_ms is not None else self._settings.default_retention_ms
+        cp = cleanup_policy if cleanup_policy is not None else self._settings.default_cleanup_policy
 
         topic_config: dict[str, str] = {"retention.ms": str(ret)}
         if cp:

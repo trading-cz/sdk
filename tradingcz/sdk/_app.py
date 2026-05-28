@@ -27,13 +27,13 @@ from __future__ import annotations
 
 import os
 
-from tradingcz.sdk._service import ServiceApp
 from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
-from tradingcz.sdk.data import DataClient
-from tradingcz.sdk.signals import SignalPublisher
-from tradingcz.sdk.positions import PositionClient
+from tradingcz.sdk._service import ServiceApp
 from tradingcz.sdk.balance import BalanceClient
+from tradingcz.sdk.data import DataClient
 from tradingcz.sdk.orders import OrderClient
+from tradingcz.sdk.positions import PositionClient
+from tradingcz.sdk.signals import SignalPublisher
 
 
 class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
@@ -87,23 +87,23 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
     # Builder methods
     # ------------------------------------------------------------------
 
-    def with_data(self, enable: bool = True) -> "TradingApp":
+    def with_data(self, enable: bool = True) -> TradingApp:
         self._enable_data = enable
         return self
 
-    def with_signals(self, enable: bool = True) -> "TradingApp":
+    def with_signals(self, enable: bool = True) -> TradingApp:
         self._enable_signals = enable
         return self
 
-    def with_positions(self, enable: bool = True) -> "TradingApp":
+    def with_positions(self, enable: bool = True) -> TradingApp:
         self._enable_positions = enable
         return self
 
-    def with_balance(self, enable: bool = True) -> "TradingApp":
+    def with_balance(self, enable: bool = True) -> TradingApp:
         self._enable_balance = enable
         return self
 
-    def with_orders(self, enable: bool = True) -> "TradingApp":
+    def with_orders(self, enable: bool = True) -> TradingApp:
         self._enable_orders = enable
         return self
 

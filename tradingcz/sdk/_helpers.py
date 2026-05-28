@@ -15,7 +15,7 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.model.headers import make_headers, REQUEST_ID
+from tradingcz.model.headers import REQUEST_ID, make_headers
 from tradingcz.transport.kafka.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)

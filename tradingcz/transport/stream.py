@@ -24,11 +24,13 @@ from tradingcz.transport.kafka_message import KafkaMessage
 
 def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
     """Return a headers_fn that auto-infers message_type from the value's class name."""
+
     def _fn(value: T) -> dict[str, str]:
         return make_headers(
             message_type=type(value).__name__.lower(),
             source_app=source_app,
         )
+
     return _fn
 
 
@@ -46,7 +48,7 @@ class TypedProducer[T]:
 
     def __init__(
         self,
-        channel: "KafkaChannel",
+        channel: KafkaChannel,
         serializer: Serializer[T],
         *,
         source_app: str = "",
@@ -56,12 +58,12 @@ class TypedProducer[T]:
         self._channel = channel
         self._serializer = serializer
         self._key_fn: Callable[[T], str] = key_fn or (lambda _: "")
-        self._headers_fn: Callable[[T], dict[str, str]] = (
-            headers_fn or _default_headers_fn(source_app)
+        self._headers_fn: Callable[[T], dict[str, str]] = headers_fn or _default_headers_fn(
+            source_app
         )
 
     @property
-    def channel(self) -> "KafkaChannel":
+    def channel(self) -> KafkaChannel:
         """The underlying Kafka channel."""
         return self._channel
 
@@ -90,14 +92,14 @@ class TypedConsumer[T]:
 
     def __init__(
         self,
-        channel: "KafkaChannel",
+        channel: KafkaChannel,
         deserializer: Deserializer[T],
     ) -> None:
         self._channel = channel
         self._deserializer = deserializer
 
     @property
-    def channel(self) -> "KafkaChannel":
+    def channel(self) -> KafkaChannel:
         """The underlying Kafka channel."""
         return self._channel
 
@@ -143,7 +145,7 @@ class TypedParser:
 
     def __init__(
         self,
-        channel: "KafkaChannel",
+        channel: KafkaChannel,
         types: dict[str, type],
     ) -> None:
         self._channel = channel

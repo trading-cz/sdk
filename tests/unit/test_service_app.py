@@ -5,6 +5,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from tradingcz.sdk._service import ServiceApp
 
 

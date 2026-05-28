@@ -12,7 +12,7 @@ class Trade(BaseModel):  # pylint: disable=too-many-instance-attributes
     model_config = ConfigDict(frozen=True)
 
     symbol: str
-    timestamp: datetime       # tz-aware UTC
+    timestamp: datetime  # tz-aware UTC
     price: float
     size: float
     exchange: str | None = None

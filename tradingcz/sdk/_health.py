@@ -63,7 +63,8 @@ class HealthPublisher:
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info(
             "HealthPublisher started for %s (interval=%ss)",
-            self._service_id, self._interval,
+            self._service_id,
+            self._interval,
         )
 
     async def close(self) -> None:
@@ -117,5 +118,7 @@ class HealthPublisher:
         except Exception:  # pylint: disable=broad-exception-caught
             logger.warning(
                 "Failed to emit %s lifecycle event for %s",
-                event, self._service_id, exc_info=True,
+                event,
+                self._service_id,
+                exc_info=True,
             )

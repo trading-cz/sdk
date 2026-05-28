@@ -166,14 +166,15 @@ class RequestReplyClient[Req, Resp]:
             async for msg in self._channel.receive():
                 try:
                     resp = self._response_deserializer.deserialize(msg.payload)
-                except (ValueError, TypeError, LookupError):
+                except ValueError, TypeError, LookupError:
                     # Expected: message on shared topic not meant for us
                     # (e.g. requests from other services on the same topic)
                     continue
                 except Exception:
                     logger.warning(
                         "Unexpected error deserializing message on %s",
-                        self._channel.name, exc_info=True,
+                        self._channel.name,
+                        exc_info=True,
                     )
                     continue
 
@@ -192,6 +193,4 @@ class RequestReplyClient[Req, Resp]:
             # Reject all pending futures so callers get an error immediately
             for future in self._pending.values():
                 if not future.done():
-                    future.set_exception(
-                        RuntimeError("RequestReplyClient listener crashed")
-                    )
+                    future.set_exception(RuntimeError("RequestReplyClient listener crashed"))

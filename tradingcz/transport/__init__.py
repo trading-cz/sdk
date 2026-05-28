@@ -11,8 +11,8 @@ Layer stack:
     - ``partition_for()`` — Murmur2-based partition discovery (``transport.hash``)
 """
 
-from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.kafka import KafkaChannel, KafkaTransport, TopicConfig, TopicRegistry
+from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.stream import TypedConsumer, TypedParser, TypedProducer
 
 __all__ = [

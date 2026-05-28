@@ -13,9 +13,9 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
-from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.model.events import DataError, DataReady, DataRequest
 from tradingcz.model.headers import REQUEST_ID, SEQUENCE, SOURCE, SOURCE_APP
+from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
 from tradingcz.transport.kafka.channel import KafkaTransport
@@ -105,7 +105,8 @@ class DataClient:
 
         logger.info(
             "DataReady(historic): topic=%s bar_count=%s",
-            resp.data_topic, resp.bar_count,
+            resp.data_topic,
+            resp.bar_count,
         )
 
         # Open ephemeral channel and consume bars

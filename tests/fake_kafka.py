@@ -151,17 +151,11 @@ class FakeKafkaChannel:
                 headers: dict[str, str] = {}
                 for h_key, h_val in raw_headers:
                     try:
-                        headers[h_key] = (
-                            h_val.decode()
-                            if isinstance(h_val, bytes)
-                            else str(h_val)
-                        )
-                    except (UnicodeDecodeError, AttributeError):
+                        headers[h_key] = h_val.decode() if isinstance(h_val, bytes) else str(h_val)
+                    except UnicodeDecodeError, AttributeError:
                         headers[h_key] = repr(h_val)
 
-                offset = (
-                    msg.offset() if hasattr(msg, "offset") and msg.offset() is not None else -1
-                )
+                offset = msg.offset() if hasattr(msg, "offset") and msg.offset() is not None else -1
                 partition = (
                     msg.partition()
                     if hasattr(msg, "partition") and msg.partition() is not None
@@ -228,9 +222,7 @@ class FakeKafkaTransport:
             )
             if name not in self._topics_created:
                 try:
-                    self._admin.create_topics([
-                        FakeNewTopic(topic=name, num_partitions=partitions)
-                    ])
+                    self._admin.create_topics([FakeNewTopic(topic=name, num_partitions=partitions)])
                 except Exception:
                     # mockafka-py raises if topic already exists;
                     # real Kafka is idempotent — ignore.
@@ -238,7 +230,10 @@ class FakeKafkaTransport:
                 self._topics_created.add(name)
 
             self._channels[name] = FakeKafkaChannel(
-                name, self._producer, self._settings, num_partitions=partitions,
+                name,
+                self._producer,
+                self._settings,
+                num_partitions=partitions,
             )
         return self._channels[name]
 

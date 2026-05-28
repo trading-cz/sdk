@@ -62,9 +62,7 @@ class ServiceApp:
     ) -> None:
         self.service_id = service_id
         self._env = env or os.environ.get("SDK_ENV", "dev")
-        self._health_interval = float(
-            os.environ.get("SDK_HEALTH_INTERVAL", str(health_interval))
-        )
+        self._health_interval = float(os.environ.get("SDK_HEALTH_INTERVAL", str(health_interval)))
 
         self._kafka = KafkaSettings(
             bootstrap_servers=bootstrap_servers
@@ -97,7 +95,9 @@ class ServiceApp:
         # Health / heartbeat on the events channel
         faf = _FireAndForget(self.events_channel, self.service_id)
         self._health = HealthPublisher(
-            faf, self.service_id, interval=self._health_interval,
+            faf,
+            self.service_id,
+            interval=self._health_interval,
         )
         await self._health.start()
 
@@ -119,7 +119,7 @@ class ServiceApp:
             await self.transport.close()
         logger.info("ServiceApp closed: id=%s", self.service_id)
 
-    async def __aenter__(self) -> "ServiceApp":
+    async def __aenter__(self) -> ServiceApp:
         await self.start()
         return self
 

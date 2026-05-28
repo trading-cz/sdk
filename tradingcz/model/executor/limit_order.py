@@ -1,5 +1,5 @@
-"""Limit market order with a possibility of OCO bracket order
-"""
+"""Limit market order with a possibility of OCO bracket order"""
+
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.model.enum.order import OrderClass, OrderSide, TimeInForce

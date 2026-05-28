@@ -1,6 +1,5 @@
 """Unit tests for tradingcz.transport._dedup.DedupFilter."""
 
-import pytest
 from tradingcz.transport._dedup import DedupFilter
 
 

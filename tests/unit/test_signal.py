@@ -1,8 +1,10 @@
 """Unit tests for tradingcz.model.signal.TradingSignal."""
 
 from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
+
 from tradingcz.model.signal import TradingSignal
 
 

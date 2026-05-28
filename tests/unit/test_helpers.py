@@ -7,13 +7,12 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
+from tradingcz.model.headers import MESSAGE_TYPE, REQUEST_ID, SEQUENCE, SOURCE_APP
 from tradingcz.sdk._helpers import (
     _FireAndForget,
-    _RequestReply,
     _infer_message_type,
+    _RequestReply,
 )
-from tradingcz.model.headers import MESSAGE_TYPE, SOURCE_APP, SEQUENCE, REQUEST_ID
-
 
 # ── Test models ─────────────────────────────────────────────────────────────
 
@@ -57,14 +56,19 @@ def mock_channel() -> AsyncMock:
 class TestInferMessageType:
     def test_data_request(self) -> None:
         from tradingcz.model.events import DataRequest
+
         req = DataRequest(type="historic", asset="stock", broker="alpaca", symbols=["AAPL"])
         assert _infer_message_type(req) == "data_request"
 
     def test_trading_signal(self) -> None:
         from tradingcz.model.signal import TradingSignal
+
         s = TradingSignal(
-            symbol="AAPL", side="LONG",
-            open_price=150.0, entry_price=151.0, stop_loss=149.0,
+            symbol="AAPL",
+            side="LONG",
+            open_price=150.0,
+            entry_price=151.0,
+            stop_loss=149.0,
             valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
             atr_value=2.5,
         )
@@ -136,6 +140,7 @@ class TestFireAndForget:
         payload = mock_channel.send.await_args.args[0]
         assert isinstance(payload, bytes)
         import json
+
         parsed = json.loads(payload)
         assert parsed["request_id"] == "r1"
         assert parsed["message"] == "hello"
@@ -182,6 +187,7 @@ class TestRequestReply:
             for f in rr._pending.values():
                 if not f.done():
                     f.set_result(Pong(request_id="req-h", reply="ok"))
+
         asyncio.create_task(_respond())
 
         await rr.request(ping, response_type=Pong, timeout=2.0)
@@ -258,6 +264,7 @@ class TestRequestReply:
             for f in rr._pending.values():
                 if not f.done():
                     f.set_result(Pong(request_id="req-h", reply="ok"))
+
         asyncio.create_task(_respond())
 
         await rr.request(ping, response_type=Pong, timeout=2.0)

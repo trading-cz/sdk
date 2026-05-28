@@ -13,7 +13,7 @@ Usage::
 
 import struct
 
-_MURMUR2_SEED = 0x9747b28c
+_MURMUR2_SEED = 0x9747B28C
 
 
 def murmur2(data: bytes) -> int:
@@ -44,14 +44,14 @@ def murmur2(data: bytes) -> int:
     if length == 3:
         h ^= (data[idx + 2] & 0xFF) << 16
         h ^= (data[idx + 1] & 0xFF) << 8
-        h ^= (data[idx] & 0xFF)
+        h ^= data[idx] & 0xFF
         h = (h * m) & 0xFFFFFFFF
     elif length == 2:
         h ^= (data[idx + 1] & 0xFF) << 8
-        h ^= (data[idx] & 0xFF)
+        h ^= data[idx] & 0xFF
         h = (h * m) & 0xFFFFFFFF
     elif length == 1:
-        h ^= (data[idx] & 0xFF)
+        h ^= data[idx] & 0xFF
         h = (h * m) & 0xFFFFFFFF
 
     h ^= h >> 13

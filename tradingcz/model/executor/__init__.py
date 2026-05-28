@@ -7,7 +7,4 @@ Serialization via tradingcz.model.serde, HTTP responses via tradingcz.model.resp
 from tradingcz.model.executor.limit_order import LimitOrder
 from tradingcz.model.executor.market_order import MarketOrder
 
-__all__ = [
-    "LimitOrder",
-    "MarketOrder"
-    ]
+__all__ = ["LimitOrder", "MarketOrder"]

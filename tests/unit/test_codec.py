@@ -1,8 +1,10 @@
 """Unit tests for tradingcz.serialization.JsonCodec."""
 
 from datetime import UTC, datetime
+
 import pytest
 from pydantic import BaseModel
+
 from tradingcz.serialization import JsonCodec
 
 

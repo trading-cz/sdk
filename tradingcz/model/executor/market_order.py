@@ -1,5 +1,5 @@
-"""Simple market order with a possibility of OTO bracket order
-"""
+"""Simple market order with a possibility of OTO bracket order"""
+
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.model.enum.order import OrderClass, OrderSide, TimeInForce

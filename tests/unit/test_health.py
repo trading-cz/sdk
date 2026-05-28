@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
+
 from tradingcz.model.health import ServiceLifecycle
 from tradingcz.sdk._health import HealthPublisher
 
@@ -43,10 +44,7 @@ class TestHealthPublisher:
         await hp.close()
 
         # Should have sent "down" — event may be after heartbeat
-        down_calls = [
-            c for c in mock_faf.send.await_args_list
-            if c.args[0].event == "down"
-        ]
+        down_calls = [c for c in mock_faf.send.await_args_list if c.args[0].event == "down"]
         assert len(down_calls) == 1
 
     @pytest.mark.asyncio
@@ -68,8 +66,7 @@ class TestHealthPublisher:
         await hp.close()
 
         heartbeat_calls = [
-            c for c in mock_faf.send.await_args_list
-            if c.args[0].event == "heartbeat"
+            c for c in mock_faf.send.await_args_list if c.args[0].event == "heartbeat"
         ]
         assert len(heartbeat_calls) >= 1, (
             f"Expected >=1 heartbeat, got {len(heartbeat_calls)}. "
@@ -84,10 +81,7 @@ class TestHealthPublisher:
         await hp.start()  # second start — no-op
 
         # Should NOT emit a second "up"
-        up_calls = [
-            c for c in mock_faf.send.await_args_list
-            if c.args[0].event == "up"
-        ]
+        up_calls = [c for c in mock_faf.send.await_args_list if c.args[0].event == "up"]
         assert len(up_calls) == 0
 
         await hp.close()
@@ -101,10 +95,7 @@ class TestHealthPublisher:
         await hp.close()  # second close — no-op
 
         # Should NOT emit a second "down"
-        down_calls = [
-            c for c in mock_faf.send.await_args_list
-            if c.args[0].event == "down"
-        ]
+        down_calls = [c for c in mock_faf.send.await_args_list if c.args[0].event == "down"]
         assert len(down_calls) == 0
 
     @pytest.mark.asyncio
@@ -129,6 +120,7 @@ class TestHealthPublisher:
     @pytest.mark.asyncio
     async def test_interval_from_env(self, mock_faf: AsyncMock) -> None:
         import os
+
         os.environ["SDK_HEALTH_INTERVAL"] = "60"
         hp = HealthPublisher(mock_faf, "test-service", interval=300)
         # The env var is read by TradingApp.__init__, not HealthPublisher.

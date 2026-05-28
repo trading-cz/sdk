@@ -61,7 +61,9 @@ class OrderClient:
         resp = await self._rr.request(req, response_type=OrderList, timeout=timeout)
         return resp.orders
 
-    async def get_order_status(self, order_id: str, *, timeout: float = 30.0) -> OrderSummary | None:
+    async def get_order_status(
+        self, order_id: str, *, timeout: float = 30.0
+    ) -> OrderSummary | None:
         """Return a single order by ID, or None."""
         orders = await self.get_orders(timeout=timeout)
         for o in orders:

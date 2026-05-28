@@ -26,7 +26,7 @@ class DataRequest(BaseModel):
     request_id: str = Field(default_factory=lambda: uuid4().hex)
     source_app: str = ""
     type: str = "historic"  # "historic", "stream", "unsubscribe"
-    asset: str = "stock"    # "stock", "option", "crypto"
+    asset: str = "stock"  # "stock", "option", "crypto"
     broker: str = "alpaca"
     symbols: list[str]
     stream_type: str = "trades"
@@ -107,6 +107,7 @@ def parse_by_message_type(message_type: str, payload: bytes) -> BaseModel:
 # ---------------------------------------------------------------------------
 # Deprecated: kept for backward compatibility with services on old SDK versions
 # ---------------------------------------------------------------------------
+
 
 def parse_event(raw: bytes) -> DataRequest | DataReady | DataError:
     """Deprecated.  Use ``parse_by_message_type(message_type, payload)`` instead.
