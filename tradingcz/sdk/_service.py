@@ -205,12 +205,3 @@ class ServiceApp:
                 pass
 
         await self.close()
-
-    # ------------------------------------------------------------------
-    # Identity — used by TypedProducer, HealthPublisher, headers
-    # ------------------------------------------------------------------
-
-    @property
-    def source_app(self) -> str:
-        """Canonical source_app identifier for Kafka headers."""
-        return self.service_id

@@ -9,11 +9,11 @@ class TransportError(SdkError):
     """Transport-level failure (connection, timeout, broker unreachable)."""
 
 
-class ConnectionError(TransportError):
+class TransportConnectionError(TransportError):
     """Cannot connect to the transport backend."""
 
 
-class TimeoutError(TransportError):
+class TransportTimeoutError(TransportError):
     """Operation timed out at the transport level."""
 
 

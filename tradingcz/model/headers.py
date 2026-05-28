@@ -7,7 +7,6 @@ No string literals for header names or message types anywhere else.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -113,18 +112,20 @@ def make_headers(
 # Model registry & dispatch (message_type → Pydantic model)
 # ═════════════════════════════════════════════════════════════════════════════
 
-_MODEL_BY_TYPE: dict[str, type[BaseModel]] | None = None
+_MODEL_BY_TYPE: dict[str, type[BaseModel]] = {}
 
 
-def _build_registry() -> dict[str, type[BaseModel]]:
-    """Lazy-build the message_type → model mapping (avoids circular imports)."""
+def _ensure_registry() -> None:
+    """Populate the message_type → model mapping on first call (lazy, avoids circular imports)."""
+    if _MODEL_BY_TYPE:
+        return
     # pylint: disable=import-outside-toplevel
     from tradingcz.model.events import DataError, DataReady, DataRequest, ServiceRequest
     from tradingcz.model.health import ServiceLifecycle
     from tradingcz.model.ingestion import Bar, Quote, Snapshot, StreamQuote, Trade
     from tradingcz.model.signal import TradingSignal
 
-    return {
+    _MODEL_BY_TYPE.update({
         MessageType.DATA_REQUEST: DataRequest,
         MessageType.DATA_READY: DataReady,
         MessageType.DATA_ERROR: DataError,
@@ -136,14 +137,7 @@ def _build_registry() -> dict[str, type[BaseModel]]:
         MessageType.TRADE: Trade,
         MessageType.STREAM_QUOTE: StreamQuote,
         MessageType.SNAPSHOT: Snapshot,
-    }
-
-
-def _get_registry() -> dict[str, type[BaseModel]]:
-    global _MODEL_BY_TYPE
-    if _MODEL_BY_TYPE is None:
-        _MODEL_BY_TYPE = _build_registry()
-    return _MODEL_BY_TYPE
+    })
 
 
 def message_model(message_type: str | MessageType) -> type[BaseModel]:
@@ -152,8 +146,8 @@ def message_model(message_type: str | MessageType) -> type[BaseModel]:
     Raises ``ValueError`` if the message_type is unknown.
     """
     mt = str(message_type)
-    registry = _get_registry()
-    cls = registry.get(mt)
+    _ensure_registry()
+    cls = _MODEL_BY_TYPE.get(mt)
     if cls is None:
         raise ValueError(f"Unknown message_type: {mt}")
     return cls
