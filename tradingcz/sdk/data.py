@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.model.events import DataError, DataReady, DataRequest
 from tradingcz.model.message_headers import historical_headers
-from tradingcz.sdk._helpers import _RequestReply
+from tradingcz.sdk._helpers import _DedupFilter, _RequestReply
 from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport
 from tradingcz.transport.kafka.topics import TopicRegistry
 
@@ -28,6 +28,10 @@ class DataClient:
 
     All methods are async and return typed domain objects.
     No Kafka knowledge required.
+
+    Deduplication is enabled by default: messages with the same
+    ``(source, sequence)`` header pair are skipped.  This handles
+    at-least-once Kafka delivery after consumer restarts.
     """
 
     def __init__(
@@ -37,15 +41,23 @@ class DataClient:
         topics: TopicRegistry,
         service_id: str,
         broker: str = "alpaca",
+        *,
+        dedup_max_size: int = 100_000,
     ) -> None:
         self._rr = rr
         self._transport = transport
         self._topics = topics
         self._service_id = service_id
         self._broker = broker
+        self._dedup = _DedupFilter(max_size=dedup_max_size)
         # Register response types
         rr.register_type("data_ready", DataReady)
         rr.register_type("data_error", DataError)
+
+    @property
+    def dedup_skipped(self) -> int:
+        """Number of duplicate messages skipped by the dedup filter."""
+        return self._dedup.skipped_count
 
     # ------------------------------------------------------------------
     # Historical
@@ -107,6 +119,12 @@ class DataClient:
             async for msg in channel.receive():
                 # Filter by request_id in headers
                 if msg.headers.get("request_id") != req.request_id:
+                    continue
+                # Dedup by (source, sequence)
+                if self._dedup.is_duplicate(
+                    msg.headers.get("source", msg.headers.get("source_app", "")),
+                    msg.headers.get("sequence", "0"),
+                ):
                     continue
                 try:
                     bar = Bar.model_validate_json(msg.payload)
@@ -193,6 +211,12 @@ class DataClient:
         channel = await self._transport.channel(resp.data_topic)
         try:
             async for msg in channel.receive():
+                # Dedup by (source, sequence) — skip re-delivered messages
+                if self._dedup.is_duplicate(
+                    msg.headers.get("source", msg.headers.get("source_app", "")),
+                    msg.headers.get("sequence", "0"),
+                ):
+                    continue
                 try:
                     parsed = model_type.model_validate_json(msg.payload)
                 except Exception:

@@ -1,9 +1,9 @@
 """Kafka-backed transport — concrete Channel and Transport.
 
-Uses Confluent's native async API (``AIOConsumer`` / ``AIOProducer``)
-for true non-blocking I/O.
+Uses Confluent's synchronous ``Producer`` with callback-based async wrapping
+for sends (required for headers support).  ``AIOConsumer`` for receives.
 
-One ``KafkaChannel`` per topic, one shared ``AIOProducer`` per ``KafkaTransport``.
+One ``KafkaChannel`` per topic, one shared ``Producer`` per ``KafkaTransport``.
 All librdkafka parameters are configurable via ``KafkaSettings`` overrides.
 
 Kafka is the permanent transport.  There is no abstract ``Channel``/``Transport``
@@ -14,7 +14,8 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 
-from confluent_kafka.aio import AIOConsumer, AIOProducer
+from confluent_kafka import KafkaError, Producer as SyncProducer
+from confluent_kafka.aio import AIOConsumer
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from tradingcz.config.settings import KafkaSettings
@@ -26,8 +27,9 @@ logger = logging.getLogger(__name__)
 class KafkaChannel:
     """Kafka-backed channel — one topic, fan-out receive.
 
-    Uses a shared ``AIOProducer`` for sends and creates a dedicated
-    ``AIOConsumer`` per ``receive()`` call for fan-out semantics.
+    Uses a shared synchronous ``Producer`` (wrapped for async) for sends
+    and creates a dedicated ``AIOConsumer`` per ``receive()`` call for
+    fan-out semantics.
 
     All messages carry headers (``dict[str, str]``).  Headers are the
     primary mechanism for metadata (message_type, source_app, request_id,
@@ -37,7 +39,7 @@ class KafkaChannel:
     def __init__(
         self,
         topic: str,
-        producer: AIOProducer,
+        producer: SyncProducer,
         settings: KafkaSettings,
     ) -> None:
         self._topic = topic
@@ -62,6 +64,10 @@ class KafkaChannel:
     ) -> None:
         """Publish a message to the Kafka topic.
 
+        Uses synchronous ``Producer.produce()`` + ``flush()`` wrapped in
+        a thread-pool executor for async await semantics with full headers
+        support.
+
         Args:
             payload: Message value as raw bytes (JSON in our system).
             key: Routing key (plain string, e.g. ``"AAPL"``).  Empty/None
@@ -74,13 +80,22 @@ class KafkaChannel:
         if headers:
             header_list = [(k, v.encode()) for k, v in headers.items()]
 
-        delivery_future = await self._producer.produce(
-            self._topic,
-            value=payload,
-            key=key_bytes,
-            headers=header_list,
-        )
-        await delivery_future
+        def _produce_and_flush() -> None:
+            self._producer.produce(
+                self._topic,
+                value=payload,
+                key=key_bytes,
+                headers=header_list,
+            )
+            remaining = self._producer.flush(timeout=30)
+            if remaining > 0:
+                raise RuntimeError(
+                    f"Failed to deliver message to {self._topic}: "
+                    f"{remaining} message(s) still pending after flush"
+                )
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _produce_and_flush)
 
     # ------------------------------------------------------------------
     # Receive
@@ -141,7 +156,7 @@ class KafkaChannel:
 
 
 class KafkaTransport:
-    """Kafka-backed transport — one shared ``AIOProducer``, cached channels.
+    """Kafka-backed transport — one shared ``Producer``, cached channels.
 
     Topics are created on first use via Admin API if they don't already exist.
     Per-topic configuration overrides are accepted by ``channel()``.
@@ -149,15 +164,15 @@ class KafkaTransport:
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
-        self._producer: AIOProducer | None = None
+        self._producer: SyncProducer | None = None
         self._admin = AdminClient({"bootstrap.servers": settings.bootstrap_servers})
         self._channels: dict[str, KafkaChannel] = {}
         self._topics_created: set[str] = set()
 
-    async def _get_producer(self) -> AIOProducer:
-        """Lazy-init the shared AIOProducer."""
+    def _get_producer(self) -> SyncProducer:
+        """Lazy-init the shared synchronous Producer."""
         if self._producer is None:
-            self._producer = AIOProducer(self._settings.producer_config())
+            self._producer = SyncProducer(self._settings.producer_config())
         return self._producer
 
     async def channel(
@@ -194,7 +209,7 @@ class KafkaTransport:
                 retention_ms=retention_ms,
                 cleanup_policy=cleanup_policy,
             )
-            producer = await self._get_producer()
+            producer = self._get_producer()
             self._channels[name] = KafkaChannel(name, producer, self._settings)
         return self._channels[name]
 
@@ -260,11 +275,9 @@ class KafkaTransport:
         for channel in self._channels.values():
             await channel.close()
         self._channels.clear()
-        # AIOProducer does not have an explicit async close in all versions;
-        # flush any outstanding messages and let GC handle cleanup.
         if self._producer is not None:
-            try:
-                self._producer.flush()
-            except Exception:
-                pass
+            # Flush and purge to ensure clean thread shutdown
+            self._producer.flush(timeout=10)
+            # Poll to process any pending delivery callbacks
+            self._producer.poll(0)
             self._producer = None

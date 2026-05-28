@@ -6,12 +6,14 @@ duplication.
 
 - ``_RequestReply``   — send a typed request, await correlated response
 - ``_FireAndForget``  — send a typed message, don't wait
+- ``_DedupFilter``    — skip duplicate messages by (source, sequence)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -22,6 +24,69 @@ from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.kafka.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
+
+
+# ── Deduplication ───────────────────────────────────────────────────────────
+
+
+class _DedupFilter:
+    """Track seen (source_app, sequence) pairs to skip duplicates.
+
+    Kafka guarantees at-least-once delivery.  After a consumer restart
+    or offset reset, messages may be re-delivered.  This filter tracks
+    seen sequences and skips already-processed messages.
+
+    Sequence numbers are expected to be **globally monotonic per
+    (source_app, topic)** — not per symbol or message type.  This
+    simplifies dedup at the cost of losing per-symbol gap detection.
+
+    Memory is bounded by *max_size* (default 100k).  When the limit is
+    reached, the oldest entry is evicted (LRU).
+    """
+
+    def __init__(self, max_size: int = 100_000) -> None:
+        self._seen: OrderedDict[tuple[str, str], None] = OrderedDict()
+        self._max = max_size
+        self._hits = 0   # duplicates skipped
+        self._total = 0  # total checked
+
+    def is_duplicate(self, source_app: str, sequence: str) -> bool:
+        """Return True if this (source_app, sequence) was already seen.
+
+        Side effect: records the pair as seen if it wasn't already.
+        """
+        self._total += 1
+        key = (source_app, sequence)
+        if key in self._seen:
+            self._hits += 1
+            return True
+        self._seen[key] = None
+        if len(self._seen) > self._max:
+            self._seen.popitem(last=False)  # evict oldest (LRU)
+        return False
+
+    def clear(self) -> None:
+        """Reset all tracking state."""
+        self._seen.clear()
+        self._hits = 0
+        self._total = 0
+
+    @property
+    def skipped_count(self) -> int:
+        """Number of duplicates skipped so far."""
+        return self._hits
+
+    @property
+    def total_count(self) -> int:
+        """Total number of messages checked."""
+        return self._total
+
+
+def _extract_dedup_key(msg: KafkaMessage) -> tuple[str, str]:
+    """Extract (source, sequence) from a KafkaMessage's headers."""
+    source = msg.headers.get("source_app", msg.headers.get("source", ""))
+    seq = msg.headers.get("sequence", "0")
+    return (source, seq)
 
 
 class _FireAndForget:
