@@ -119,9 +119,9 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         assert self.transport is not None
         assert self.topics is not None
 
-        # Shared internal helpers
-        self._rr = _RequestReply(self.events_channel, self.service_id)
-        self._faf = _FireAndForget(self.events_channel, self.service_id)
+        # Shared internal helpers — use source_app for consistent header identity
+        self._rr = _RequestReply(self.events_channel, self.source_app)
+        self._faf = _FireAndForget(self.events_channel, self.source_app)
         await self._rr.start()
 
         # Data client

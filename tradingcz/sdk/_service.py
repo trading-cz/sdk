@@ -127,6 +127,20 @@ class ServiceApp:
         await self.close()
 
     # ------------------------------------------------------------------
+    # Identity — used for headers, logging, health events
+    # ------------------------------------------------------------------
+
+    @property
+    def source_app(self) -> str:
+        """Service identifier for Kafka headers (same as ``service_id``)."""
+        return self.service_id
+
+    @property
+    def env(self) -> str:
+        """Deployment environment (dev/prd)."""
+        return self._env
+
+    # ------------------------------------------------------------------
     # Shutdown
     # ------------------------------------------------------------------
 
@@ -137,3 +151,12 @@ class ServiceApp:
     async def wait_for_shutdown(self) -> None:
         """Block until shutdown is requested (SIGTERM/SIGINT)."""
         await self._shutdown.wait()
+
+    # ------------------------------------------------------------------
+    # Identity — used by TypedProducer, HealthPublisher, headers
+    # ------------------------------------------------------------------
+
+    @property
+    def source_app(self) -> str:
+        """Canonical source_app identifier for Kafka headers."""
+        return self.service_id

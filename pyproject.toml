@@ -31,6 +31,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.7.0",
     "mypy>=1.13.0",
+    "mockafka-py==0.2.3",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -72,6 +73,10 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.pylint.messages_control]
 disable = [

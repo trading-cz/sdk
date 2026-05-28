@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
@@ -31,13 +31,23 @@ class Pong(BaseModel):
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
+async def _empty_receive():
+    """Async generator that yields nothing — used to mock channel.receive()."""
+    if False:  # pragma: no cover — never yields, just satisfies async for
+        yield  # type: ignore[unreachable]
+
+
 @pytest.fixture
 def mock_channel() -> AsyncMock:
-    """Return a mock KafkaChannel."""
+    """Return a mock KafkaChannel (used by _RequestReply tests)."""
     ch = AsyncMock()
     ch.name = "dev-test"
     ch.send = AsyncMock()
     ch.flush = AsyncMock()
+    # receive() returns an async generator that yields nothing.
+    # The _RequestReply background listener iterates over it but the test
+    # manually resolves futures — no actual message flow through the mock.
+    ch.receive.return_value = _empty_receive()
     return ch
 
 
@@ -125,7 +135,6 @@ class TestFireAndForget:
         # payload is the first positional argument to channel.send()
         payload = mock_channel.send.await_args.args[0]
         assert isinstance(payload, bytes)
-        # Should be valid JSON
         import json
         parsed = json.loads(payload)
         assert parsed["request_id"] == "r1"
@@ -143,10 +152,8 @@ class TestRequestReply:
 
         ping = Ping(request_id="req-1", message="hello")
 
-        # Simulate response arriving shortly after request
         async def _simulate_response() -> None:
             await asyncio.sleep(0.05)
-            # Manually resolve the pending future
             future = list(rr._pending.values())[0] if rr._pending else None
             if future and not future.done():
                 future.set_result(Pong(request_id="req-1", reply="world"))
@@ -158,12 +165,83 @@ class TestRequestReply:
         assert isinstance(resp, Pong)
         assert resp.request_id == "req-1"
         assert resp.reply == "world"
-
-        # Verify send was called
         mock_channel.send.assert_awaited_once()
-
-        # Verify flush was called after send
         mock_channel.flush.assert_awaited_once()
+
+        await rr.close()
+
+    @pytest.mark.asyncio
+    async def test_request_builds_headers(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test-service", message_types={"pong": Pong})
+        await rr.start()
+
+        ping = Ping(request_id="req-h", message="test")
+
+        async def _respond() -> None:
+            await asyncio.sleep(0.05)
+            for f in rr._pending.values():
+                if not f.done():
+                    f.set_result(Pong(request_id="req-h", reply="ok"))
+        asyncio.create_task(_respond())
+
+        await rr.request(ping, response_type=Pong, timeout=2.0)
+
+        headers = mock_channel.send.await_args.kwargs["headers"]
+        assert headers[MESSAGE_TYPE] == "ping"
+        assert headers[SOURCE_APP] == "test-service"
+        assert headers[REQUEST_ID] == "req-h"
+        assert SEQUENCE in headers
+
+        await rr.close()
+
+    @pytest.mark.asyncio
+    async def test_request_without_request_id_raises(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test")
+
+        class BadRequest(BaseModel):
+            pass
+
+        with pytest.raises(ValueError, match="request_id"):
+            await rr.request(BadRequest(), response_type=Pong, timeout=1.0)
+
+    @pytest.mark.asyncio
+    async def test_request_timeout(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test")
+        await rr.start()
+
+        ping = Ping(request_id="req-timeout", message="test")
+
+        with pytest.raises(asyncio.TimeoutError):
+            await rr.request(ping, response_type=Pong, timeout=0.1)
+
+        await rr.close()
+
+    @pytest.mark.asyncio
+    async def test_register_type(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test")
+        rr.register_type("pong", Pong)
+        assert rr._types["pong"] is Pong
+
+    @pytest.mark.asyncio
+    async def test_close_cancels_pending_futures(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test")
+        await rr.start()
+
+        future: asyncio.Future[Pong] = asyncio.get_event_loop().create_future()
+        rr._pending["test-id"] = future  # type: ignore[arg-type]
+
+        await rr.close()
+
+        assert future.cancelled() or future.done()
+
+    @pytest.mark.asyncio
+    async def test_start_is_idempotent(self, mock_channel: AsyncMock) -> None:
+        rr = _RequestReply(mock_channel, "test")
+        await rr.start()
+        task1 = rr._listen_task
+        await rr.start()
+        task2 = rr._listen_task
+        assert task1 is task2
 
         await rr.close()
 
