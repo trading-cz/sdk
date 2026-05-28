@@ -60,6 +60,22 @@ class DataError(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ServiceRequest(BaseModel):
+    """General-purpose request to the executor/risk service.
+
+    Sent on the event topic with ``message_type = "service_request"``.
+    The ``service`` field determines the expected response type.
+    """
+
+    request_id: str = Field(default_factory=lambda: uuid4().hex)
+    source_app: str = ""
+    service: str  # "get_positions", "get_balance", "get_orders", etc.
+    symbol: str | None = None
+    order_id: str | None = None
+    order_status: str | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 # ---------------------------------------------------------------------------
 # Message-type registry for header-based dispatch
 # ---------------------------------------------------------------------------
@@ -68,6 +84,7 @@ _MESSAGE_TYPES: dict[str, type[BaseModel]] = {
     "data_request": DataRequest,
     "data_ready": DataReady,
     "data_error": DataError,
+    "service_request": ServiceRequest,
 }
 
 
