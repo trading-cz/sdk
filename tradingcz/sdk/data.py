@@ -9,16 +9,16 @@ Handles the full lifecycle:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.model.events import DataError, DataReady, DataRequest
 from tradingcz.model.headers import REQUEST_ID, SEQUENCE, SOURCE, SOURCE_APP
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
-from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport
+from tradingcz.transport.kafka.channel import KafkaTransport
 from tradingcz.transport.kafka.topics import TopicRegistry
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,6 @@ class DataClient:
 
         Returns ``{symbol: [Bar sorted by timestamp]}``.
         """
-        from datetime import UTC, datetime, timedelta
-
         end = datetime.now(UTC)
         start = end - timedelta(days=days)
 

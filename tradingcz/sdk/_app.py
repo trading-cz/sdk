@@ -44,7 +44,7 @@ from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport
 from tradingcz.transport.kafka.topics import TopicRegistry
 
 
-class TradingApp:
+class TradingApp:  # pylint: disable=too-many-instance-attributes
     """Batteries-included trading application.
 
     All client features are enabled by default.  Use ``.with_*(False)``

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from pydantic import BaseModel
 
@@ -20,7 +21,7 @@ from tradingcz.transport.kafka.channel import KafkaChannel
 logger = logging.getLogger(__name__)
 
 
-class _FireAndForget:
+class _FireAndForget:  # pylint: disable=too-few-public-methods
     """Send a typed message on a KafkaChannel.  No response expected.
 
     Used internally by: SignalPublisher.
@@ -121,11 +122,11 @@ class _RequestReply:
     # Core API
     # ------------------------------------------------------------------
 
-    async def request[Resp: BaseModel](
+    async def request[Resp: BaseModel](  # pylint: disable=unused-argument
         self,
         req: BaseModel,
         *,
-        response_type: type[Resp],
+        response_type: type[Resp],  # type-checker only, not used at runtime
         request_type: str | None = None,
         timeout: float = 30.0,
     ) -> Resp:
@@ -148,6 +149,7 @@ class _RequestReply:
         if not request_id:
             raise ValueError(f"Request model {type(req).__name__} has no request_id")
 
+        _ = response_type  # used only for type-checker generic binding
         mt = request_type or _infer_message_type(req)
         self._seq += 1
 
@@ -187,7 +189,7 @@ class _RequestReply:
 
                 try:
                     parsed = model_type.model_validate_json(msg.payload)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     self._skipped += 1
                     continue
 
@@ -200,7 +202,7 @@ class _RequestReply:
                     future.set_result(parsed)
         except asyncio.CancelledError:
             logger.debug("_RequestReply listener cancelled")
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("_RequestReply listener crashed")
 
     @property
@@ -211,5 +213,4 @@ class _RequestReply:
 
 def _infer_message_type(model: BaseModel) -> str:
     """Infer message_type from model class name: DataRequest → 'data_request'."""
-    import re
     return re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
