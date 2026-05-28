@@ -34,6 +34,7 @@ from __future__ import annotations
 import os
 
 from tradingcz.config.settings import KafkaSettings
+from tradingcz.sdk._health import HealthPublisher
 from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
 from tradingcz.sdk.data import DataClient
 from tradingcz.sdk.signals import SignalPublisher
@@ -68,10 +69,14 @@ class TradingApp:  # pylint: disable=too-many-instance-attributes
         env: str | None = None,
         bootstrap_servers: str | None = None,
         broker: str | None = None,
+        health_interval: float = 300.0,
     ) -> None:
         self._service_id = service_id
         self._env = env or os.environ.get("SDK_ENV", "dev")
         self._broker = broker or os.environ.get("SDK_BROKER", "alpaca")
+        self._health_interval = float(
+            os.environ.get("SDK_HEALTH_INTERVAL", str(health_interval))
+        )
 
         # Kafka settings — env vars take priority, else use reasonable defaults
         self._kafka = KafkaSettings(
@@ -92,6 +97,7 @@ class TradingApp:  # pylint: disable=too-many-instance-attributes
         self._events_channel: KafkaChannel | None = None
         self._rr: _RequestReply | None = None
         self._faf: _FireAndForget | None = None
+        self._health: HealthPublisher | None = None
 
         self.data: DataClient | None = None
         self.signals: SignalPublisher | None = None
@@ -142,6 +148,13 @@ class TradingApp:  # pylint: disable=too-many-instance-attributes
         self._faf = _FireAndForget(self._events_channel, self._service_id)
         await self._rr.start()
 
+        # Health / heartbeat — emits "up" and starts periodic heartbeat
+        assert self._faf is not None
+        self._health = HealthPublisher(
+            self._faf, self._service_id, interval=self._health_interval,
+        )
+        await self._health.start()
+
         # Data client
         if self._enable_data:
             assert self._transport is not None
@@ -176,7 +189,10 @@ class TradingApp:  # pylint: disable=too-many-instance-attributes
             self.orders = OrderClient(rr=self._rr)
 
     async def close(self) -> None:
-        """Graceful shutdown — flushes queued messages and closes connections."""
+        """Graceful shutdown — stops heartbeat, emits 'down', flushes, closes."""
+        # Stop health FIRST — emits "down" event before transport goes away
+        if self._health is not None:
+            await self._health.close()
         if self._rr is not None:
             await self._rr.close()
         if self._transport is not None:

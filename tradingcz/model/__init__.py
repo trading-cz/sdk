@@ -5,6 +5,7 @@ from tradingcz.model.enum import (
     SortOrder,
     Timeframe,
 )
+from tradingcz.model.health import ServiceLifecycle
 from tradingcz.model.ingestion import Bar, Quote, Snapshot, StreamQuote, Trade
 from tradingcz.model.headers import make_headers
 from tradingcz.model.events import (
@@ -29,6 +30,8 @@ __all__ = [
     "Trade",
     "Snapshot",
     "StreamQuote",
+    # Health
+    "ServiceLifecycle",
     # Headers
     "make_headers",
     # Events
