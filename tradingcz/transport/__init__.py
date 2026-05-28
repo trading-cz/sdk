@@ -13,7 +13,7 @@ Layer stack:
 
 from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.kafka import KafkaChannel, KafkaTransport, TopicConfig, TopicRegistry
-from tradingcz.transport.stream import TypedConsumer, TypedProducer
+from tradingcz.transport.stream import TypedConsumer, TypedParser, TypedProducer
 
 __all__ = [
     "KafkaChannel",
@@ -22,5 +22,6 @@ __all__ = [
     "TopicConfig",
     "TopicRegistry",
     "TypedConsumer",
+    "TypedParser",
     "TypedProducer",
 ]
