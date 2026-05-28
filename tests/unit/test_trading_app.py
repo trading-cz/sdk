@@ -10,8 +10,8 @@ from tradingcz.sdk._app import TradingApp
 
 @pytest.fixture
 def mock_transport() -> MagicMock:
-    """Patch KafkaTransport so TradingApp.start() doesn't connect to real Kafka."""
-    with patch("tradingcz.sdk._app.KafkaTransport") as mock_cls:
+    """Patch KafkaTransport in ServiceApp so start() doesn't connect to real Kafka."""
+    with patch("tradingcz.sdk._service.KafkaTransport") as mock_cls:
         transport = MagicMock()
         transport.channel = AsyncMock(return_value=AsyncMock())
         transport.close = AsyncMock()
@@ -77,7 +77,7 @@ class TestTradingAppLifecycle:
     @pytest.mark.asyncio
     async def test_health_emits_up_on_start(self, mock_transport: MagicMock) -> None:
         """Verify HealthPublisher.start() is called during TradingApp.start()."""
-        with patch("tradingcz.sdk._app.HealthPublisher") as mock_hp_cls:
+        with patch("tradingcz.sdk._service.HealthPublisher") as mock_hp_cls:
             mock_hp = MagicMock()
             mock_hp.start = AsyncMock()
             mock_hp.close = AsyncMock()
@@ -105,7 +105,7 @@ class TestTradingAppLifecycle:
     @pytest.mark.asyncio
     async def test_close_order_health_before_transport(self, mock_transport: MagicMock) -> None:
         """Health must close BEFORE transport (so 'down' event can be sent)."""
-        with patch("tradingcz.sdk._app.HealthPublisher") as mock_hp_cls:
+        with patch("tradingcz.sdk._service.HealthPublisher") as mock_hp_cls:
             mock_hp = MagicMock()
             mock_hp.start = AsyncMock()
             mock_hp.close = AsyncMock()
