@@ -1,12 +1,12 @@
-"""Pure domain models.
+"""Pydantic domain models for ingestion data.
 
-Lightweight dataclasses (slots=True, frozen=True) with no methods or vendor dependencies.
-Serialization via tradingcz.model.serde, HTTP responses via tradingcz.model.response.
+Frozen models with no vendor dependencies or I/O.
 """
 
 from tradingcz.model.ingestion.bar import Bar
 from tradingcz.model.ingestion.quote import Quote
 from tradingcz.model.ingestion.snapshot import Snapshot
+from tradingcz.model.ingestion.stream_quote import StreamQuote
 from tradingcz.model.ingestion.trade import Trade
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     "Quote",
     "Trade",
     "Snapshot",
+    "StreamQuote",
 ]

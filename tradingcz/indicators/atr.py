@@ -19,9 +19,7 @@ def calculate_atr(bars: list[Bar], period: int) -> float:
         ValueError: If fewer than ``period + 1`` bars are provided.
     """
     if len(bars) < period + 1:
-        raise ValueError(
-            f"Need at least {period + 1} bars for ATR({period}), got {len(bars)}"
-        )
+        raise ValueError(f"Need at least {period + 1} bars for ATR({period}), got {len(bars)}")
 
     true_ranges: list[float] = []
     for i in range(1, len(bars)):

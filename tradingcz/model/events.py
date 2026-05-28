@@ -1,25 +1,33 @@
-"""Control-plane event models — messages on the shared events topic.
+"""Control-plane event models — messages on the shared event topic.
 
-Wire protocol shared between ingestion service and strategy pods.
-All models carry ``event_type`` as a literal discriminator for
-Pydantic discriminated-union parsing.
+Wire protocol shared between ingestion, executor, and strategy pods.
+
+Message type is carried in the Kafka header ``message_type``, NOT in
+the value payload.  Use ``tradingcz.model.headers.parse_message()``
+to deserialize based on the header.
+
+Models:
+    - ``DataRequest``  — request historical or streaming market data
+    - ``DataReady``    — acknowledgement: data available on data_topic
+    - ``DataError``    — error response to a DataRequest
+    - ``ServiceRequest`` — general-purpose request to executor/risk
+
+All models carry ``request_id`` for correlation in request/reply flows.
 """
 
 from datetime import UTC, datetime
-from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field
 
 
 class DataRequest(BaseModel):
     """Request for historical or streaming market data."""
 
-    event_type: Literal["data_request"] = "data_request"
     request_id: str = Field(default_factory=lambda: uuid4().hex)
     source_app: str = ""
-    type: Literal["historic", "stream", "unsubscribe"]
-    asset: Literal["stock", "option", "crypto"] = "stock"
+    type: str = "historic"  # "historic", "stream", "unsubscribe"
+    asset: str = "stock"  # "stock", "option", "crypto"
     broker: str = "alpaca"
     symbols: list[str]
     stream_type: str = "trades"
@@ -36,11 +44,10 @@ class DataReady(BaseModel):
     ``bar_count`` is set only when ``type="historic"``.
     """
 
-    event_type: Literal["data_ready"] = "data_ready"
     request_id: str
     broker: str
     data_topic: str
-    type: Literal["historic", "stream"]
+    type: str = "historic"  # "historic" or "stream"
     bar_count: int | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -48,25 +55,26 @@ class DataReady(BaseModel):
 class DataError(BaseModel):
     """Error response to a DataRequest."""
 
-    event_type: Literal["data_error"] = "data_error"
     request_id: str
     broker: str
     error: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-# --- Discriminated union for parsing raw bytes ---
+class ServiceRequest(BaseModel):
+    """General-purpose request to the executor/risk service.
 
-EventMessage = Annotated[
-    DataRequest | DataReady | DataError,
-    Field(discriminator="event_type"),
-]
+    Sent on the event topic with ``message_type = "service_request"``.
+    The ``service`` field determines the expected response type.
+    """
 
-_event_adapter: TypeAdapter[DataRequest | DataReady | DataError] = TypeAdapter(
-    EventMessage
-)
+    request_id: str = Field(default_factory=lambda: uuid4().hex)
+    source_app: str = ""
+    service: str  # "get_positions", "get_balance", "get_orders", etc.
+    symbol: str | None = None
+    order_id: str | None = None
+    order_status: str | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-def parse_event(raw: bytes) -> DataRequest | DataReady | DataError:
-    """Deserialize raw JSON bytes into a typed event model."""
-    return _event_adapter.validate_json(raw)
+

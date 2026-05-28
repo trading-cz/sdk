@@ -5,17 +5,22 @@ from tradingcz.model.enum import (
     SortOrder,
     Timeframe,
 )
-from tradingcz.model.ingestion import Bar, Quote, Snapshot, Trade
-from tradingcz.model.kafka_key import KafkaKey
-from tradingcz.model.events import DataError, DataReady, DataRequest, parse_event
-from tradingcz.model.signal import (
-    SignalEnvelope,
-    SignalKey,
-    SignalMetadata,
-    SignalValue,
-    TradingSignal,
-    build_signal,
+from tradingcz.model.events import (
+    DataError,
+    DataReady,
+    DataRequest,
+    ServiceRequest,
 )
+from tradingcz.model.headers import (
+    Header,
+    MessageType,
+    make_headers,
+    message_model,
+    parse_message,
+)
+from tradingcz.model.health import ServiceLifecycle
+from tradingcz.model.ingestion import Bar, Quote, Snapshot, StreamQuote, Trade
+from tradingcz.model.signal import TradingSignal
 
 __all__ = [
     # Enums
@@ -24,22 +29,25 @@ __all__ = [
     "SortOrder",
     "OrderSide",
     "OrderType",
+    # Wire format
+    "Header",
+    "MessageType",
+    "make_headers",
+    "parse_message",
+    "message_model",
     # Domain Models
     "Bar",
     "Quote",
     "Trade",
     "Snapshot",
-    "KafkaKey",
-    # Control-plane events
+    "StreamQuote",
+    # Health
+    "ServiceLifecycle",
+    # Events
     "DataRequest",
     "DataReady",
     "DataError",
-    "parse_event",
-    # Trading signals
+    "ServiceRequest",
+    # Signals
     "TradingSignal",
-    "SignalKey",
-    "SignalValue",
-    "SignalMetadata",
-    "SignalEnvelope",
-    "build_signal",
 ]

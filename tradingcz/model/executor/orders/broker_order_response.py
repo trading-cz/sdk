@@ -54,7 +54,7 @@ class BrokerOrderResponse(BaseModel):
     hwm: float | None
 
     # raw_broker_response: dict | None
-    raw_broker_response: dict[str, Any] = Field(default_factory=dict) # by gemini
+    raw_broker_response: dict[str, Any] = Field(default_factory=dict)  # by gemini
 
     @model_validator(mode="before")
     @classmethod

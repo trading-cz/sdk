@@ -14,7 +14,7 @@ class Quote(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     symbol: str
-    timestamp: datetime       # tz-aware UTC
+    timestamp: datetime  # tz-aware UTC
     bid_price: float
     ask_price: float
     bid_size: float | None = None

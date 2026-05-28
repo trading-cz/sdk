@@ -1,118 +1,90 @@
-# Trading SDK (`trading-sdk`)
+# trading-sdk
 
-Shared SDK, data models, transport abstractions, and utilities for the trading platform.
+Shared SDK for the trading platform — batteries-included Kafka messaging,
+market data models, and strategy tooling.  **One `pip install`, zero boilerplate.**
 
-## Overview
-
-- **Package name**: `trading-sdk`
-- **Namespace**: `tradingcz` (shared across all trading services)
-- **Purpose**: Eliminate code duplication across ingestion, strategy, risk, and executor services
-- **Editable install**: `pip install -e /path/to/sdk` in each service's virtual environment
-
----
-
-## Installation
+## Install
 
 ```bash
-# Editable install (development)
 pip install -e /path/to/sdk
-
-# With optional aiokafka support (for strategy pods)
-pip install -e "/path/to/sdk[kafka-aio]"
 ```
 
----
+Requires Python ≥ 3.14.  Bring your own Kafka broker (default: `localhost:9092`).
 
-## Project Structure
-
-```
-sdk/
-├── pyproject.toml
-├── README.md
-│
-├── tradingcz/
-│   ├── __init__.py              # Namespace package (pkgutil.extend_path)
-│   ├── py.typed                 # PEP 561 marker
-│   │
-│   ├── config/
-│   │   ├── __init__.py          # Exports: KafkaSettings, ServerSettings, LoggingSettings
-│   │   └── settings.py          # Pydantic BaseSettings classes
-│   │
-│   ├── model/
-│   │   ├── __init__.py          # Re-exports all shared models
-│   │   ├── enum/                # Timeframe, Adjustment, OrderSide, etc.
-│   │   ├── ingestion/           # Bar, Quote, Trade, Snapshot (market data)
-│   │   ├── events.py            # DataRequest, DataReady, DataError, parse_event
-│   │   ├── signal.py            # TradingSignal, build_signal
-│   │   ├── event_bus.py         # EventBus (JSON send/listen over Channel)
-│   │   ├── kafka_key.py         # KafkaKey helper (support for multiple topic keys)
-│   │   └── executor/            # Executor-specific models (reserved for future)
-│   │
-│   ├── transport/
-│   │   ├── __init__.py          # Exports: Channel, Message, Transport, KafkaChannel, KafkaTransport
-│   │   ├── protocol.py          # Abstract channel/transport interfaces
-│   │   └── kafka.py             # Confluent-kafka implementation
-│   │
-│   ├── receiver/
-│   │   ├── __init__.py          # Exports: AioKafkaReceiverTransport
-│   │   └── kafka_aio.py         # Async Kafka request/response transport (aiokafka)
-│   │
-│   └── indicators/
-│       ├── __init__.py          # Exports: calculate_atr
-│       └── atr.py               # ATR indicator (Wilder method)
-```
-
----
-
-## Usage
+## Quickstart — publish a trading signal
 
 ```python
-from tradingcz.model import Bar, Quote, TradingSignal, DataRequest, DataReady
-from tradingcz.config import KafkaSettings
-from tradingcz.transport import KafkaTransport
-from tradingcz.receiver import AioKafkaReceiverTransport
-from tradingcz.indicators import calculate_atr
+import asyncio
+from datetime import UTC, datetime
+from tradingcz.sdk import TradingApp
+from tradingcz.model.signal import TradingSignal
+
+async def main():
+    async with TradingApp(service_id="my-strategy") as app:
+        signal = TradingSignal(
+            symbol="AAPL",
+            side="LONG",
+            open_price=150.0,
+            entry_price=151.0,
+            stop_loss=149.0,
+            valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
+            atr_value=2.5,
+        )
+        await app.signals.publish(signal, tracking_id="trk-001")
+
+asyncio.run(main())
 ```
-| `OrderType` | market, limit, stop, stop_limit | Order execution type |
 
-### DTOs (hand-written)
+## Quickstart — request historical data
 
-| DTO | Fields | Purpose |
-|-----|--------|---------|
-| `Bar` | symbol, timestamp, OHLCV, vwap | Candlestick data |
-| `Quote` | symbol, timestamp, bid/ask price+size | Level 1 quotes |
-| `Trade` | symbol, timestamp, price, size | Individual trades |
-| `Snapshot` | latest_trade, latest_quote, bars | Complete market state |
+```python
+async with TradingApp(service_id="my-strategy") as app:
+    bars = await app.data.request_historical(["AAPL", "MSFT"], days=30)
+    for symbol, daily_bars in bars.items():
+        print(f"{symbol}: {len(daily_bars)} bars")
+```
 
----
+## Quickstart — minimal service (no strategy features)
 
-## Local Development
+```python
+from tradingcz.sdk import ServiceApp
+
+async with ServiceApp(service_id="my-service") as svc:
+    # transport, events_channel, and health/heartbeat are ready
+    await svc.events_channel.send(b"hello", key="greeting")
+    await svc.wait_for_shutdown()   # blocks until SIGTERM
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka broker addresses |
+| `KAFKA_CONSUMER_GROUP` | `<service_id>` | Consumer group id |
+| `SDK_ENV` | `dev` | Deployment environment |
+| `SDK_HEALTH_INTERVAL` | `300` | Heartbeat interval (seconds) |
+| `SDK_BROKER` | `alpaca` | Broker identifier (TradingApp only) |
+
+## Feature flags
+
+Disable clients you don't need to reduce resource usage:
+
+```python
+app = TradingApp(service_id="risk-checker")
+app.with_signals(False).with_data(False)
+# Only app.positions, app.balance, app.orders are available
+```
+
+## Development
 
 ```bash
-# Install in editable mode
-pip install -e .
-
-# Run tests
+pip install -e ".[dev]"
 pytest tests/ -v
-
-# Validate code quality (same checks as CI)
-ruff check tradingcz/          # Fast linting (flake8 + isort checks)
-pylint tradingcz/ --disable=import-error  # Comprehensive analysis
-mypy tradingcz/                # Type checking
-
-# Auto-fix issues
-ruff check tradingcz/ --fix    # Auto-fix ruff issues
-ruff format tradingcz/         # Format code
+ruff check tradingcz/
+mypy tradingcz/
 ```
 
-**Note**: Both `ruff` and `pylint` are configured in `pyproject.toml` and run in CI via MegaLinter. Local dev should verify both pass before pushing.
+## See also
 
----
-
-## Design Principles
-
-1. **Simplicity** — Shared data models without code generation complexity
-2. **Type safety** — All models use Pydantic or dataclasses
-3. **Consistent naming** — `tradingcz.model.*` namespace everywhere
-4. **Easy consumption** — One import for all models
-5. **Maintainability** — All code is hand-written and version-controlled
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — module map, design decisions, transport layer details
+- **[docs/python314.md](docs/python314.md)** — modern Python 3.14 patterns used in this codebase
