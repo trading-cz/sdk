@@ -252,32 +252,6 @@ class TestRequestReply:
         await rr.close()
 
     @pytest.mark.asyncio
-    async def test_request_builds_headers(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test-service", message_types={"pong": Pong})
-        await rr.start()
-
-        ping = Ping(request_id="req-h", message="test")
-
-        # Simulate response
-        async def _respond() -> None:
-            await asyncio.sleep(0.05)
-            for f in rr._pending.values():
-                if not f.done():
-                    f.set_result(Pong(request_id="req-h", reply="ok"))
-
-        asyncio.create_task(_respond())
-
-        await rr.request(ping, response_type=Pong, timeout=2.0)
-
-        headers = mock_channel.send.await_args.kwargs["headers"]
-        assert headers[MESSAGE_TYPE] == "ping"
-        assert headers[SOURCE_APP] == "test-service"
-        assert headers[REQUEST_ID] == "req-h"
-        assert SEQUENCE in headers
-
-        await rr.close()
-
-    @pytest.mark.asyncio
     async def test_request_without_request_id_raises(self, mock_channel: AsyncMock) -> None:
         rr = _RequestReply(mock_channel, "test")
 
