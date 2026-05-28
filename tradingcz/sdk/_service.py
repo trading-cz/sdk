@@ -152,6 +152,31 @@ class ServiceApp:
         """Block until shutdown is requested (SIGTERM/SIGINT)."""
         await self._shutdown.wait()
 
+    async def run_until_shutdown(self, *tasks: asyncio.Task[object]) -> None:
+        """Run tasks until shutdown, then cancel them and close.
+
+        Standard service lifecycle for server-type services::
+
+            router_task = asyncio.create_task(router.run())
+            await self.run_until_shutdown(router_task)
+
+        On shutdown: cancels all tasks, awaits their cancellation,
+        then calls ``close()`` (health 'down' + transport shutdown).
+        """
+        await self._shutdown.wait()
+        logger.info("Shutdown requested — cancelling %d task(s)", len(tasks))
+
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        await self.close()
+
     # ------------------------------------------------------------------
     # Identity — used by TypedProducer, HealthPublisher, headers
     # ------------------------------------------------------------------
