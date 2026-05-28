@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 from tradingcz.model.events import DataError, DataReady, DataRequest
-from tradingcz.model.headers import REQUEST_ID, SEQUENCE, SOURCE, SOURCE_APP
+from tradingcz.model.headers import Header
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
@@ -103,11 +103,7 @@ class DataClient:
         if resp.type != "historic":
             raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
 
-        logger.info(
-            "DataReady(historic): topic=%s bar_count=%s",
-            resp.data_topic,
-            resp.bar_count,
-        )
+        logger.info("DataReady(historic): topic=%s bar_count=%s", resp.data_topic, resp.bar_count)
 
         # Open ephemeral channel and consume bars
         channel = await self._transport.channel(resp.data_topic)
@@ -118,12 +114,12 @@ class DataClient:
         try:
             async for msg in channel.receive():
                 # Filter by request_id in headers
-                if msg.headers.get(REQUEST_ID) != req.request_id:
+                if msg.headers.get(Header.REQUEST_ID) != req.request_id:
                     continue
                 # Dedup by (source, sequence)
                 if self._dedup.is_duplicate(
-                    msg.headers.get(SOURCE, msg.headers.get(SOURCE_APP, "")),
-                    msg.headers.get(SEQUENCE, "0"),
+                    msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                    msg.headers.get(Header.SEQUENCE, "0"),
                 ):
                     continue
                 try:
@@ -213,8 +209,8 @@ class DataClient:
             async for msg in channel.receive():
                 # Dedup by (source, sequence) — skip re-delivered messages
                 if self._dedup.is_duplicate(
-                    msg.headers.get(SOURCE, msg.headers.get(SOURCE_APP, "")),
-                    msg.headers.get(SEQUENCE, "0"),
+                    msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                    msg.headers.get(Header.SEQUENCE, "0"),
                 ):
                     continue
                 try:

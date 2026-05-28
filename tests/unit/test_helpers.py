@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.model.headers import MESSAGE_TYPE, REQUEST_ID, SEQUENCE, SOURCE_APP
+from tradingcz.model.headers import Header
 from tradingcz.sdk._helpers import (
     _FireAndForget,
     _infer_message_type,
@@ -96,9 +96,9 @@ class TestFireAndForget:
         call_kwargs = mock_channel.send.await_args.kwargs
         assert call_kwargs["key"] == "my-key"
         headers = call_kwargs["headers"]
-        assert headers[MESSAGE_TYPE] == "ping"
-        assert headers[SOURCE_APP] == "test-service"
-        assert headers[SEQUENCE] == "1"
+        assert headers[Header.MESSAGE_TYPE] == "ping"
+        assert headers[Header.SOURCE_APP] == "test-service"
+        assert headers[Header.SEQUENCE] == "1"
 
     @pytest.mark.asyncio
     async def test_send_increments_sequence(self, mock_channel: AsyncMock) -> None:
@@ -109,8 +109,8 @@ class TestFireAndForget:
         await faf.send(ping, message_type="ping")
 
         assert mock_channel.send.await_count == 2
-        seq1 = mock_channel.send.await_args_list[0].kwargs["headers"][SEQUENCE]
-        seq2 = mock_channel.send.await_args_list[1].kwargs["headers"][SEQUENCE]
+        seq1 = mock_channel.send.await_args_list[0].kwargs["headers"][Header.SEQUENCE]
+        seq2 = mock_channel.send.await_args_list[1].kwargs["headers"][Header.SEQUENCE]
         assert seq1 == "1"
         assert seq2 == "2"
 
@@ -193,10 +193,10 @@ class TestRequestReply:
         await rr.request(ping, response_type=Pong, timeout=2.0)
 
         headers = mock_channel.send.await_args.kwargs["headers"]
-        assert headers[MESSAGE_TYPE] == "ping"
-        assert headers[SOURCE_APP] == "test-service"
-        assert headers[REQUEST_ID] == "req-h"
-        assert SEQUENCE in headers
+        assert headers[Header.MESSAGE_TYPE] == "ping"
+        assert headers[Header.SOURCE_APP] == "test-service"
+        assert headers[Header.REQUEST_ID] == "req-h"
+        assert Header.SEQUENCE in headers
 
         await rr.close()
 

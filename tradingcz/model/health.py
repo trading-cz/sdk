@@ -18,12 +18,6 @@ from pydantic import BaseModel, Field
 
 
 class ServiceLifecycle(BaseModel):
-    """Lifecycle event published by every service to ``dev-event``.
-
-    Consumed by ingestion (to manage streaming subscriptions), monitoring
-    dashboards, and the platform operator.
-    """
-
     service_id: str
     """Unique service identifier (e.g. ``"my-strategy"``)."""
 
@@ -32,6 +26,3 @@ class ServiceLifecycle(BaseModel):
 
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     """UTC timestamp when the event was emitted."""
-
-
-__all__ = ["ServiceLifecycle"]

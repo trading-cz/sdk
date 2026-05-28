@@ -9,10 +9,15 @@ from tradingcz.model.events import (
     DataError,
     DataReady,
     DataRequest,
-    parse_by_message_type,
-    parse_event,
+    ServiceRequest,
 )
-from tradingcz.model.headers import make_headers
+from tradingcz.model.headers import (
+    Header,
+    MessageType,
+    make_headers,
+    message_model,
+    parse_message,
+)
 from tradingcz.model.health import ServiceLifecycle
 from tradingcz.model.ingestion import Bar, Quote, Snapshot, StreamQuote, Trade
 from tradingcz.model.signal import TradingSignal
@@ -24,6 +29,12 @@ __all__ = [
     "SortOrder",
     "OrderSide",
     "OrderType",
+    # Wire format
+    "Header",
+    "MessageType",
+    "make_headers",
+    "parse_message",
+    "message_model",
     # Domain Models
     "Bar",
     "Quote",
@@ -32,14 +43,11 @@ __all__ = [
     "StreamQuote",
     # Health
     "ServiceLifecycle",
-    # Headers
-    "make_headers",
     # Events
     "DataRequest",
     "DataReady",
     "DataError",
-    "parse_by_message_type",
-    "parse_event",
+    "ServiceRequest",
     # Signals
     "TradingSignal",
 ]

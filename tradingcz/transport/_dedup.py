@@ -10,12 +10,14 @@ reached, the oldest entry is evicted (LRU).
 Usage::
 
     from tradingcz.transport._dedup import DedupFilter
+    from tradingcz.model.headers import Header
+
     dedup = DedupFilter(max_size=50_000)
 
     async for msg in channel.receive():
         if dedup.is_duplicate(
-            msg.headers.get("source_app", ""),
-            msg.headers.get("sequence", "0"),
+            msg.headers.get(Header.SOURCE_APP, ""),
+            msg.headers.get(Header.SEQUENCE, "0"),
         ):
             continue
         process(msg)

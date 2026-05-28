@@ -15,7 +15,7 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.model.headers import REQUEST_ID, make_headers
+from tradingcz.model.headers import Header, make_headers
 from tradingcz.transport.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ class _RequestReply:
         logger.debug("_RequestReply listener started on %s", self._channel.name)
         try:
             async for msg in self._channel.receive():
-                msg_type = msg.headers.get("message_type", "")
+                msg_type = msg.headers.get(Header.MESSAGE_TYPE, "")
                 model_type = self._types.get(msg_type)
                 if model_type is None:
                     self._skipped += 1
@@ -193,7 +193,7 @@ class _RequestReply:
                     self._skipped += 1
                     continue
 
-                resp_id: str = getattr(parsed, REQUEST_ID, "")
+                resp_id: str = getattr(parsed, Header.REQUEST_ID, "")
                 if not resp_id:
                     continue
 

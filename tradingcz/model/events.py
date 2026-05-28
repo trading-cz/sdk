@@ -1,15 +1,16 @@
 """Control-plane event models — messages on the shared event topic.
 
-Wire protocol shared between ingestion service and strategy pods.
+Wire protocol shared between ingestion, executor, and strategy pods.
 
 Message type is carried in the Kafka header ``message_type``, NOT in
-the value payload.  The header tells the consumer which Pydantic model
-to deserialize into.  This avoids self-typing fields in the value.
+the value payload.  Use ``tradingcz.model.headers.parse_message()``
+to deserialize based on the header.
 
-Message types:
-    - ``"data_request"``  → DataRequest
-    - ``"data_ready"``    → DataReady
-    - ``"data_error"``    → DataError
+Models:
+    - ``DataRequest``  — request historical or streaming market data
+    - ``DataReady``    — acknowledgement: data available on data_topic
+    - ``DataError``    — error response to a DataRequest
+    - ``ServiceRequest`` — general-purpose request to executor/risk
 
 All models carry ``request_id`` for correlation in request/reply flows.
 """
@@ -76,47 +77,4 @@ class ServiceRequest(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-# ---------------------------------------------------------------------------
-# Message-type registry for header-based dispatch
-# ---------------------------------------------------------------------------
 
-_MESSAGE_TYPES: dict[str, type[BaseModel]] = {
-    "data_request": DataRequest,
-    "data_ready": DataReady,
-    "data_error": DataError,
-    "service_request": ServiceRequest,
-}
-
-
-def message_type_for(model: type[BaseModel]) -> str:
-    """Return the ``message_type`` header value for a model class."""
-    for mt, cls in _MESSAGE_TYPES.items():
-        if cls is model:
-            return mt
-    raise KeyError(f"Unknown model type: {model.__name__}")
-
-
-def parse_by_message_type(message_type: str, payload: bytes) -> BaseModel:
-    """Deserialize JSON bytes into the correct model based on ``message_type`` header."""
-    model_type = _MESSAGE_TYPES.get(message_type)
-    if model_type is None:
-        raise ValueError(f"Unknown message_type: {message_type}")
-    return model_type.model_validate_json(payload)
-
-
-# ---------------------------------------------------------------------------
-# Deprecated: kept for backward compatibility with services on old SDK versions
-# ---------------------------------------------------------------------------
-
-
-def parse_event(raw: bytes) -> DataRequest | DataReady | DataError:
-    """Deprecated.  Use ``parse_by_message_type(message_type, payload)`` instead.
-
-    Tries each known event type until one parses successfully.
-    """
-    for model_type in [DataRequest, DataReady, DataError]:
-        try:
-            return model_type.model_validate_json(raw)  # type: ignore[return-value]
-        except Exception:
-            continue
-    raise ValueError("Cannot parse event from bytes — unknown event type")

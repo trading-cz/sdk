@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 from tradingcz import SCHEMA_VERSION
 from tradingcz.config import KafkaSettings
 from tradingcz.model.ingestion import Bar, Quote
-from tradingcz.model.headers import make_headers
+from tradingcz.model.headers import Header, make_headers
 from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
 from tradingcz.transport._dedup import DedupFilter
 from tradingcz.serialization import JsonCodec
@@ -157,10 +157,10 @@ async def test_1_channel_send_receive_with_headers() -> None:
 
         # Send with key and headers
         test_headers = {
-            "message_type": "ping",
-            "source_app": "smoke_test",
-            "sequence": "1",
-            "schema_version": SCHEMA_VERSION,
+            Header.MESSAGE_TYPE: "ping",
+            Header.SOURCE_APP: "smoke_test",
+            Header.SEQUENCE: "1",
+            Header.SCHEMA_VERSION: SCHEMA_VERSION,
         }
         await channel.send(b'{"hello":"world"}', key="test-key", headers=test_headers)
         ok("Sent message with key='test-key' + 4 headers")
@@ -177,10 +177,10 @@ async def test_1_channel_send_receive_with_headers() -> None:
 
         # Verify KafkaMessage fields
         assert_eq(msg.key, "test-key", "key")
-        assert_eq(msg.headers.get("message_type"), "ping", "header: message_type")
-        assert_eq(msg.headers.get("source_app"), "smoke_test", "header: source_app")
-        assert_eq(msg.headers.get("sequence"), "1", "header: sequence")
-        assert_eq(msg.headers.get("schema_version"), SCHEMA_VERSION, "header: schema_version")
+        assert_eq(msg.headers.get(Header.MESSAGE_TYPE), "ping", "header: message_type")
+        assert_eq(msg.headers.get(Header.SOURCE_APP), "smoke_test", "header: source_app")
+        assert_eq(msg.headers.get(Header.SEQUENCE), "1", "header: sequence")
+        assert_eq(msg.headers.get(Header.SCHEMA_VERSION), SCHEMA_VERSION, "header: schema_version")
 
         ok(f"offset={msg.offset}, partition={msg.partition}, topic='{msg.topic}'")
         assert msg.offset >= 0 or fail(f"offset should be >=0, got {msg.offset}")
@@ -208,10 +208,10 @@ async def test_2_typed_producer_consumer_roundtrip() -> None:
             serializer=JsonCodec(Ping),
             key_fn=lambda p: p.request_id,
             headers_fn=lambda p: {
-                "message_type": "ping",
-                "source_app": "smoke_test",
-                "sequence": str(seq_counter.pop(0) + 1),
-                "schema_version": SCHEMA_VERSION,
+                Header.MESSAGE_TYPE: "ping",
+                Header.SOURCE_APP: "smoke_test",
+                Header.SEQUENCE: str(seq_counter.pop(0) + 1),
+                Header.SCHEMA_VERSION: SCHEMA_VERSION,
             },
         )
 
@@ -242,7 +242,7 @@ async def test_2_typed_producer_consumer_roundtrip() -> None:
 
         if received_meta:
             assert_eq(
-                received_meta.headers.get("message_type", ""),
+                received_meta.headers.get(Header.MESSAGE_TYPE, ""),
                 "ping",
                 "header round-trip: message_type",
             )

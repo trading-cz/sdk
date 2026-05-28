@@ -17,7 +17,7 @@ Usage::
 
 from collections.abc import AsyncIterator, Callable
 
-from tradingcz.model.headers import make_headers
+from tradingcz.model.headers import Header, make_headers
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.kafka_message import KafkaMessage
 
@@ -136,7 +136,7 @@ class TypedParser:
     async def parse(self) -> AsyncIterator[tuple[str, object, KafkaMessage]]:
         """Yield (message_type, parsed_model, raw_message) tuples."""
         async for msg in self._channel.receive():
-            msg_type = msg.headers.get("message_type", "")
+            msg_type = msg.headers.get(Header.MESSAGE_TYPE, "")
             model_type = self._types.get(msg_type)
             if model_type is None:
                 continue
