@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator, Callable
 from tradingcz.model.headers import Header, make_headers
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.kafka_message import KafkaMessage
+from tradingcz.transport.channel import KafkaChannel
 
 
 def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
