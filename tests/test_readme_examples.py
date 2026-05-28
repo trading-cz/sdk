@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.fake_kafka import FakeKafkaTransport
-from tradingcz.config.settings import KafkaSettings
+from tradingcz.config import KafkaSettings
 from tradingcz.model.signal import TradingSignal
 from tradingcz.sdk import ServiceApp, TradingApp
 

@@ -18,7 +18,7 @@ from confluent_kafka import Producer as SyncProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 from confluent_kafka.aio import AIOConsumer
 
-from tradingcz.config.settings import KafkaSettings
+from tradingcz.config import KafkaSettings
 from tradingcz.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)

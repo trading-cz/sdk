@@ -124,39 +124,17 @@ class TypedConsumer[T]:
 
 
 class TypedParser:
-    """Parse raw Kafka messages into typed models based on ``message_type`` header.
+    """Parse raw Kafka messages into typed models based on message_type header.
 
-    Unlike ``TypedConsumer`` (which deserializes EVERYTHING as one type),
-    ``TypedParser`` reads the ``message_type`` header and dispatches to
-    the correct Pydantic model.  This is the primary mechanism for consuming
-    from the shared event topic where multiple message types coexist.
-
-    Usage::
-
-        parser = TypedParser(
-            channel=events_channel,
-            types={"data_request": DataRequest, "data_ready": DataReady},
-        )
-        async for msg_type, model, raw in parser.parse():
-            match msg_type:
-                case "data_request": handle_request(model)
-                case "data_ready": handle_ready(model)
+    Dispatches to the correct Pydantic model for multi-type shared topics.
     """
 
-    def __init__(
-        self,
-        channel: KafkaChannel,
-        types: dict[str, type],
-    ) -> None:
+    def __init__(self, channel: KafkaChannel, types: dict[str, type]) -> None:
         self._channel = channel
         self._types = types
 
     async def parse(self) -> AsyncIterator[tuple[str, object, KafkaMessage]]:
-        """Yield ``(message_type, parsed_model, raw_message)`` tuples.
-
-        Messages whose ``message_type`` is not in the registered types
-        are silently skipped (expected on a shared topic).
-        """
+        """Yield (message_type, parsed_model, raw_message) tuples."""
         async for msg in self._channel.receive():
             msg_type = msg.headers.get("message_type", "")
             model_type = self._types.get(msg_type)

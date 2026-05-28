@@ -7,25 +7,32 @@ the SDK, see the [README](../README.md).
 
 ```
 tradingcz/
-├── sdk/                  ← PUBLIC API — the only layer you import
-│   ├── _app.py           TradingApp (strategy/consumer role)
-│   ├── _service.py       ServiceApp (base class for ALL services)
-│   ├── _health.py        HealthPublisher (up → heartbeat → down)
-│   ├── _helpers.py       _RequestReply, _FireAndForget (internal patterns)
-│   ├── data.py           DataClient (historical + streaming)
-│   ├── signals.py        SignalPublisher (fire-and-forget)
-│   ├── positions.py      PositionClient (request/reply)
-│   ├── balance.py        BalanceClient (request/reply)
-│   └── orders.py         OrderClient (request/reply)
+├── __init__.py          # Namespace package, SCHEMA_VERSION
+├── config.py            # KafkaSettings, LoggingSettings
+├── errors.py            # SdkError, TransportError
 │
-├── transport/            ← INTERNAL — Kafka I/O
-│   ├── kafka/
-│   │   ├── channel.py    KafkaChannel (send/receive), KafkaTransport
-│   │   └── topics.py     TopicRegistry, TopicConfig
-│   ├── stream.py         TypedProducer, TypedConsumer (typed wrappers)
-│   ├── kafka_message.py  KafkaMessage (offset, partition, headers, payload)
-│   ├── hash.py           Murmur2 partition discovery
-│   └── _dedup.py         DedupFilter (LRU-based deduplication)
+├── sdk/                 ← PUBLIC API — the only layer you import
+│   ├── __init__.py      # TradingApp, ServiceApp
+│   ├── _app.py          # TradingApp (strategy/consumer role)
+│   ├── _service.py      # ServiceApp (base class for ALL services)
+│   ├── _health.py       # HealthPublisher (up → heartbeat → down)
+│   ├── _helpers.py      # _RequestReply, _FireAndForget (internal patterns)
+│   ├── data.py          # DataClient (historical + streaming)
+│   ├── signals.py       # SignalPublisher (fire-and-forget)
+│   ├── positions.py     # PositionClient (request/reply)
+│   ├── balance.py       # BalanceClient (request/reply)
+│   └── orders.py        # OrderClient (request/reply)
+│
+├── transport/           ← Kafka I/O — flat module, no subpackages
+│   ├── __init__.py      # KafkaChannel, KafkaTransport, TopicRegistry, etc.
+│   ├── channel.py       # KafkaChannel (send/receive), KafkaTransport
+│   ├── topics.py        # TopicRegistry, TopicConfig
+│   ├── stream.py        # TypedProducer, TypedConsumer, TypedParser
+│   ├── request_reply.py # RequestReplyClient[Req, Resp]
+│   ├── kafka_message.py # KafkaMessage (offset, partition, headers, payload)
+│   ├── hash.py          # Murmur2 partition discovery
+│   └── _dedup.py        # DedupFilter (LRU-based deduplication)
+│
 │
 ├── model/                ← Domain models — NO vendor dependencies
 │   ├── headers.py        Header constants + make_headers() factory

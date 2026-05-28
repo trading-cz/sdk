@@ -11,7 +11,7 @@ Metadata lives in headers via ``tradingcz.model.headers.make_headers()``.
 
 Usage (in any service)::
 
-    from tradingcz.transport.kafka import TopicRegistry
+    from tradingcz.transport import TopicRegistry
 
     topics = TopicRegistry(env="dev")
     channel = await transport.channel(topics.market_data.name)

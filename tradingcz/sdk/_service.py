@@ -24,11 +24,11 @@ import logging
 import os
 import signal
 
-from tradingcz.config.settings import KafkaSettings
+from tradingcz.config import KafkaSettings
 from tradingcz.sdk._health import HealthPublisher
 from tradingcz.sdk._helpers import _FireAndForget
-from tradingcz.transport.kafka.channel import KafkaChannel, KafkaTransport
-from tradingcz.transport.kafka.topics import TopicRegistry
+from tradingcz.transport.channel import KafkaChannel, KafkaTransport
+from tradingcz.transport.topics import TopicRegistry
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ Kafka transport layer but use ``mockafka-py`` (``FakeProducer``,
 Usage in tests::
 
     from tests.fake_kafka import FakeKafkaTransport
-    from tradingcz.config.settings import KafkaSettings
+    from tradingcz.config import KafkaSettings
 
     settings = KafkaSettings(
         bootstrap_servers="fake:9092",
@@ -32,7 +32,7 @@ from collections.abc import AsyncIterator
 from mockafka import FakeAdminClientImpl, FakeConsumer, FakeProducer
 from mockafka.admin_client import NewTopic as FakeNewTopic
 
-from tradingcz.config.settings import KafkaSettings
+from tradingcz.config import KafkaSettings
 from tradingcz.transport.hash import partition_for
 from tradingcz.transport.kafka_message import KafkaMessage
 

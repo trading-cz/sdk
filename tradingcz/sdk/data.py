@@ -18,8 +18,8 @@ from tradingcz.model.headers import REQUEST_ID, SEQUENCE, SOURCE, SOURCE_APP
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
-from tradingcz.transport.kafka.channel import KafkaTransport
-from tradingcz.transport.kafka.topics import TopicRegistry
+from tradingcz.transport.channel import KafkaTransport
+from tradingcz.transport.topics import TopicRegistry
 
 logger = logging.getLogger(__name__)
 

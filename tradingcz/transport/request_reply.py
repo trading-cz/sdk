@@ -28,7 +28,7 @@ import logging
 from collections.abc import Callable
 
 from tradingcz.serialization.protocol import Deserializer, Serializer
-from tradingcz.transport.kafka.channel import KafkaChannel
+from tradingcz.transport.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
 
