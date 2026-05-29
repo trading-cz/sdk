@@ -37,7 +37,7 @@ class TopicConfig:
     name: str
     partitions: int = 5
     replication_factor: int = 2
-    retention_ms: int = 432_000_000  # 5 days
+    retention_ms: int = 259_200_000  # 3 days
     cleanup_policy: str = "delete"
 
 
@@ -64,17 +64,15 @@ class TopicRegistry:
         self.market_data = TopicConfig(
             name=f"{env}-stock-market-stream-data",
             partitions=5,
-            retention_ms=86_400_000,  # 1 day for live data
         )
 
-        # Historical stock data: 5 partitions, shared across all
+        # Historical stock data: single partition, shared across all
         # historical requests (request_id used for filtering).
         self.historical_data = TopicConfig(
             name=f"{env}-stock-market-historical-data",
-            partitions=5,
+            partitions=1,
         )
 
-        self.signals = TopicConfig(name=f"{env}-raw-signal", partitions=1)
         self.execution_requests = TopicConfig(name=f"{env}-execution-request", partitions=1)
         self.execution_responses = TopicConfig(name=f"{env}-execution-response", partitions=1)
         self.positions = TopicConfig(name=f"{env}-position-events", partitions=1)
