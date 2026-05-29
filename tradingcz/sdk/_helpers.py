@@ -55,7 +55,7 @@ class _FireAndForget:  # pylint: disable=too-few-public-methods
             sequence=self._seq,
             **(extra_headers or {}),
         )
-        payload = message.model_dump_json().encode()
+        payload = message.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
         await self._channel.send(payload, key=key, headers=headers)
 
 
@@ -158,7 +158,7 @@ class _RequestReply:
         mt = request_type or _infer_message_type(req)
         self._seq += 1
 
-        payload = req.model_dump_json().encode()
+        payload = req.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
         headers = make_headers(
             message_type=mt,
             source_app=self._service_id,
