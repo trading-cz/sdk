@@ -45,7 +45,7 @@ class TestRetry:
             await retry.call(
                 lambda: (_ for _ in ()).throw(TransientError("always fails"))
             )
-        assert retry.attempts == 3  # 1 initial + 2 retries
+        assert retry.attempts == 3  # 1 initial + 2 retries 
 
     @pytest.mark.asyncio
     async def test_non_retryable_passes_through(self) -> None:
