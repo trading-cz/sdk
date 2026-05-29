@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.model.headers import MessageType
 from tradingcz.sdk._helpers import _RequestReply
 
 
@@ -38,7 +39,7 @@ class BalanceClient:
 
     def __init__(self, rr: _RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type("balance_response", BalanceResponse)
+        self._rr.register_type(MessageType.BALANCE_RESPONSE, BalanceResponse)
 
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: skip-file
 """Comprehensive smoke test for the simplified SDK.
 
 Verifies end-to-end against a real Kafka broker (46.224.59.47:30002):
@@ -20,7 +21,6 @@ Usage:
 """
 
 import asyncio
-import json
 import os
 import subprocess
 import sys
@@ -28,17 +28,14 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from confluent_kafka.admin import AdminClient
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from tradingcz import SCHEMA_VERSION
 from tradingcz.config import KafkaSettings
-from tradingcz.model.ingestion import Bar, Quote
-from tradingcz.model.headers import Header, make_headers
+from tradingcz.model.headers import Header
 from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
-from tradingcz.transport._dedup import DedupFilter
 from tradingcz.serialization import JsonCodec
 from tradingcz.transport import (
-    KafkaChannel,
     KafkaMessage,
     KafkaTransport,
     TopicRegistry,
@@ -46,6 +43,7 @@ from tradingcz.transport import (
     TypedParser,
     TypedProducer,
 )
+from tradingcz.transport._dedup import DedupFilter
 from tradingcz.transport.hash import partition_for
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -278,7 +276,7 @@ async def test_3_typed_parser_multiple_types() -> None:
         parser = TypedParser(channel=channel, types={"ping": Ping, "pong": Pong})
 
         received: list[tuple[str, object]] = []
-        async for msg_type, model, raw in parser.parse():
+        async for msg_type, model, _raw in parser.parse():
             received.append((msg_type, model))
             if len(received) >= 2:
                 break
@@ -398,9 +396,9 @@ async def test_6_request_reply_correlation() -> None:
         # Send request and response concurrently (simulating real flow)
         async def _send_response() -> None:
             await asyncio.sleep(0.3)  # let the request land first
-            pong = Pong(request_id="req-001", reply="echo-response")
+            _pong = Pong(request_id="req-001", reply="echo-response")
             # Use a separate channel for producing to avoid the consumer conflict
-            resp_channel = await transport.channel(TEST_TOPIC + "-resp", num_partitions=1, retention_ms=60_000)
+            _resp_channel = await transport.channel(TEST_TOPIC + "-resp", num_partitions=1, retention_ms=60_000)
 
         # Actually, use the same channel but produce after request
         async def _produce_pong() -> None:
@@ -522,7 +520,7 @@ async def test_8_kcat_inspection() -> None:
             ok(f"partition_for('{symbol}', 2) = {p}")
 
         # Verify we consumed the right count
-        lines = [l for l in consumed.split("\n") if l.strip()]
+        lines = [line for line in consumed.split("\n") if line.strip()]
         assert_eq(len(lines), 3, "kcat consumed 3 messages")
 
     finally:

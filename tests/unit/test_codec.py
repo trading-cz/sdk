@@ -48,7 +48,7 @@ class TestJsonCodec:
 
     def test_deserialize_invalid_json_raises(self) -> None:
         codec = JsonCodec(_TestModel)
-        with pytest.raises(Exception):  # ValidationError or JSONDecodeError
+        with pytest.raises((ValueError, Exception)):
             codec.deserialize(b"not json")
 
     def test_serialize_batch(self) -> None:

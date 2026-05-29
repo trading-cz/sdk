@@ -14,6 +14,7 @@ from tradingcz.model.events import (
 from tradingcz.model.headers import (
     Header,
     MessageType,
+    build_event_key,
     make_headers,
     message_model,
     parse_message,
@@ -32,6 +33,7 @@ __all__ = [
     # Wire format
     "Header",
     "MessageType",
+    "build_event_key",
     "make_headers",
     "parse_message",
     "message_model",

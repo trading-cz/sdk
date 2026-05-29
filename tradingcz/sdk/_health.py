@@ -18,7 +18,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
-from tradingcz.model.headers import Header, MessageType
+from tradingcz.model.headers import Header, MessageType, build_event_key
 from tradingcz.model.health import ServiceLifecycle
 from tradingcz.sdk._helpers import _FireAndForget
 from tradingcz.transport.channel import KafkaChannel
@@ -116,11 +116,12 @@ class HealthPublisher:
             service_id=self._service_id,
             event=event,  # type: ignore[arg-type]
         )
+        key = build_event_key(MessageType.SERVICE_LIFECYCLE, self._service_id, event)
         try:
             await self._faf.send(
                 lifecycle,
                 message_type=MessageType.SERVICE_LIFECYCLE,
-                key=self._service_id,
+                key=key,
                 extra_headers={Header.LIFECYCLE_EVENT: event},
             )
         except Exception:  # pylint: disable=broad-exception-caught

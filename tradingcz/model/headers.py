@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from tradingcz import SCHEMA_VERSION
 
-
 # ═════════════════════════════════════════════════════════════════════════════
 # Header — Kafka header field names
 # ═════════════════════════════════════════════════════════════════════════════
@@ -61,6 +60,11 @@ class MessageType(StrEnum):
     SERVICE_REQUEST = "service_request"
     SERVICE_LIFECYCLE = "service_lifecycle"
 
+    # Service responses (event topic)
+    POSITION_RESPONSE = "position_response"
+    BALANCE_RESPONSE = "balance_response"
+    ORDER_RESPONSE = "order_response"
+
     # Strategy output (signal topic)
     TRADING_SIGNAL = "trading_signal"
 
@@ -79,13 +83,17 @@ class MessageType(StrEnum):
 
 def make_headers(
     *,
-    message_type: str | MessageType,
+    message_type: MessageType,
     source_app: str = "",
     sequence: int = 0,
     schema_version: str = SCHEMA_VERSION,
     **extra: str,
 ) -> dict[str, str]:
     """Build a standard headers dict for any Kafka message.
+
+    The ``message_type`` parameter MUST be a :class:`MessageType` enum
+    value — raw strings are rejected at the type level.  This ensures
+    every message carries a known, documented wire type.
 
     Example::
 
@@ -106,6 +114,39 @@ def make_headers(
     }
     headers.update(extra)
     return headers
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# build_event_key — composite Kafka key for human-readable event topics
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def build_event_key(
+    message_type: MessageType,
+    source_app: str,
+    *extra: str,
+) -> str:
+    """Build a human-readable composite Kafka key for the event topic.
+
+    Format: ``message_type:source_app[:extra...]``
+
+    Examples::
+
+        >>> build_event_key(MessageType.DATA_REQUEST, "pcb-breakout", "abc123")
+        'data_request:pcb-breakout:abc123'
+
+        >>> build_event_key(MessageType.SERVICE_LIFECYCLE, "ingestion", "heartbeat")
+        'service_lifecycle:ingestion:heartbeat'
+
+        >>> build_event_key(MessageType.DATA_READY, "ingestion", "abc123")
+        'data_ready:ingestion:abc123'
+
+    This key is for human scanning / ``kcat`` grep only — application-level
+    routing is driven by headers, never by keys.  The event topic has exactly
+    one partition, so keys have no load‑balancing effect.
+    """
+    parts = [str(message_type), source_app, *extra]
+    return ":".join(parts)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -174,6 +215,7 @@ def parse_message(message_type: str | MessageType, payload: bytes) -> BaseModel:
 __all__ = [
     "Header",
     "MessageType",
+    "build_event_key",
     "make_headers",
     "parse_message",
     "message_model",

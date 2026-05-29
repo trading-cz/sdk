@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.model.headers import MessageType
 from tradingcz.sdk._helpers import _RequestReply
 
 
@@ -41,7 +42,7 @@ class OrderClient:
 
     def __init__(self, rr: _RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type("order_response", OrderList)
+        self._rr.register_type(MessageType.ORDER_RESPONSE, OrderList)
 
     async def get_orders(
         self,

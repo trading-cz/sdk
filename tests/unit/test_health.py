@@ -105,7 +105,7 @@ class TestHealthPublisher:
 
         call_args = mock_faf.send.await_args
         assert call_args.kwargs["message_type"] == "service_lifecycle"
-        assert call_args.kwargs["key"] == "test-service"
+        assert call_args.kwargs["key"] == "service_lifecycle:test-service:up"
 
         extra = call_args.kwargs.get("extra_headers", {})
         assert extra.get("lifecycle_event") == "up"

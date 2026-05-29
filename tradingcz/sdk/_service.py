@@ -27,6 +27,7 @@ import signal
 from pydantic import BaseModel
 
 from tradingcz.config import KafkaSettings
+from tradingcz.model.headers import MessageType
 from tradingcz.sdk._health import HealthPublisher
 from tradingcz.sdk._helpers import _FireAndForget
 from tradingcz.transport.channel import KafkaChannel, KafkaTransport
@@ -145,9 +146,9 @@ class ServiceApp:
 
     async def publish(
         self,
-        message: "BaseModel",
+        message: BaseModel,
         *,
-        message_type: str,
+        message_type: MessageType,
         key: str = "",
         **headers: str,
     ) -> None:
@@ -161,7 +162,7 @@ class ServiceApp:
 
             await self.publish(
                 DataReady(request_id="...", ...),
-                message_type="data_ready",
+                message_type=MessageType.DATA_READY,
                 key=request_id,
             )
         """
