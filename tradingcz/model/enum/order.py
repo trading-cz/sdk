@@ -1,7 +1,7 @@
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 
-class SortOrder(str, Enum):
+class SortOrder(StrEnum):
     """Sort order for time-series data."""
 
     ASC = "asc"  # Oldest first (default for backtesting)

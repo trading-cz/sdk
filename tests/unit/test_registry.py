@@ -1,6 +1,7 @@
 """Unit tests for tradingcz.sdk._registry.Registry."""
 
 import pytest
+
 from tradingcz.sdk._registry import Registry
 
 

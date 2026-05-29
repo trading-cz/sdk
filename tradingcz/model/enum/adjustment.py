@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Adjustment(str, Enum):
+class Adjustment(StrEnum):
     RAW = "raw"  # No adjustment
     SPLIT = "split"  # Adjusted for stock splits only
     DIVIDEND = "dividend"  # Adjusted for dividends only

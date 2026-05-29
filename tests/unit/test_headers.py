@@ -103,7 +103,7 @@ class TestMessageModel:
     def test_unknown_type_raises(self) -> None:
         try:
             message_model("bogus_type_xyz")
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 
@@ -128,6 +128,6 @@ class TestParseMessage:
     def test_parse_unknown_type_raises(self) -> None:
         try:
             parse_message("bogus", b"{}")
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
