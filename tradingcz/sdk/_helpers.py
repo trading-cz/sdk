@@ -15,7 +15,7 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.model.headers import Header, build_event_key, make_headers
+from tradingcz.model.headers import Header, MessageType, build_event_key, make_headers
 from tradingcz.transport.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class _FireAndForget:  # pylint: disable=too-few-public-methods
         self,
         message: BaseModel,
         *,
-        message_type: str,
+        message_type: MessageType,
         key: str = "",
         extra_headers: dict[str, str] | None = None,
     ) -> None:
@@ -44,7 +44,7 @@ class _FireAndForget:  # pylint: disable=too-few-public-methods
 
         Args:
             message: Pydantic model to serialize.
-            message_type: Value for the ``message_type`` header.
+            message_type: :class:`MessageType` enum value for the header.
             key: Kafka message key (empty = no partitioning).
             extra_headers: Additional headers merged into standard set.
         """
@@ -91,9 +91,13 @@ class _RequestReply:
     # Type registry
     # ------------------------------------------------------------------
 
-    def register_type(self, message_type: str, model: type[BaseModel]) -> None:
-        """Register a message_type → model mapping for response deserialization."""
-        self._types[message_type] = model
+    def register_type(self, message_type: str | MessageType, model: type[BaseModel]) -> None:
+        """Register a message_type → model mapping for response deserialization.
+
+        Accepts both :class:`MessageType` enum values and plain strings
+        (for custom response types not in the standard enum).
+        """
+        self._types[str(message_type)] = model
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -127,7 +131,7 @@ class _RequestReply:
         req: BaseModel,
         *,
         response_type: type[Resp],  # type-checker only, not used at runtime
-        request_type: str | None = None,
+        request_type: MessageType | None = None,
         timeout: float = 30.0,
     ) -> Resp:
         """Send *req*, await a correlated *Resp*.
@@ -135,7 +139,8 @@ class _RequestReply:
         Args:
             req: The request model (must have ``request_id: str``).
             response_type: Expected response Pydantic model class.
-            request_type: ``message_type`` header value (auto-inferred if None).
+            request_type: :class:`MessageType` enum value for the header
+                (auto-inferred from the request class name if None).
             timeout: Seconds to wait before raising TimeoutError.
 
         Returns:
@@ -212,6 +217,22 @@ class _RequestReply:
         return self._skipped
 
 
-def _infer_message_type(model: BaseModel) -> str:
-    """Infer message_type from model class name: DataRequest → 'data_request'."""
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
+def _infer_message_type(model: BaseModel) -> MessageType:
+    """Infer MessageType from model class name: DataRequest → DATA_REQUEST.
+
+    Converts CamelCase class name to snake_case and looks up the
+    corresponding :class:`MessageType` enum member.
+
+    Raises:
+        ValueError: If no MessageType matches the inferred name.
+            Pass an explicit ``request_type`` to avoid inference.
+    """
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
+    try:
+        return MessageType(snake)
+    except ValueError:
+        raise ValueError(
+            f"Cannot infer MessageType from class {type(model).__name__!r}: "
+            f"'{snake}' is not a known message_type. "
+            f"Pass an explicit 'request_type' parameter."
+        ) from None

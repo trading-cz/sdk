@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from tradingcz import SCHEMA_VERSION
 
-
 # ═════════════════════════════════════════════════════════════════════════════
 # Header — Kafka header field names
 # ═════════════════════════════════════════════════════════════════════════════
@@ -61,6 +60,11 @@ class MessageType(StrEnum):
     SERVICE_REQUEST = "service_request"
     SERVICE_LIFECYCLE = "service_lifecycle"
 
+    # Service responses (event topic)
+    POSITION_RESPONSE = "position_response"
+    BALANCE_RESPONSE = "balance_response"
+    ORDER_RESPONSE = "order_response"
+
     # Strategy output (signal topic)
     TRADING_SIGNAL = "trading_signal"
 
@@ -79,13 +83,17 @@ class MessageType(StrEnum):
 
 def make_headers(
     *,
-    message_type: str | MessageType,
+    message_type: MessageType,
     source_app: str = "",
     sequence: int = 0,
     schema_version: str = SCHEMA_VERSION,
     **extra: str,
 ) -> dict[str, str]:
     """Build a standard headers dict for any Kafka message.
+
+    The ``message_type`` parameter MUST be a :class:`MessageType` enum
+    value — raw strings are rejected at the type level.  This ensures
+    every message carries a known, documented wire type.
 
     Example::
 
@@ -114,7 +122,7 @@ def make_headers(
 
 
 def build_event_key(
-    message_type: str | MessageType,
+    message_type: MessageType,
     source_app: str,
     *extra: str,
 ) -> str:
@@ -124,13 +132,13 @@ def build_event_key(
 
     Examples::
 
-        >>> build_event_key("data_request", "pcb-breakout", "abc123")
+        >>> build_event_key(MessageType.DATA_REQUEST, "pcb-breakout", "abc123")
         'data_request:pcb-breakout:abc123'
 
         >>> build_event_key(MessageType.SERVICE_LIFECYCLE, "ingestion", "heartbeat")
         'service_lifecycle:ingestion:heartbeat'
 
-        >>> build_event_key("data_ready", "ingestion", "abc123")
+        >>> build_event_key(MessageType.DATA_READY, "ingestion", "abc123")
         'data_ready:ingestion:abc123'
 
     This key is for human scanning / ``kcat`` grep only — application-level

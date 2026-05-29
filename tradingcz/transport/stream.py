@@ -20,20 +20,38 @@ from collections.abc import AsyncIterator, Callable
 
 from pydantic import BaseModel
 
-from tradingcz.model.headers import Header, make_headers
+from tradingcz.model.headers import Header, MessageType, make_headers
 from tradingcz.serialization.protocol import Deserializer, Serializer
-from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.channel import KafkaChannel
+from tradingcz.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 
 
 def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
-    """Return a headers_fn that auto-infers message_type from the value's class name."""
+    """Return a headers_fn that auto-infers MessageType from the value's class name.
+
+    Converts CamelCase class name to snake_case and looks up the
+    corresponding :class:`MessageType` enum member (e.g. ``TradingSignal``
+    → ``MessageType.TRADING_SIGNAL`` → ``\"trading_signal\"``).
+
+    If the class name doesn't match any known MessageType, the caller
+    should supply an explicit ``headers_fn`` instead.
+    """
 
     def _fn(value: T) -> dict[str, str]:
+        import re
+        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(value).__name__).lower()
+        try:
+            mt = MessageType(snake)
+        except ValueError:
+            raise ValueError(
+                f"Cannot infer MessageType from class {type(value).__name__!r}: "
+                f"'{snake}' is not a known message_type. "
+                f"Supply an explicit 'headers_fn' to TypedProducer."
+            ) from None
         return make_headers(
-            message_type=type(value).__name__.lower(),
+            message_type=mt,
             source_app=source_app,
         )
 

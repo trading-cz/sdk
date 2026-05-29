@@ -45,7 +45,7 @@ class TestMakeHeaders:
     """Tests for make_headers() factory."""
 
     def test_minimal_headers(self) -> None:
-        h = make_headers(message_type="data_request")
+        h = make_headers(message_type=MessageType.DATA_REQUEST)
         assert h[Header.MESSAGE_TYPE] == "data_request"
         assert h[Header.SOURCE_APP] == ""
         assert h[Header.SCHEMA_VERSION] == SCHEMA_VERSION
@@ -57,7 +57,7 @@ class TestMakeHeaders:
 
     def test_full_headers(self) -> None:
         h = make_headers(
-            message_type="data_request",
+            message_type=MessageType.DATA_REQUEST,
             source_app="ingestion",
             sequence=42,
             request_id="abc-123",
@@ -74,20 +74,20 @@ class TestMakeHeaders:
         assert h[Header.TRACKING_ID] == "trk-001"
 
     def test_extra_kwargs_become_headers(self) -> None:
-        h = make_headers(message_type="trade", custom_field="custom_value")
+        h = make_headers(message_type=MessageType.TRADE, custom_field="custom_value")
         assert h["custom_field"] == "custom_value"
 
     def test_sequence_is_string(self) -> None:
-        h = make_headers(message_type="test", sequence=0)
+        h = make_headers(message_type=MessageType.BAR, sequence=0)
         assert isinstance(h[Header.SEQUENCE], str)
         assert h[Header.SEQUENCE] == "0"
 
     def test_schema_version_default(self) -> None:
-        h = make_headers(message_type="test")
+        h = make_headers(message_type=MessageType.BAR)
         assert h[Header.SCHEMA_VERSION] == SCHEMA_VERSION
 
     def test_schema_version_override(self) -> None:
-        h = make_headers(message_type="test", schema_version="2.0")
+        h = make_headers(message_type=MessageType.BAR, schema_version="2.0")
         assert h[Header.SCHEMA_VERSION] == "2.0"
 
 
@@ -110,7 +110,7 @@ class TestMessageModel:
     def test_str_message_type_accepted(self) -> None:
         from tradingcz.model.events import DataReady
 
-        cls = message_model("data_ready")
+        cls = message_model(MessageType.DATA_READY)
         assert cls is DataReady
 
 

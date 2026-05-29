@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 from tradingcz.model.events import DataError, DataReady, DataRequest
-from tradingcz.model.headers import Header
+from tradingcz.model.headers import Header, MessageType
 from tradingcz.model.ingestion import Bar, StreamQuote, Trade
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
@@ -52,8 +52,8 @@ class DataClient:
         self._broker = broker
         self._dedup = DedupFilter(max_size=dedup_max_size)
         # Register response types
-        rr.register_type("data_ready", DataReady)
-        rr.register_type("data_error", DataError)
+        rr.register_type(MessageType.DATA_READY, DataReady)
+        rr.register_type(MessageType.DATA_ERROR, DataError)
 
     @property
     def dedup_skipped(self) -> int:
@@ -194,7 +194,7 @@ class DataClient:
         resp = await self._rr.request(
             req,
             response_type=DataReady,
-            request_type="data_request",
+            request_type=MessageType.DATA_REQUEST,
             timeout=timeout,
         )
 

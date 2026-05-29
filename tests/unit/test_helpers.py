@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.model.headers import Header
+from tradingcz.model.headers import Header, MessageType
 from tradingcz.sdk._helpers import (
     _FireAndForget,
     _infer_message_type,
@@ -58,7 +58,7 @@ class TestInferMessageType:
         from tradingcz.model.events import DataRequest
 
         req = DataRequest(type="historic", asset="stock", broker="alpaca", symbols=["AAPL"])
-        assert _infer_message_type(req) == "data_request"
+        assert _infer_message_type(req) == MessageType.DATA_REQUEST
 
     def test_trading_signal(self) -> None:
         from tradingcz.model.signal import TradingSignal
@@ -72,13 +72,14 @@ class TestInferMessageType:
             valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
             atr_value=2.5,
         )
-        assert _infer_message_type(s) == "trading_signal"
+        assert _infer_message_type(s) == MessageType.TRADING_SIGNAL
 
-    def test_camel_case_to_snake(self) -> None:
+    def test_unknown_class_raises(self) -> None:
         class MyCustomEvent(BaseModel):
             request_id: str = ""
 
-        assert _infer_message_type(MyCustomEvent()) == "my_custom_event"
+        with pytest.raises(ValueError, match="Cannot infer MessageType"):
+            _infer_message_type(MyCustomEvent())
 
 
 # ── _FireAndForget ──────────────────────────────────────────────────────────
@@ -90,13 +91,13 @@ class TestFireAndForget:
         faf = _FireAndForget(mock_channel, "test-service")
         ping = Ping(request_id="r1", message="hello")
 
-        await faf.send(ping, message_type="ping", key="my-key")
+        await faf.send(ping, message_type=MessageType.DATA_REQUEST, key="my-key")
 
         mock_channel.send.assert_awaited_once()
         call_kwargs = mock_channel.send.await_args.kwargs
         assert call_kwargs["key"] == "my-key"
         headers = call_kwargs["headers"]
-        assert headers[Header.MESSAGE_TYPE] == "ping"
+        assert headers[Header.MESSAGE_TYPE] == "data_request"
         assert headers[Header.SOURCE_APP] == "test-service"
         assert headers[Header.SEQUENCE] == "1"
 
@@ -105,8 +106,8 @@ class TestFireAndForget:
         faf = _FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="a")
 
-        await faf.send(ping, message_type="ping")
-        await faf.send(ping, message_type="ping")
+        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
+        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
 
         assert mock_channel.send.await_count == 2
         seq1 = mock_channel.send.await_args_list[0].kwargs["headers"][Header.SEQUENCE]
@@ -121,7 +122,7 @@ class TestFireAndForget:
 
         await faf.send(
             ping,
-            message_type="ping",
+            message_type=MessageType.DATA_REQUEST,
             extra_headers={"tracking_id": "trk-1", "strategy_id": "strat-1"},
         )
 
@@ -134,7 +135,7 @@ class TestFireAndForget:
         faf = _FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="hello")
 
-        await faf.send(ping, message_type="ping")
+        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
 
         # payload is the first positional argument to channel.send()
         payload = mock_channel.send.await_args.args[0]
@@ -165,7 +166,7 @@ class TestRequestReply:
 
         asyncio.create_task(_simulate_response())
 
-        resp = await rr.request(ping, response_type=Pong, timeout=2.0)
+        resp = await rr.request(ping, response_type=Pong, request_type=MessageType.DATA_REQUEST, timeout=2.0)
 
         assert isinstance(resp, Pong)
         assert resp.request_id == "req-1"
@@ -177,7 +178,7 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_request_builds_headers(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test-service", message_types={"pong": Pong})
+        rr = _RequestReply(mock_channel, "test-service", message_types={MessageType.DATA_READY: Pong})
         await rr.start()
 
         ping = Ping(request_id="req-h", message="test")
@@ -190,10 +191,10 @@ class TestRequestReply:
 
         asyncio.create_task(_respond())
 
-        await rr.request(ping, response_type=Pong, timeout=2.0)
+        await rr.request(ping, response_type=Pong, request_type=MessageType.DATA_REQUEST, timeout=2.0)
 
         headers = mock_channel.send.await_args.kwargs["headers"]
-        assert headers[Header.MESSAGE_TYPE] == "ping"
+        assert headers[Header.MESSAGE_TYPE] == "data_request"
         assert headers[Header.SOURCE_APP] == "test-service"
         assert headers[Header.REQUEST_ID] == "req-h"
         assert Header.SEQUENCE in headers
@@ -218,66 +219,15 @@ class TestRequestReply:
         ping = Ping(request_id="req-timeout", message="test")
 
         with pytest.raises(asyncio.TimeoutError):
-            await rr.request(ping, response_type=Pong, timeout=0.1)
+            await rr.request(ping, response_type=Pong, request_type=MessageType.DATA_REQUEST, timeout=0.1)
 
         await rr.close()
 
     @pytest.mark.asyncio
     async def test_register_type(self, mock_channel: AsyncMock) -> None:
         rr = _RequestReply(mock_channel, "test")
-        rr.register_type("pong", Pong)
-        assert rr._types["pong"] is Pong
-
-    @pytest.mark.asyncio
-    async def test_close_cancels_pending_futures(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
-        await rr.start()
-
-        future: asyncio.Future[Pong] = asyncio.get_event_loop().create_future()
-        rr._pending["test-id"] = future  # type: ignore[arg-type]
-
-        await rr.close()
-
-        assert future.cancelled() or future.done()
-
-    @pytest.mark.asyncio
-    async def test_start_is_idempotent(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
-        await rr.start()
-        task1 = rr._listen_task
-        await rr.start()
-        task2 = rr._listen_task
-        assert task1 is task2
-
-        await rr.close()
-
-    @pytest.mark.asyncio
-    async def test_request_without_request_id_raises(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
-
-        class BadRequest(BaseModel):
-            pass  # no request_id
-
-        with pytest.raises(ValueError, match="request_id"):
-            await rr.request(BadRequest(), response_type=Pong, timeout=1.0)
-
-    @pytest.mark.asyncio
-    async def test_request_timeout(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
-        await rr.start()
-
-        ping = Ping(request_id="req-timeout", message="test")
-
-        with pytest.raises(asyncio.TimeoutError):
-            await rr.request(ping, response_type=Pong, timeout=0.1)
-
-        await rr.close()
-
-    @pytest.mark.asyncio
-    async def test_register_type(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
-        rr.register_type("pong", Pong)
-        assert rr._types["pong"] is Pong
+        rr.register_type(MessageType.DATA_READY, Pong)
+        assert rr._types["data_ready"] is Pong
 
     @pytest.mark.asyncio
     async def test_close_cancels_pending_futures(self, mock_channel: AsyncMock) -> None:
