@@ -72,5 +72,3 @@ class ServiceRequest(BaseModel):
     order_id: str | None = None
     order_status: str | None = None
 
-
-

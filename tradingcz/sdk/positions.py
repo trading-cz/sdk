@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from tradingcz.model.headers import MessageType
 from tradingcz.sdk._helpers import _RequestReply
