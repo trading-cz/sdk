@@ -120,7 +120,7 @@ class TestParseMessage:
     def test_parse_data_request(self) -> None:
         from tradingcz.model.events import DataRequest
 
-        payload = b'{"request_id":"abc","source_app":"test","symbols":["AAPL"]}'
+        payload = b'{"request_id":"abc","symbols":["AAPL"]}'
         result = parse_message(MessageType.DATA_REQUEST, payload)
         assert isinstance(result, DataRequest)
         assert result.request_id == "abc"

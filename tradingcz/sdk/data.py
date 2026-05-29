@@ -87,7 +87,6 @@ class DataClient:
             timeframe=timeframe,
             start_time=start,
             end_time=end,
-            source_app=self._service_id,
         )
 
         resp = await self._rr.request(
@@ -188,7 +187,6 @@ class DataClient:
             broker=self._broker,
             symbols=symbols,
             stream_type=stream_type,
-            source_app=self._service_id,
         )
 
         resp = await self._rr.request(

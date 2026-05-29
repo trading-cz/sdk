@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from tradingcz.model.headers import MessageType
 from tradingcz.sdk._helpers import _RequestReply
@@ -27,8 +26,6 @@ class PositionList(BaseModel):
 
     request_id: str
     positions: list[Position]
-    source_app: str = "executor"
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PositionClient:
