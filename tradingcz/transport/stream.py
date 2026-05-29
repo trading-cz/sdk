@@ -15,12 +15,17 @@ Usage::
     await producer.send(signal)
 """
 
+import logging
 from collections.abc import AsyncIterator, Callable
+
+from pydantic import BaseModel
 
 from tradingcz.model.headers import Header, make_headers
 from tradingcz.serialization.protocol import Deserializer, Serializer
 from tradingcz.transport.kafka_message import KafkaMessage
 from tradingcz.transport.channel import KafkaChannel
+
+logger = logging.getLogger(__name__)
 
 
 def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
@@ -109,9 +114,22 @@ class TypedConsumer[T]:
 
         Each call creates an independent subscriber (fan-out semantics
         inherited from ``KafkaChannel.receive()``).
+
+        Messages that fail to deserialize as ``T`` are logged and
+        skipped — the iterator does NOT crash.  On a shared multi-type
+        topic this is essential for resilience.
         """
         async for msg in self._channel.receive():
-            yield self._deserializer.deserialize(msg.payload)
+            try:
+                yield self._deserializer.deserialize(msg.payload)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug(
+                    "Skipping message on %s — not a valid %s (offset=%d key=%r)",
+                    self._channel.name,
+                    type(self._deserializer).__name__,
+                    msg.offset,
+                    msg.key,
+                )
 
     async def consume_with_metadata(self) -> AsyncIterator[tuple[T, KafkaMessage]]:
         """Yield typed values WITH raw KafkaMessage metadata.
@@ -119,30 +137,63 @@ class TypedConsumer[T]:
         Use this when you need access to the Kafka message key, headers,
         offset, or partition for deduplication, tracing, or offset
         checkpointing.
+
+        Messages that fail to deserialize as ``T`` are logged and skipped.
         """
         async for msg in self._channel.receive():
-            yield self._deserializer.deserialize(msg.payload), msg
+            try:
+                yield self._deserializer.deserialize(msg.payload), msg
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug(
+                    "Skipping message on %s — not a valid %s (offset=%d key=%r)",
+                    self._channel.name,
+                    type(self._deserializer).__name__,
+                    msg.offset,
+                    msg.key,
+                )
 
 
 class TypedParser:
     """Parse raw Kafka messages into typed models based on message_type header.
 
     Dispatches to the correct Pydantic model for multi-type shared topics.
+    Messages with an unrecognized ``message_type`` header are silently skipped.
     """
 
-    def __init__(self, channel: KafkaChannel, types: dict[str, type]) -> None:
+    def __init__(self, channel: KafkaChannel, types: dict[str, type[BaseModel]]) -> None:
         self._channel = channel
         self._types = types
 
     async def parse(self) -> AsyncIterator[tuple[str, object, KafkaMessage]]:
-        """Yield (message_type, parsed_model, raw_message) tuples."""
+        """Yield (message_type, parsed_model, raw_message) tuples.
+
+        Messages whose ``message_type`` header is not registered in *types*
+        are skipped.  Messages whose payload fails validation against the
+        registered model are logged and skipped.
+        """
         async for msg in self._channel.receive():
             msg_type = msg.headers.get(Header.MESSAGE_TYPE, "")
+            if not msg_type:
+                logger.debug(
+                    "Skipping message on %s — no message_type header (offset=%d key=%r)",
+                    self._channel.name,
+                    msg.offset,
+                    msg.key,
+                )
+                continue
             model_type = self._types.get(msg_type)
             if model_type is None:
                 continue
             try:
                 parsed = model_type.model_validate_json(msg.payload)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug(
+                    "Skipping message on %s — %s failed validation for %s (offset=%d key=%r)",
+                    self._channel.name,
+                    model_type.__name__,
+                    msg_type,
+                    msg.offset,
+                    msg.key,
+                )
                 continue
             yield msg_type, parsed, msg

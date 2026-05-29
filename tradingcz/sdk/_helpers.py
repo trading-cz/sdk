@@ -15,7 +15,7 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.model.headers import Header, make_headers
+from tradingcz.model.headers import Header, build_event_key, make_headers
 from tradingcz.transport.channel import KafkaChannel
 
 logger = logging.getLogger(__name__)
@@ -160,12 +160,13 @@ class _RequestReply:
             sequence=self._seq,
             request_id=request_id,
         )
+        key = build_event_key(mt, self._service_id, request_id)
         # Send + flush — request delivery must be guaranteed before awaiting response
-        await self._channel.send(payload, key="", headers=headers)
+        await self._channel.send(payload, key=key, headers=headers)
         await self._channel.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
-        self._pending[request_id] = future  # type: ignore[arg-type]
+        self._pending[request_id] = future  # type: ignore[assignment]
 
         try:
             return await asyncio.wait_for(future, timeout=timeout)

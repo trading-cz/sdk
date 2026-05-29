@@ -109,6 +109,39 @@ def make_headers(
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# build_event_key — composite Kafka key for human-readable event topics
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def build_event_key(
+    message_type: str | MessageType,
+    source_app: str,
+    *extra: str,
+) -> str:
+    """Build a human-readable composite Kafka key for the event topic.
+
+    Format: ``message_type:source_app[:extra...]``
+
+    Examples::
+
+        >>> build_event_key("data_request", "pcb-breakout", "abc123")
+        'data_request:pcb-breakout:abc123'
+
+        >>> build_event_key(MessageType.SERVICE_LIFECYCLE, "ingestion", "heartbeat")
+        'service_lifecycle:ingestion:heartbeat'
+
+        >>> build_event_key("data_ready", "ingestion", "abc123")
+        'data_ready:ingestion:abc123'
+
+    This key is for human scanning / ``kcat`` grep only — application-level
+    routing is driven by headers, never by keys.  The event topic has exactly
+    one partition, so keys have no load‑balancing effect.
+    """
+    parts = [str(message_type), source_app, *extra]
+    return ":".join(parts)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Model registry & dispatch (message_type → Pydantic model)
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -174,6 +207,7 @@ def parse_message(message_type: str | MessageType, payload: bytes) -> BaseModel:
 __all__ = [
     "Header",
     "MessageType",
+    "build_event_key",
     "make_headers",
     "parse_message",
     "message_model",
