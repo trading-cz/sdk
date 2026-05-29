@@ -15,6 +15,7 @@ Models:
 All models carry ``request_id`` for correlation in request/reply flows.
 """
 
+from datetime import datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
