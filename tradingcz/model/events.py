@@ -21,6 +21,9 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 
+from tradingcz.model.enum.timeframe import Timeframe
+
+
 class DataRequest(BaseModel):
     """Request for historical or streaming market data."""
 
@@ -31,7 +34,7 @@ class DataRequest(BaseModel):
     broker: str = "alpaca"
     symbols: list[str]
     stream_type: str = "trades"
-    timeframe: str = "1d"
+    timeframe: Timeframe = Timeframe.D1  # canonical format: "1d", "4h", etc.
     start_time: datetime | None = None
     end_time: datetime | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
