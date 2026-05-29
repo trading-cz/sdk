@@ -75,7 +75,6 @@ class TestReadmeHistoricalData:
             timeframe="1d",
             start_time=datetime(2026, 5, 1, tzinfo=UTC),
             end_time=datetime(2026, 5, 28, tzinfo=UTC),
-            source_app="my-strategy",
         )
 
         assert req.type == "historic"

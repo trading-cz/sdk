@@ -15,7 +15,6 @@ Models:
 All models carry ``request_id`` for correlation in request/reply flows.
 """
 
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -27,7 +26,6 @@ class DataRequest(BaseModel):
     """Request for historical or streaming market data."""
 
     request_id: str = Field(default_factory=lambda: uuid4().hex)
-    source_app: str = ""
     type: str = "historic"  # "historic", "stream", "unsubscribe"
     asset: str = "stock"  # "stock", "option", "crypto"
     broker: str = "alpaca"
@@ -36,7 +34,6 @@ class DataRequest(BaseModel):
     timeframe: Timeframe = Timeframe.D1  # canonical format: "1d", "4h", etc.
     start_time: datetime | None = None
     end_time: datetime | None = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DataReady(BaseModel):
@@ -51,7 +48,6 @@ class DataReady(BaseModel):
     data_topic: str
     type: str = "historic"  # "historic" or "stream"
     bar_count: int | None = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DataError(BaseModel):
@@ -60,7 +56,6 @@ class DataError(BaseModel):
     request_id: str
     broker: str
     error: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ServiceRequest(BaseModel):
@@ -71,12 +66,10 @@ class ServiceRequest(BaseModel):
     """
 
     request_id: str = Field(default_factory=lambda: uuid4().hex)
-    source_app: str = ""
     service: str  # "get_positions", "get_balance", "get_orders", etc.
     symbol: str | None = None
     order_id: str | None = None
     order_status: str | None = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 

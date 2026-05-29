@@ -27,8 +27,6 @@ class PositionList(BaseModel):
 
     request_id: str
     positions: list[Position]
-    source_app: str = "executor"
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PositionClient:

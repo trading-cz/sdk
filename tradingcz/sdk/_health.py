@@ -124,6 +124,10 @@ class HealthPublisher:
                 key=key,
                 extra_headers={Header.LIFECYCLE_EVENT: event},
             )
+            if event in ("up", "down"):
+                logger.info("ServiceLifecycle sent: service=%s event=%s", self._service_id, event)
+            else:
+                logger.debug("ServiceLifecycle sent: service=%s event=%s", self._service_id, event)
         except Exception:  # pylint: disable=broad-exception-caught
             logger.warning(
                 "Failed to emit %s lifecycle event for %s",
@@ -222,11 +226,18 @@ class HealthMonitor:
                     event = ServiceLifecycle.model_validate_json(msg.payload)
                 except Exception:  # pylint: disable=broad-exception-caught
                     continue
+                sid = event.service_id
                 if event.event == "down":
-                    self._seen.pop(event.service_id, None)
-                    await self._notify(event.service_id)
+                    was_tracked = sid in self._seen
+                    self._seen.pop(sid, None)
+                    if was_tracked:
+                        logger.info("HealthMonitor: %s reported down", sid)
+                    await self._notify(sid)
                 else:  # up or heartbeat
-                    self._seen[event.service_id] = time.monotonic()
+                    is_new = sid not in self._seen
+                    self._seen[sid] = time.monotonic()
+                    if is_new:
+                        logger.info("HealthMonitor: %s is now alive (event=%s)", sid, event.event)
         except asyncio.CancelledError:
             pass
 
