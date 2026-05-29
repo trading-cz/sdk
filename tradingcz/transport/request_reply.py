@@ -147,6 +147,12 @@ class RequestReplyClient[Req, Resp]:
 
         try:
             return await asyncio.wait_for(future, timeout=self._timeout)
+        except asyncio.TimeoutError:
+            logger.error(
+                "Request timed out after %.1fs: req_id=%s channel=%s",
+                self._timeout, req_id, self._channel.name,
+            )
+            raise
         finally:
             self._pending.pop(req_id, None)
 
