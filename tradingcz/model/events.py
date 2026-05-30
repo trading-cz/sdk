@@ -24,14 +24,25 @@ from tradingcz.model.enum.timeframe import Timeframe
 
 
 class DataRequest(BaseModel):
-    """Request for historical or streaming market data."""
+    """Request for historical or streaming market data.
+
+    Transport identity (source_app) is carried in Kafka headers,
+    not in the payload — keeping the model focused on data semantics.
+
+    For historical requests (``type="historic"``), use ``historical_data_type``
+    to specify which kind of data to fetch:
+    - ``"bars"`` — OHLCV aggregates (needs ``timeframe``, ``start_time``, ``end_time``)
+    - ``"trades"`` — individual trade ticks (needs ``start_time``, ``end_time``)
+    - ``"quotes"`` — bid/ask quotes (needs ``start_time``, ``end_time``)
+    - ``"snapshots"`` — latest trade, quote, bar (only needs ``symbols``)
+    """
 
     request_id: str = Field(default_factory=lambda: uuid4().hex)
     type: str = "historic"  # "historic", "stream", "unsubscribe"
     asset: str = "stock"  # "stock", "option", "crypto"
     broker: str = "alpaca"
-    source_app: str = ""
     symbols: list[str]
+    historical_data_type: str = "bars"  # "bars" | "trades" | "quotes" | "snapshots"
     stream_type: str = "trades"
     timeframe: Timeframe = Timeframe.D1  # canonical format: "1d", "4h", etc.
     start_time: datetime | None = None
@@ -42,14 +53,14 @@ class DataReady(BaseModel):
     """Acknowledgement: data is available on data_topic.
 
     Sent by ingestion after fulfilling a DataRequest.
-    ``bar_count`` is set only when ``type="historic"``.
+    ``record_count`` is set only when ``type="historic"``.
     """
 
     request_id: str
     broker: str
     data_topic: str
     type: str = "historic"  # "historic" or "stream"
-    bar_count: int | None = None
+    record_count: int | None = None
 
 
 class DataError(BaseModel):
@@ -58,7 +69,6 @@ class DataError(BaseModel):
     request_id: str
     broker: str
     error: str
-
 
 class ServiceRequest(BaseModel):
     """General-purpose request to the executor/risk service.
@@ -72,4 +82,3 @@ class ServiceRequest(BaseModel):
     symbol: str | None = None
     order_id: str | None = None
     order_status: str | None = None
-
