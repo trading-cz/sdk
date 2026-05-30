@@ -30,6 +30,7 @@ class DataRequest(BaseModel):
     type: str = "historic"  # "historic", "stream", "unsubscribe"
     asset: str = "stock"  # "stock", "option", "crypto"
     broker: str = "alpaca"
+    source_app: str = ""
     symbols: list[str]
     stream_type: str = "trades"
     timeframe: Timeframe = Timeframe.D1  # canonical format: "1d", "4h", etc.
