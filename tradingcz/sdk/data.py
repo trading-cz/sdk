@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 from tradingcz.model.events import DataError, DataReady, DataRequest
 from tradingcz.model.headers import Header, MessageType
-from tradingcz.model.ingestion import Bar, StreamQuote, Trade
+from tradingcz.model.ingestion import Bar, OptionSnapshot, StreamQuote, Trade
 from tradingcz.sdk._helpers import _RequestReply
 from tradingcz.transport._dedup import DedupFilter
 from tradingcz.transport.channel import KafkaTransport
@@ -102,13 +102,13 @@ class DataClient:
         if resp.type != "historic":
             raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
 
-        logger.info("DataReady(historic): topic=%s bar_count=%s", resp.data_topic, resp.bar_count)
+        logger.info("DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count)
 
         # Open ephemeral channel and consume bars
         channel = await self._transport.channel(resp.data_topic)
         bars_by_symbol: dict[str, list[Bar]] = {}
         count = 0
-        expected = resp.bar_count or 0
+        expected = resp.record_count or 0
 
         try:
             async for msg in channel.receive():
@@ -138,6 +138,93 @@ class DataClient:
             symbol_bars.sort(key=lambda b: b.timestamp)
 
         return bars_by_symbol
+
+    async def request_option_snapshots(
+        self,
+        symbols: list[str],
+        *,
+        timeout: float = 30.0,
+    ) -> dict[str, OptionSnapshot]:
+        """Request option snapshots (trade, quote, greeks, IV).
+
+        Returns ``{symbol: OptionSnapshot}``.
+        """
+        return await self._request_historical_typed(
+            symbols=symbols,
+            asset="option",
+            data_type="snapshots",
+            model_type=OptionSnapshot,
+            timeout=timeout,
+        )
+
+    async def request_option_chain(
+        self,
+        underlying: str,
+        *,
+        timeout: float = 30.0,
+    ) -> dict[str, OptionSnapshot]:
+        """Request option chain for an underlying.
+
+        Returns ``{contract_symbol: OptionSnapshot}`` for all active contracts.
+        """
+        return await self._request_historical_typed(
+            symbols=[underlying],
+            asset="option",
+            data_type="chain",
+            model_type=OptionSnapshot,
+            timeout=timeout,
+        )
+
+    async def _request_historical_typed[T](  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        symbols: list[str],
+        asset: str,
+        data_type: str,
+        model_type: type[T],
+        timeout: float,
+    ) -> dict[str, list[T]]:
+        """Internal: send DataRequest for historical data, consume typed results."""
+        req = DataRequest(
+            type="historic",
+            asset=asset,
+            broker=self._broker,
+            symbols=symbols,
+            historical_data_type=data_type,
+        )
+        resp = await self._rr.request(
+            req, response_type=DataReady,
+            request_type="data_request", timeout=timeout,
+        )
+        if isinstance(resp, DataError):
+            raise RuntimeError(f"DataError from ingestion: {resp.error}")
+        if resp.type != "historic":
+            raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
+
+        channel = await self._transport.channel(resp.data_topic)
+        results: dict[str, list[T]] = {}
+        count = 0
+        expected = resp.record_count or 0
+        try:
+            async for msg in channel.receive():
+                if msg.headers.get(Header.REQUEST_ID) != req.request_id:
+                    continue
+                if self._dedup.is_duplicate(
+                    msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                    msg.headers.get(Header.SEQUENCE, "0"),
+                ):
+                    continue
+                try:
+                    item = model_type.model_validate_json(msg.payload)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.debug("Skipping unparseable %s", data_type, exc_info=True)
+                    continue
+                results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
+                count += 1
+                if expected and count >= expected:
+                    break
+        finally:
+            await channel.close()
+        return results
 
     # ------------------------------------------------------------------
     # Streaming

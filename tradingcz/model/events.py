@@ -31,10 +31,18 @@ class DataRequest(BaseModel):
 
     For historical requests (``type="historic"``), use ``historical_data_type``
     to specify which kind of data to fetch:
+
+    Stocks (``asset="stock"``):
     - ``"bars"`` — OHLCV aggregates (needs ``timeframe``, ``start_time``, ``end_time``)
     - ``"trades"`` — individual trade ticks (needs ``start_time``, ``end_time``)
     - ``"quotes"`` — bid/ask quotes (needs ``start_time``, ``end_time``)
     - ``"snapshots"`` — latest trade, quote, bar (only needs ``symbols``)
+
+    Options (``asset="option"``):
+    - ``"bars"`` — OHLCV aggregates (needs ``timeframe``, ``start_time``, ``end_time``)
+    - ``"trades"`` — individual trade ticks (needs ``start_time``, ``end_time``)
+    - ``"snapshots"`` — latest trade, quote, greeks, IV (only needs ``symbols``)
+    - ``"chain"`` — all contracts for an underlying (``symbols`` = [underlying])
     """
 
     request_id: str = Field(default_factory=lambda: uuid4().hex)
