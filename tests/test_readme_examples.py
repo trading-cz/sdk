@@ -155,7 +155,9 @@ class TestReadmeServiceApp:
             app = TradingApp(service_id="my-strategy", bootstrap_servers="fake:9092")
             await app.start()
 
-            assert app.data is not None
+            assert app.stock is not None
+            assert app.options is not None
+            assert app.corporate_actions is not None
             assert app.signals is not None
             assert app.positions is not None
             assert app.balance is not None
@@ -179,11 +181,13 @@ class TestReadmeServiceApp:
 
         try:
             app = TradingApp(service_id="risk-checker", bootstrap_servers="fake:9092")
-            app.with_data(False).with_signals(False)
+            app.with_stock(False).with_options(False).with_corporate_actions(False).with_signals(False)
 
             await app.start()
 
-            assert app.data is None
+            assert app.stock is None
+            assert app.options is None
+            assert app.corporate_actions is None
             assert app.signals is None
             # positions, balance, orders still enabled by default
             assert app.positions is not None
