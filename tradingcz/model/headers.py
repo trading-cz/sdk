@@ -74,6 +74,7 @@ class MessageType(StrEnum):
     TRADE = "trade"
     STREAM_QUOTE = "stream_quote"
     SNAPSHOT = "snapshot"
+    OPTION_SNAPSHOT = "option_snapshot"
 
 
 # ═════════════════════════════════════════════════════════════════════════════

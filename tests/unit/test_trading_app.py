@@ -33,7 +33,9 @@ class TestTradingAppLifecycle:
     @pytest.mark.asyncio
     async def test_async_context_manager(self, fake_transport: MagicMock) -> None:
         async with TradingApp(service_id="test-app", health_interval=300) as app:
-            assert app.data is not None
+            assert app.stock is not None
+            assert app.options is not None
+            assert app.corporate_actions is not None
             assert app.signals is not None
             assert app.positions is not None
             assert app.balance is not None
@@ -42,12 +44,15 @@ class TestTradingAppLifecycle:
     @pytest.mark.asyncio
     async def test_feature_flags_disable_clients(self, fake_transport: MagicMock) -> None:
         app = TradingApp(service_id="test-app")
-        app.with_data(False).with_signals(False).with_positions(False)
+        app.with_stock(False).with_options(False).with_corporate_actions(False)
+        app.with_signals(False).with_positions(False)
         app.with_balance(False).with_orders(False)
 
         await app.start()
 
-        assert app.data is None
+        assert app.stock is None
+        assert app.options is None
+        assert app.corporate_actions is None
         assert app.signals is None
         assert app.positions is None
         assert app.balance is None

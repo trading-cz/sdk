@@ -5,7 +5,7 @@ Simple two-parameter design::
     from tradingcz.sdk import Retry
 
     retry = Retry(max_retries=3, delay=2.0)
-    bars = await retry.call(lambda: client.request_historical(["AAPL"]))
+    bars = await retry.call(lambda: client.bars(["AAPL"]))
     positions = await retry.call(lambda: client.get_positions())
 
 Works with any async callable — data, positions, balance, orders, signals.
@@ -31,7 +31,7 @@ class Retry:
     Example::
 
         retry = Retry(max_retries=5, delay=2.0)
-        result = await retry.call(lambda: app.data.request_historical(["AAPL"]))
+        result = await retry.call(lambda: app.stock.bars(["AAPL"]))
     """
 
     def __init__(self, max_retries: int = 3, delay: float = 2.0) -> None:
