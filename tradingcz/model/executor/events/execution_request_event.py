@@ -1,6 +1,7 @@
 """Module containing the OrderRequestEvent model, which represents a market order request event received via generic listener."""
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import Field
 
@@ -13,6 +14,7 @@ class ExecutionRequestEvent(BaseEvent):
     """Represents an execution request event received via generic listener.
     Basic and immutable recipe for ExecutionRequestEvent model, with static field values, frozen."""
 
+    id: UUID = Field(..., description="Unique identifier for the event")
     strategy_type: StrategyType = Field(
         default=StrategyType.SINGLE_ORDER,
         description="Type of the strategy that generated the order request",
