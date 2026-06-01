@@ -4,13 +4,16 @@ from enum import StrEnum
 class EventStatus(StrEnum):
     """Status of the event processing."""
 
-    RECEIVED = "received"
-    PROCESSING = "processing"
-    EXECUTING = "executing"
     ACTIVE = "active"
-    CANCELLED = "cancelled"
+    CLOSING = "closing"
     COMPLETED = "completed"
+    EXECUTING = "executing"
     FAILED = "failed"
+    IN_MARKET = "in_market"
+    PROCESSING = "processing"
+    RECEIVED = "received"
+    REQUIRES_ATTENTION = "requires_attention"
+    WAITING_FOR_TRIGGER = "waiting_for_trigger"
 
 
 class EventType(StrEnum):
@@ -23,7 +26,7 @@ class EventType(StrEnum):
 class StrategyType(StrEnum):
     """Strategy type."""
 
-    OCA_DUAL_BREAKOUT = "oca_dual_breakout"
+    INTRADAY_VOLATILITY_BREAKOUT = "intraday_volatility_breakout"
     SINGLE_ORDER = "single_order"
 
 
@@ -31,4 +34,5 @@ class ServiceRequestType(StrEnum):
     """Service request type."""
 
     REQUEST_CURRENT_POSITIONS = "request_current_positions"
+    REQUEST_ORDERS_FOR_EVENT = "request_orders_for_event"
     REQUEST_CASH_BALANCE = "request_cash_balance"
