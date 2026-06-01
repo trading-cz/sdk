@@ -22,6 +22,7 @@ class OcoOrderRequest(BaseModel):
     time_in_force: TimeInForce = Field(..., description="Lifecycle of the order: day,  gtc, etc.")
     order_class: OrderClass = Field(default=OrderClass.SIMPLE)
     limit_price: float | None = Field(default=None, description="Limit price for buying or selling")
+    stop_price: float | None = Field(default=None, description="Stop price for buying or selling")
 
     group_id: str | None = Field(default=None, index=True)
 

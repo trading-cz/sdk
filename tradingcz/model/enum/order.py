@@ -69,11 +69,11 @@ class OrderStatus(StrEnum):
     HELD = "held"
 
 
-class StrategyStatus(StrEnum):
-    """Strategy status."""
-
-    NEW = "new"
-    WAITING = "waiting"
-    ACTIVE_LONG = "active_long"
-    ACTIVE_SHORT = "active_short"
-    CLOSED = "closed"
+TERMINAL_STATUSES: frozenset[OrderStatus] = frozenset(
+    {
+        OrderStatus.FILLED,
+        OrderStatus.CANCELED,
+        OrderStatus.REJECTED,
+        OrderStatus.EXPIRED,
+    }
+)
