@@ -410,7 +410,7 @@ async with TradingApp(service_id="my-strategy") as app:
         atr = calculate_atr(history, period=14)
 
     # Step C: Stream real-time data
-    async with app.stock.quotes(["AAPL"]) as stream:
+    async with app.stock.stream_quotes(["AAPL"]) as stream:
         async for quote in stream:
             if quote.quote.bid_price > threshold:
                 signal = TradingSignal(
@@ -568,7 +568,7 @@ from tradingcz import TradingApp, Bar, TradingSignal
 
 async with TradingApp(service_id="my-strategy") as app:
     bars = await app.stock.bars(["AAPL"], days=30)
-    async with app.stock.quotes(["AAPL"]) as stream:
+    async with app.stock.stream_quotes(["AAPL"]) as stream:
         async for quote in stream:
             ...
 ```

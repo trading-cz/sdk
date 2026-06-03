@@ -108,7 +108,7 @@ from tradingcz import TradingApp
 async def main():
     async with TradingApp(service_id="quote-watcher") as app:
         # Stream quotes — guaranteed unsubscribe on exit
-        async with app.stock.quotes(["AAPL"]) as stream:
+        async with app.stock.stream_quotes(["AAPL"]) as stream:
             async for stream_quote in stream:
                 q = stream_quote.quote
                 spread = q.ask_price - q.bid_price

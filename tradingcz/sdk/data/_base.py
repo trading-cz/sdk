@@ -30,18 +30,18 @@ class StreamHandle[T](AsyncIterator[T]):
     """Handle to a live data stream with automatic cleanup.
 
     A :class:`StreamHandle` is returned by streaming methods like
-    ``app.stock.quotes()`` and ``app.stock.trades()``.  It can be used
+    ``app.stock.stream_quotes()`` and ``app.stock.stream_trades()``.  It can be used
     in two ways:
 
     **Bare iteration** (cleanup on loop exit)::
 
-        async for quote in app.stock.quotes(["AAPL"]):
+        async for quote in app.stock.stream_quotes(["AAPL"]):
             if done:
                 break  # channel is closed automatically
 
     **Context manager** (guaranteed unsubscribe via DataRequest)::
 
-        async with app.stock.quotes(["AAPL"]) as stream:
+        async with app.stock.stream_quotes(["AAPL"]) as stream:
             async for quote in stream:
                 ...
         # unsubscribe sent here, even if exception raised

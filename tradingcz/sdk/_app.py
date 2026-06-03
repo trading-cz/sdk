@@ -10,7 +10,7 @@ Minimal setup — just provide a ``service_id``::
         bars = await app.stock.bars(["AAPL", "MSFT"], days=30)
 
         # Streaming data (context manager = guaranteed unsubscribe)
-        async with app.stock.quotes(["AAPL"]) as stream:
+        async with app.stock.stream_quotes(["AAPL"]) as stream:
             async for quote in stream:
                 if quote.quote.bid_price > threshold:
                     break
@@ -101,8 +101,8 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
 
     **One-time vs. streaming**: Methods that return a plain ``dict``
     (``bars()``, ``snapshots()``, ``chain()``) are one-shot requests.
-    Methods that return a :class:`StreamHandle` (``quotes()``,
-    ``trades()``) yield data indefinitely — use ``async with`` for
+    Methods that return a :class:`StreamHandle` (``stream_quotes()``,
+    ``stream_trades()``) yield data indefinitely — use ``async with`` for
     guaranteed unsubscribe on exit.
 
     Usage::
@@ -110,7 +110,7 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         async with TradingApp(service_id="my-strategy") as app:
             bars = await app.stock.bars(["AAPL"], days=30)
 
-            async with app.stock.quotes(["AAPL"]) as stream:
+            async with app.stock.stream_quotes(["AAPL"]) as stream:
                 async for quote in stream:
                     ...
     """
