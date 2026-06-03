@@ -4,8 +4,8 @@ One-time (returns ``dict``):
   - ``bars()``     — OHLCV aggregates for a time range
 
 Streaming (returns :class:`StreamHandle`):
-  - ``quotes()``   — live bid/ask quotes, yields indefinitely
-  - ``trades()``   — live trade ticks, yields indefinitely
+  - ``stream_quotes()``   — live bid/ask quotes, yields indefinitely
+  - ``stream_trades()``   — live trade ticks, yields indefinitely
 """
 
 from __future__ import annotations
@@ -34,13 +34,13 @@ class StockDataClient:
     **Streaming data** (returns a :class:`StreamHandle`)::
 
         # Bare iteration — cleanup on loop exit
-        async for quote in app.stock.quotes(["AAPL"]):
+        async for quote in app.stock.stream_quotes(["AAPL"]):
             print(quote.quote.bid_price)
             if done:
                 break
 
         # Context manager — guaranteed unsubscribe
-        async with app.stock.quotes(["AAPL"]) as stream:
+        async with app.stock.stream_quotes(["AAPL"]) as stream:
             async for quote in stream:
                 ...
     """
@@ -74,7 +74,7 @@ class StockDataClient:
 
     # -- Streaming -----------------------------------------------------
 
-    def quotes(
+    def stream_quotes(
         self,
         symbols: list[str],
         *,
@@ -94,7 +94,7 @@ class StockDataClient:
             timeout=timeout,
         )
 
-    def trades(
+    def stream_trades(
         self,
         symbols: list[str],
         *,
