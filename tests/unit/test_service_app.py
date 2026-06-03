@@ -6,15 +6,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tradingcz.sdk._service import ServiceApp
+from tradingcz.framework.service import ServiceApp
 
 
 @pytest.fixture
 def fake_transport() -> MagicMock:
     """Mock KafkaTransport + HealthPublisher so start() doesn't connect to real Kafka."""
     with (
-        patch("tradingcz.sdk._service.KafkaTransport") as mock_transport_cls,
-        patch("tradingcz.sdk._service.HealthPublisher") as mock_hp_cls,
+        patch("tradingcz.framework.service.KafkaTransport") as mock_transport_cls,
+        patch("tradingcz.framework.service.HealthPublisher") as mock_hp_cls,
     ):
         transport = MagicMock()
         transport.channel = AsyncMock(return_value=AsyncMock())

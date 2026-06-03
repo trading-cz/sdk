@@ -2,7 +2,7 @@
 
 import pytest
 
-from tradingcz.sdk._registry import Registry
+from tradingcz.common.registry import Registry
 
 
 class TestRegistry:

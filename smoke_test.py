@@ -31,9 +31,9 @@ from confluent_kafka.admin import AdminClient
 from pydantic import BaseModel
 
 from tradingcz import SCHEMA_VERSION
-from tradingcz.config import KafkaSettings
-from tradingcz.model.headers import Header
-from tradingcz.sdk._helpers import _FireAndForget, _RequestReply
+from tradingcz.common.config import KafkaSettings
+from tradingcz.models.headers import Header
+from tradingcz.framework.helpers import FireAndForget, RequestReply
 from tradingcz.serialization import JsonCodec
 from tradingcz.transport import (
     KafkaMessage,
@@ -43,8 +43,8 @@ from tradingcz.transport import (
     TypedParser,
     TypedProducer,
 )
-from tradingcz.transport._dedup import DedupFilter
-from tradingcz.transport.hash import partition_for
+from tradingcz.core.transport.dedup import DedupFilter
+from tradingcz.core.transport.hash_utils import partition_for
 
 # ── Config ──────────────────────────────────────────────────────────────────
 BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "46.224.59.47:30002")
@@ -332,7 +332,7 @@ async def test_5_signal_publisher() -> None:
         channel = await transport.channel(TEST_TOPIC, num_partitions=1, retention_ms=60_000)
         faf = _FireAndForget(channel=channel, service_id="smoke_test")
 
-        from tradingcz.model.signal import TradingSignal
+        from tradingcz.models.signal import TradingSignal
 
         signal = TradingSignal(
             symbol="AAPL",

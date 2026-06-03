@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tradingcz.model.health import ServiceLifecycle
-from tradingcz.sdk._health import HealthPublisher
+from tradingcz.models.health import ServiceLifecycle
+from tradingcz.framework.health import HealthPublisher
 
 
 @pytest.fixture
 def mock_faf() -> AsyncMock:
-    """Mock _FireAndForget."""
+    """Mock FireAndForget."""
     faf = AsyncMock()
     faf.send = AsyncMock()
     return faf

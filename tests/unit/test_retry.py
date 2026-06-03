@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tradingcz.sdk.retry import Retry
+from tradingcz.common.retry import Retry
 
 
 class TransientError(RuntimeError):
