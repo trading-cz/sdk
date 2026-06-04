@@ -1,6 +1,6 @@
 """Average True Range (ATR) indicator — Wilder's method."""
 
-from tradingcz.model.ingestion import Bar
+from tradingcz.models.market import Bar
 
 
 def calculate_atr(bars: list[Bar], period: int) -> float:

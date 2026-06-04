@@ -1,7 +1,7 @@
 """Unit tests for tradingcz.model.headers."""
 
 from tradingcz import SCHEMA_VERSION
-from tradingcz.model.headers import (
+from tradingcz.models.headers import (
     Header,
     MessageType,
     make_headers,
@@ -95,7 +95,7 @@ class TestMessageModel:
     """Tests for message_model() lookup."""
 
     def test_known_types_return_model_class(self) -> None:
-        from tradingcz.model.events import DataRequest
+        from tradingcz.models.events import DataRequest
 
         cls = message_model(MessageType.DATA_REQUEST)
         assert cls is DataRequest
@@ -108,7 +108,7 @@ class TestMessageModel:
             pass
 
     def test_str_message_type_accepted(self) -> None:
-        from tradingcz.model.events import DataReady
+        from tradingcz.models.events import DataReady
 
         cls = message_model(MessageType.DATA_READY)
         assert cls is DataReady
@@ -118,7 +118,7 @@ class TestParseMessage:
     """Tests for parse_message() dispatch."""
 
     def test_parse_data_request(self) -> None:
-        from tradingcz.model.events import DataRequest
+        from tradingcz.models.events import DataRequest
 
         payload = b'{"request_id":"abc","symbols":["AAPL"]}'
         result = parse_message(MessageType.DATA_REQUEST, payload)

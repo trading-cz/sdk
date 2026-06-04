@@ -1,4 +1,4 @@
-"""Unit tests for tradingcz.sdk._helpers (_FireAndForget, _RequestReply)."""
+"""Unit tests for tradingcz.sdk._helpers (FireAndForget, RequestReply)."""
 
 import asyncio
 from datetime import UTC, datetime
@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.model.headers import Header, MessageType
-from tradingcz.sdk._helpers import (
-    _FireAndForget,
+from tradingcz.models.headers import Header, MessageType
+from tradingcz.framework.helpers import (
+    FireAndForget,
     _infer_message_type,
-    _RequestReply,
+    RequestReply,
 )
 
 # ── Test models ─────────────────────────────────────────────────────────────
@@ -38,13 +38,13 @@ async def _empty_receive():
 
 @pytest.fixture
 def mock_channel() -> AsyncMock:
-    """Return a mock KafkaChannel (used by _RequestReply tests)."""
+    """Return a mock KafkaChannel (used by RequestReply tests)."""
     ch = AsyncMock()
     ch.name = "dev-test"
     ch.send = AsyncMock()
     ch.flush = AsyncMock()
     # receive() returns an async generator that yields nothing.
-    # The _RequestReply background listener iterates over it but the test
+    # The RequestReply background listener iterates over it but the test
     # manually resolves futures — no actual message flow through the mock.
     ch.receive.return_value = _empty_receive()
     return ch
@@ -55,13 +55,13 @@ def mock_channel() -> AsyncMock:
 
 class TestInferMessageType:
     def test_data_request(self) -> None:
-        from tradingcz.model.events import DataRequest
+        from tradingcz.models.events import DataRequest
 
         req = DataRequest(type="historic", asset="stock", broker="alpaca", symbols=["AAPL"])
         assert _infer_message_type(req) == MessageType.DATA_REQUEST
 
     def test_trading_signal(self) -> None:
-        from tradingcz.model.signal import TradingSignal
+        from tradingcz.models.signal import TradingSignal
 
         s = TradingSignal(
             symbol="AAPL",
@@ -82,13 +82,13 @@ class TestInferMessageType:
             _infer_message_type(MyCustomEvent())
 
 
-# ── _FireAndForget ──────────────────────────────────────────────────────────
+# ── FireAndForget ──────────────────────────────────────────────────────────
 
 
 class TestFireAndForget:
     @pytest.mark.asyncio
     async def test_send_builds_headers(self, mock_channel: AsyncMock) -> None:
-        faf = _FireAndForget(mock_channel, "test-service")
+        faf = FireAndForget(mock_channel, "test-service")
         ping = Ping(request_id="r1", message="hello")
 
         await faf.send(ping, message_type=MessageType.DATA_REQUEST, key="my-key")
@@ -103,7 +103,7 @@ class TestFireAndForget:
 
     @pytest.mark.asyncio
     async def test_send_increments_sequence(self, mock_channel: AsyncMock) -> None:
-        faf = _FireAndForget(mock_channel, "test")
+        faf = FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="a")
 
         await faf.send(ping, message_type=MessageType.DATA_REQUEST)
@@ -117,7 +117,7 @@ class TestFireAndForget:
 
     @pytest.mark.asyncio
     async def test_extra_headers_merged(self, mock_channel: AsyncMock) -> None:
-        faf = _FireAndForget(mock_channel, "test")
+        faf = FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="hello")
 
         await faf.send(
@@ -132,7 +132,7 @@ class TestFireAndForget:
 
     @pytest.mark.asyncio
     async def test_payload_is_json_bytes(self, mock_channel: AsyncMock) -> None:
-        faf = _FireAndForget(mock_channel, "test")
+        faf = FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="hello")
 
         await faf.send(ping, message_type=MessageType.DATA_REQUEST)
@@ -147,13 +147,13 @@ class TestFireAndForget:
         assert parsed["message"] == "hello"
 
 
-# ── _RequestReply ───────────────────────────────────────────────────────────
+# ── RequestReply ───────────────────────────────────────────────────────────
 
 
 class TestRequestReply:
     @pytest.mark.asyncio
     async def test_request_sends_and_flushes(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test-service")
+        rr = RequestReply(mock_channel, "test-service")
         await rr.start()
 
         ping = Ping(request_id="req-1", message="hello")
@@ -178,7 +178,7 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_request_builds_headers(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test-service", message_types={MessageType.DATA_READY: Pong})
+        rr = RequestReply(mock_channel, "test-service", message_types={MessageType.DATA_READY: Pong})
         await rr.start()
 
         ping = Ping(request_id="req-h", message="test")
@@ -203,7 +203,7 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_request_without_request_id_raises(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
+        rr = RequestReply(mock_channel, "test")
 
         class BadRequest(BaseModel):
             pass
@@ -213,7 +213,7 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_request_timeout(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
+        rr = RequestReply(mock_channel, "test")
         await rr.start()
 
         ping = Ping(request_id="req-timeout", message="test")
@@ -225,13 +225,13 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_register_type(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
+        rr = RequestReply(mock_channel, "test")
         rr.register_type(MessageType.DATA_READY, Pong)
         assert rr._types["data_ready"] is Pong
 
     @pytest.mark.asyncio
     async def test_close_cancels_pending_futures(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
+        rr = RequestReply(mock_channel, "test")
         await rr.start()
 
         # Add a pending future manually
@@ -244,7 +244,7 @@ class TestRequestReply:
 
     @pytest.mark.asyncio
     async def test_start_is_idempotent(self, mock_channel: AsyncMock) -> None:
-        rr = _RequestReply(mock_channel, "test")
+        rr = RequestReply(mock_channel, "test")
         await rr.start()
         task1 = rr._listen_task
         await rr.start()

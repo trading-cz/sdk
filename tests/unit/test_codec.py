@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.serialization import JsonCodec
+from tradingcz.core.serialization import JsonCodec
 
 
 class _TestModel(BaseModel):

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from tradingcz.model.signal import TradingSignal
+from tradingcz.models.signal import TradingSignal
 
 
 class TestTradingSignal:
