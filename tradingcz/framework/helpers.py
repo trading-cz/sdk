@@ -174,7 +174,16 @@ class RequestReply:
         self._pending[request_id] = future  # type: ignore[assignment]
 
         try:
-            return await asyncio.wait_for(future, timeout=timeout)
+            # Use asyncio.wait (not wait_for) so that CancelledError
+            # from a future cancelled by close() propagates directly
+            # instead of being converted to TimeoutError by the
+            # asyncio.timeout() context manager (Python 3.12+).
+            done, pending = await asyncio.wait([future], timeout=timeout)
+            if not done:
+                raise TimeoutError(
+                    f"Request {request_id!r} timed out after {timeout:.1f}s"
+                )
+            return future.result()
         finally:
             self._pending.pop(request_id, None)
 
