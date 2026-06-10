@@ -58,7 +58,7 @@ async with ServiceApp(service_id="my-service") as svc:
 ## Environment variables
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka broker addresses |
 | `KAFKA_CONSUMER_GROUP` | `<service_id>` | Consumer group id |
 | `SDK_ENV` | `dev` | Deployment environment |
@@ -84,7 +84,7 @@ authority** — if its models or headers are wrong, every downstream service
 ### What must be tested
 
 | Layer | What to test | Example |
-|-------|-------------|---------|
+| ------- | ------------- | --------- |
 | **Models** | Round-trip JSON serialization | `Bar.model_validate_json(bar.model_dump_json()) == bar` |
 | **Models** | Field validation rejects bad data | `Bar(symbol=123)` → raises `ValidationError` |
 | **Headers** | `make_headers()` output is correct | `make_headers(message_type="bar")` → contains `message_type`, `source_app`, `sequence` |

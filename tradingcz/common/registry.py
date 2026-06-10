@@ -47,7 +47,7 @@ class Registry[K, V]:
                      Default: calls ``cls(**deps)``.
         """
         def decorator(cls: type) -> type:
-            self._items[key] = (cls, factory or self._default_factory)
+            self._items[key] = (cls, factory or self._default_factory)  # type: ignore[assignment]
             return cls
         return decorator
 

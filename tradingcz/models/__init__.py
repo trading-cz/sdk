@@ -43,6 +43,8 @@ __all__ = [
     "Trade",
     "Snapshot",
     "StreamQuote",
+    # Market helpers
+    "market_item_message_type",
     # Health
     "ServiceLifecycle",
     # Events
