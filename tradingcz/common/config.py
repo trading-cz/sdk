@@ -29,9 +29,7 @@ class AlpacaSettings(BaseSettings):
 
     api_key: str = Field("", description="Alpaca API key ID (env: ALPACA_API_KEY)")
     secret_key: str = Field("", description="Alpaca API secret key (env: ALPACA_SECRET_KEY)")
-    feed: Literal["sip", "iex"] = Field(
-        "iex", description="Data feed tier: sip (paid) or iex (free)"
-    )
+    feed: Literal["sip", "iex"] = Field("iex", description="Data feed tier: sip (paid) or iex (free)")
 
 
 class KafkaSettings(BaseSettings):
