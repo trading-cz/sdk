@@ -1,7 +1,9 @@
 """Application configuration settings.
 
-Shared settings classes used by ingestion, strategy, and other services.
+Shared settings classes used by ingestion, executor, and other services.
 """
+
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +14,24 @@ class LoggingSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="LOG_", extra="ignore")
     level: str = Field("INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)")
+
+
+class AlpacaSettings(BaseSettings):
+    """Alpaca Markets API credentials — shared by ingestion, executor, etc.
+
+    Environment variables:
+        ``ALPACA_API_KEY``    — Alpaca API key ID (required)
+        ``ALPACA_SECRET_KEY`` — Alpaca API secret key (required)
+        ``ALPACA_FEED``       — Data feed tier: ``"iex"`` (free) or ``"sip"`` (paid)
+    """
+
+    model_config = SettingsConfigDict(env_prefix="ALPACA_", extra="ignore")
+
+    api_key: str = Field("", description="Alpaca API key ID (env: ALPACA_API_KEY)")
+    secret_key: str = Field("", description="Alpaca API secret key (env: ALPACA_SECRET_KEY)")
+    feed: Literal["sip", "iex"] = Field(
+        "iex", description="Data feed tier: sip (paid) or iex (free)"
+    )
 
 
 class KafkaSettings(BaseSettings):

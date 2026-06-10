@@ -68,9 +68,22 @@ class TypedProducer[T]:
     Headers are always included — by default, ``message_type`` is
     auto-inferred from the value's class name (e.g. ``TradingSignal``
     → ``"trading_signal"``).  Override via ``headers_fn``.
+
+    Lifecycle::
+
+        # Long-lived producer (e.g. streaming):
+        producer = stream_producer(channel, source_app="ingestion")
+        for item in items:
+            await producer.send(item)
+        await producer.flush()  # guarantee delivery before shutdown
+
+        # Scoped producer (auto-flush on exit):
+        async with stream_producer(channel, source_app="ingestion") as producer:
+            for item in items:
+                await producer.send(item)
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         channel: KafkaChannel,
         serializer: Serializer[T],
@@ -102,6 +115,20 @@ class TypedProducer[T]:
         key = self._key_fn(value)
         headers = self._headers_fn(value)
         await self._channel.send(payload, key=key, headers=headers)
+
+    async def flush(self) -> None:
+        """Wait for all queued messages to be delivered to Kafka.
+
+        Call before shutdown to guarantee delivery.  For streaming
+        producers, call this in your ``close()`` or shutdown handler.
+        """
+        await self._channel.flush()
+
+    async def __aenter__(self) -> TypedProducer[T]:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.flush()
 
 
 class TypedConsumer[T]:

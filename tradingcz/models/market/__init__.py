@@ -3,6 +3,8 @@
 Frozen models with no vendor dependencies or I/O.
 """
 
+import re
+
 from tradingcz.models.market.bar import Bar
 from tradingcz.models.market.option_snapshot import OptionSnapshot
 from tradingcz.models.market.quote import Quote
@@ -15,9 +17,32 @@ from tradingcz.models.market.trade import Trade
 # All members share ``symbol: str`` and ``timestamp: datetime``.
 MarketItem = Trade | Bar | Quote | StreamQuote | Snapshot | OptionSnapshot
 
+
+def market_item_message_type(item: MarketItem) -> "MessageType":
+    """Infer the ``MessageType`` from a market data item's class name.
+
+    Converts CamelCase class name to snake_case and looks up the
+    corresponding ``MessageType`` enum member.  For example::
+
+        >>> market_item_message_type(Bar(...))       # → MessageType.BAR
+        >>> market_item_message_type(Trade(...))     # → MessageType.TRADE
+        >>> market_item_message_type(StreamQuote(...))  # → MessageType.STREAM_QUOTE
+
+    This is the canonical mapping for all market data types.
+    Apps should use this instead of manually computing the
+    CamelCase → snake_case → MessageType chain.
+    """
+    # Deferred import to avoid circular dependency at module level
+    from tradingcz.models.headers import MessageType  # pylint: disable=import-outside-toplevel
+
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(item).__name__).lower()
+    return MessageType(snake)
+
+
 __all__ = [
     "Bar",
     "MarketItem",
+    "market_item_message_type",
     "OptionSnapshot",
     "Quote",
     "Trade",

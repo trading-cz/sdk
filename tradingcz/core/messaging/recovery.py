@@ -1,12 +1,30 @@
-"""RecoveryReader — one-time topic replay from offset 0.
+"""RecoveryReader — one-time topic replay for startup state reconstruction.
 
-Reads from the beginning of a Kafka topic using a temporary random
-consumer group (so it does not disturb normal consumer groups), then
-stops automatically after *idle_timeout* seconds of silence.
+Uses the **standard application consumer group** — no random suffixes,
+no temporary groups.  Kafka's ``auto.offset.reset=earliest`` (the SDK
+default) ensures the first start replays from offset 0.  After recovery,
+auto-commit records the position so subsequent restarts only replay
+new messages.
 
-Typical use: service startup recovery — replay the events topic to
-reconstruct state (what requests were made, what responses were sent)
-before switching to live consumption.
+Design rationale
+----------------
+Kafka consumer group semantics give us exactly what we need:
+
+1. **First start**: No committed offsets → ``auto.offset.reset=earliest``
+   → replays every message from the beginning of the topic.
+2. **Recovery consumes everything**: Messages are auto-committed as they
+   are processed (``enable.auto.commit=true``).
+3. **Subsequent restarts**: Committed offsets exist → resumes from the
+   last committed position → only new messages are replayed.
+4. **Same group for live consumption**: After recovery, calling
+   ``channel.receive()`` (no suffix) on the same channel resumes
+   from the last committed offset — seamless handoff.
+
+Why NOT a separate consumer group?
+    - The application OWNS its offset.  A separate group means the
+      application never learns where it left off.
+    - Random suffixes create many ephemeral groups — unnecessary churn.
+    - The standard group with auto-commit is simpler and correct.
 
 Usage::
 
@@ -17,10 +35,13 @@ Usage::
         str(MessageType.SERVICE_LIFECYCLE):  ServiceLifecycle,
     }):
         ...  # classify and reconstruct state
+
+    # After recovery: same channel, same group, resumes from committed offset
+    async for raw in events_channel.receive():
+        ...  # live consumption
 """
 
 import logging
-import os
 from collections.abc import AsyncIterator
 
 from pydantic import BaseModel
@@ -32,13 +53,16 @@ from tradingcz.core.transport.message import KafkaMessage
 logger = logging.getLogger(__name__)
 
 
-class RecoveryReader:
-    """One-time replay of a Kafka topic from offset 0.
+class RecoveryReader:  # pylint: disable=too-few-public-methods
+    """One-time replay of a Kafka topic for startup state recovery.
 
-    Uses a unique, randomly-generated consumer group suffix so each
-    replay starts from the very first message on the topic (no
-    committed offsets exist for the group).  The temporary group has
-    no side-effects on normal consumer groups.
+    Uses the application's standard consumer group — no temporary
+    groups, no random suffixes.  Relies on Kafka's built-in offset
+    management:
+
+    - First start: ``auto.offset.reset=earliest`` → from offset 0
+    - After recovery: auto-commit records position → next restart
+      only replays new messages
 
     The replay stops after *idle_timeout* consecutive seconds with no
     new messages — interpreted as "topic is caught up".
@@ -52,11 +76,15 @@ class RecoveryReader:
         self,
         types: dict[str, type[BaseModel]],
     ) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        """Yield ``(msg_type, model, raw_message)`` from offset 0.
+        """Yield ``(msg_type, model, raw_message)`` from the topic.
 
         Only message types present in *types* are yielded; others are
         silently skipped.  Messages that fail Pydantic validation are
         logged at DEBUG level and skipped.
+
+        Uses the standard consumer group (no suffix).  On first start
+        this replays from offset 0.  On subsequent starts it resumes
+        from the last committed offset — only new messages are replayed.
 
         Args:
             types: Mapping of ``message_type`` string value to Pydantic
@@ -65,16 +93,13 @@ class RecoveryReader:
         Yields:
             ``(msg_type, parsed_model, raw_kafka_message)`` tuples.
         """
-        group_suffix = f"recovery-{os.urandom(4).hex()}"
         logger.debug(
-            "RecoveryReader: replaying %s (idle_timeout=%.1fs group=%s)",
+            "RecoveryReader: replaying %s (idle_timeout=%.1fs)",
             self._channel.name,
             self._idle_timeout,
-            group_suffix,
         )
         count = 0
         async for raw in self._channel.receive(
-            group_suffix=group_suffix,
             idle_timeout=self._idle_timeout,
         ):
             msg_type = raw.headers.get(Header.MESSAGE_TYPE, "")
@@ -98,4 +123,3 @@ class RecoveryReader:
             count,
             self._channel.name,
         )
-

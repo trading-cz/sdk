@@ -20,7 +20,7 @@ from tradingcz.models.headers import (
     parse_message,
 )
 from tradingcz.models.health import ServiceLifecycle
-from tradingcz.models.market import Bar, Quote, Snapshot, StreamQuote, Trade
+from tradingcz.models.market import Bar, Quote, Snapshot, StreamQuote, Trade, market_item_message_type
 from tradingcz.models.signal import TradingSignal
 
 __all__ = [
