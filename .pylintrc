@@ -1,0 +1,29 @@
+[MASTER]
+# Ignore patterns - use ignore instead of ignore-paths
+ignore=
+    .github,
+    tests
+ignore-patterns=^\.#
+
+[MESSAGES CONTROL]
+# Focus on Errors (E) and Warnings (W) only during development.
+# Convention (C) and Refactor (R) are globally disabled — they produce
+# too much noise (line-too-long, consider-using-f-string, no-else-return,
+# too-many-*) and are handled by ruff/black/isort for formatting.
+disable=
+    C,       # All convention messages (coding style, naming, formatting)
+    R,       # All refactor messages (code smells, design suggestions)
+    W0511,   # fixme (allow TODO comments)
+    W0718,   # broad-exception-caught (catch-all exceptions in error handlers)
+    W1203,   # logging-fstring-interpolation (f-strings ok with lazy evaluation)
+    E0401,   # import-error (external dependencies may not be installed in analysis environment)
+
+[FORMAT]
+max-line-length=250
+
+[DESIGN]
+max-attributes=10
+
+[VARIABLES]
+# Minimum confidence required to accept a message as valid inference for inference failures
+min-similarity-lines=4

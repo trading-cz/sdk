@@ -1,0 +1,106 @@
+# Configuration file for MegaLinter - github_action repository
+# See all available variables at https://megalinter.io/latest/config-file/
+#
+# Philosophy: Focus on Errors and Warnings during development.
+# - pylint: C (Convention) and R (Refactor) globally disabled via .pylintrc
+# - ruff: Configured per-repo in pyproject.toml (E, W, F, I, B, C4, UP)
+# - Formatters (BLACK, ISORT, YAML_PRETTIER): Kept for auto-fix, not noise
+
+# Apply fixes for formatters
+APPLY_FIXES: all
+APPLY_FIXES_EVENT: all
+APPLY_FIXES_MODE: commit
+
+# Validate all codebase
+VALIDATE_ALL_CODEBASE: true
+
+# Essential Python linters - consistent local & CI setup
+# - ruff: Fast, modern linter (flake8 + pylint)
+# - pylint: Comprehensive, configured in each repo's pyproject.toml
+# - black, mypy, isort: Formatters & type checkers
+ENABLE_LINTERS:
+  - ACTION_ACTIONLINT
+  - PYTHON_BLACK
+  - PYTHON_ISORT
+  - PYTHON_RUFF
+  - PYTHON_PYLINT
+  - PYTHON_MYPY
+  - MARKDOWN_MARKDOWNLINT
+  - MARKDOWN_MARKDOWN_TABLE_FORMATTER
+  - YAML_YAMLLINT
+  - YAML_PRETTIER
+  - REPOSITORY_GITLEAKS
+  - REPOSITORY_TRIVY
+  - SPELL_LYCHEE
+
+# Disable redundant linters to reduce runtime and false positives
+DISABLE_LINTERS:
+  - PYTHON_FLAKE8 # Redundant with ruff
+  - PYTHON_PYRIGHT # Duplicate type checker; mypy is sufficient
+
+# ActionLint configuration for workflow validation
+ACTION_ACTIONLINT_CONFIG_FILE: .github/actionlint.yaml
+
+# Python configuration
+# pylint: Use .pylintrc (INI format) if available, otherwise default
+# Others: Use pyproject.toml (TOML format) for their configuration
+PYTHON_BLACK_CONFIG_FILE: pyproject.toml
+PYTHON_ISORT_CONFIG_FILE: pyproject.toml
+PYTHON_MYPY_CONFIG_FILE: pyproject.toml
+PYTHON_MYPY_ARGUMENTS: '--python-version=3.14'
+PYTHON_RUFF_CONFIG_FILE: pyproject.toml
+PYTHON_PYLINT_CONFIG_FILE: .pylintrc
+# Exclude .github scripts and tests from pylint (they have separate standards)
+PYTHON_PYLINT_FILTER_REGEX_EXCLUDE: '.github/script/.*|tests/.*'
+# Exclude tests and smoke_test from mypy (test files have relaxed type standards)
+PYTHON_MYPY_FILTER_REGEX_EXCLUDE: "tests/.*|smoke_test\\.py"
+
+# Markdown configuration - ignore doc folders in all repos
+MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: 'doc/'
+
+# YAML formatting
+YAML_PRETTIER_ARGUMENTS: '--single-quote'
+
+# Trivy security scanning
+# Only report MEDIUM+ severity (filters out LOW like DS-0026 HEALTHCHECK
+# which is irrelevant for K3s/Kubernetes using K8s probes)
+REPOSITORY_TRIVY_ARGUMENTS: '--severity MEDIUM,HIGH,CRITICAL'
+
+# Display output options
+SHOW_ELAPSED_TIME: true
+SHOW_SKIPPED_LINTERS: true
+SHOW_LINTER_TIMINGS: true
+
+# Disable LLM advisor, flavor suggestions, and security announcements
+LLM_ADVISOR_ENABLED: false
+FLAVOR_SUGGESTIONS: false
+SECURITY_SUGGESTIONS: false
+
+# Fail on errors
+DISABLE_ERRORS: false
+
+# Post comment on PR - Let MegaLinter handle PR comments natively
+POST_COMMENT: true
+# Pre-commands: Try to install project dependencies before linting
+# Some packages may fail to compile in CI environment (that's OK)
+PRE_COMMANDS:
+  # Install build tools for attempting C extension compilation
+  - command: apk add --no-cache build-base python3-dev
+    cwd: root
+    run_before_linters: true
+    continue_if_failed: true
+
+  # Keep pip tooling current
+  - command: python3 -m pip install --upgrade pip setuptools wheel
+    cwd: root
+    run_before_linters: true
+    continue_if_failed: true
+
+  # Install project dependencies (if available)
+  - command: |
+      if [ -f "pyproject.toml" ]; then
+        python3 -m pip install -e ".[dev]" || python3 -m pip install -e . || true
+      fi
+    cwd: workspace
+    run_before_linters: true
+    continue_if_failed: true
