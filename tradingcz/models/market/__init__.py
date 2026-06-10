@@ -3,7 +3,13 @@
 Frozen models with no vendor dependencies or I/O.
 """
 
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tradingcz.models.headers import MessageType
 
 from tradingcz.models.market.bar import Bar
 from tradingcz.models.market.option_snapshot import OptionSnapshot
@@ -18,7 +24,7 @@ from tradingcz.models.market.trade import Trade
 MarketItem = Trade | Bar | Quote | StreamQuote | Snapshot | OptionSnapshot
 
 
-def market_item_message_type(item: MarketItem) -> "MessageType":
+def market_item_message_type(item: MarketItem) -> MessageType:
     """Infer the ``MessageType`` from a market data item's class name.
 
     Converts CamelCase class name to snake_case and looks up the
@@ -33,10 +39,10 @@ def market_item_message_type(item: MarketItem) -> "MessageType":
     CamelCase → snake_case → MessageType chain.
     """
     # Deferred import to avoid circular dependency at module level
-    from tradingcz.models.headers import MessageType  # pylint: disable=import-outside-toplevel
+    from tradingcz.models.headers import MessageType as _MT  # pylint: disable=import-outside-toplevel
 
     snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(item).__name__).lower()
-    return MessageType(snake)
+    return _MT(snake)
 
 
 __all__ = [

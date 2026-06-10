@@ -190,6 +190,8 @@ class BaseDataClient:
 
         Returns ``{symbol: [T sorted by timestamp]}``.
         """
+        start: datetime | None
+        end: datetime | None
         if start_time is None and days is not None:
             end = end_time or datetime.now(UTC)
             start = end - timedelta(days=days)
@@ -246,7 +248,7 @@ class BaseDataClient:
                 ):
                     continue
                 try:
-                    item = model_type.model_validate_json(msg.payload)
+                    item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
                 except Exception:  # pylint: disable=broad-exception-caught
                     logger.debug(
                         "Skipping unparseable %s", data_type, exc_info=True,
@@ -260,7 +262,7 @@ class BaseDataClient:
             await channel.close()
 
         for symbol_items in results.values():
-            symbol_items.sort(key=lambda b: b.timestamp)
+            symbol_items.sort(key=lambda b: b.timestamp)  # type: ignore[attr-defined]
 
         return results
 
@@ -319,7 +321,7 @@ class BaseDataClient:
                     ):
                         continue
                     try:
-                        parsed = model_type.model_validate_json(msg.payload)
+                        parsed = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
                     except Exception:
                         continue
                     yield parsed

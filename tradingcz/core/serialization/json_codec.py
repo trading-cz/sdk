@@ -30,7 +30,7 @@ class JsonSerializer[T: BaseModel](Serializer[T]):
 
     def serialize(self, value: T) -> bytes:
         """Serialize *value* to UTF-8 JSON bytes, omitting null fields."""
-        return value.model_dump_json(exclude_none=True).encode()
+        return value.model_dump_json(exclude_none=True).encode()  # type: ignore[no-any-return]
 
     def content_type(self) -> str:
         """Return the MIME type for this serializer."""
@@ -53,7 +53,7 @@ class JsonCodec[T: BaseModel](Codec[T]):
 
     def deserialize(self, payload: bytes) -> T:
         """Deserialize UTF-8 JSON bytes into a model instance."""
-        return self._model.model_validate_json(payload)
+        return self._model.model_validate_json(payload)  # type: ignore[no-any-return]
 
     def content_type(self) -> str:
         return "application/json"

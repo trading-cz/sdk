@@ -38,7 +38,7 @@ class Registry[K, V]:
 
     def register(
         self, key: K, *, factory: Callable[..., Any] | None = None,
-    ):
+    ) -> Callable[[type], type]:
         """Decorator: register the decorated class under *key*.
 
         Args:
@@ -46,7 +46,7 @@ class Registry[K, V]:
             factory: Optional callable ``(cls, **deps) -> instance``.
                      Default: calls ``cls(**deps)``.
         """
-        def decorator(cls):
+        def decorator(cls: type) -> type:
             self._items[key] = (cls, factory or self._default_factory)
             return cls
         return decorator

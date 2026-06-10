@@ -106,7 +106,7 @@ class KafkaChannel:
         """
 
         def _flush() -> int:
-            return self._producer.flush(timeout)
+            return self._producer.flush(timeout)  # type: ignore[no-any-return]
 
         loop = asyncio.get_running_loop()
         remaining = await loop.run_in_executor(None, _flush)

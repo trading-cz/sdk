@@ -7,6 +7,7 @@ Streaming (returns :class:`StreamHandle`):
   - ``stream_quotes()``   — live bid/ask quotes, yields indefinitely
   - ``stream_trades()``   — live trade ticks, yields indefinitely
 """
+# pylint: disable=protected-access
 
 from __future__ import annotations
 

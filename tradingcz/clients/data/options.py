@@ -4,6 +4,7 @@ One-time (returns ``dict``):
   - ``snapshots()`` — latest trade, quote, greeks, IV for given symbols
   - ``chain()``     — all contracts for an underlying
 """
+# pylint: disable=protected-access
 
 from __future__ import annotations
 
@@ -41,10 +42,10 @@ class OptionsDataClient:
         symbols: list[str],
         *,
         timeout: float = 30.0,
-    ) -> dict[str, OptionSnapshot]:
+    ) -> dict[str, list[OptionSnapshot]]:
         """Request option snapshots (trade, quote, greeks, IV).
 
-        Returns ``{symbol: OptionSnapshot}``.
+        Returns ``{symbol: [OptionSnapshot]}``.
         """
         return await self._base._request_historical(
             symbols=symbols,
@@ -59,10 +60,10 @@ class OptionsDataClient:
         underlying: str,
         *,
         timeout: float = 30.0,
-    ) -> dict[str, OptionSnapshot]:
+    ) -> dict[str, list[OptionSnapshot]]:
         """Request all option contracts for an underlying.
 
-        Returns ``{contract_symbol: OptionSnapshot}`` for all active
+        Returns ``{contract_symbol: [OptionSnapshot]}`` for all active
         contracts.
         """
         return await self._base._request_historical(
