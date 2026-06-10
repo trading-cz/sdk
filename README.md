@@ -144,5 +144,4 @@ mypy tradingcz/
 
 ## See also
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — module map, design decisions, transport layer details
 - **[docs/python314.md](docs/python314.md)** — modern Python 3.14 patterns used in this codebase
