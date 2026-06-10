@@ -2,17 +2,39 @@
 
 Usage::
 
-    from tradingcz.core.serialization import JsonCodec
+    from tradingcz.core.serialization import JsonCodec, JsonSerializer
     from tradingcz.models.market import Bar
 
+    # Round-trip codec (producer + consumer):
     codec = JsonCodec(Bar)
     payload = codec.serialize(bar)          # bytes
     bar2 = codec.deserialize(payload)       # Bar
+
+    # Serialize-only (e.g. TypedProducer with polymorphic market data):
+    serializer = JsonSerializer()
+    payload = serializer.serialize(bar)     # bytes
 """
 
 from pydantic import BaseModel
 
-from tradingcz.core.serialization.protocol import Codec
+from tradingcz.core.serialization.protocol import Codec, Serializer
+
+
+class JsonSerializer[T: BaseModel](Serializer[T]):
+    """Serialize-only JSON codec — no model type required.
+
+    Use this with :class:`TypedProducer` when the channel carries
+    heterogeneous model types (e.g. ``Trade | Bar | Quote``).
+    Serialization is polymorphic via Pydantic's ``model_dump_json``.
+    """
+
+    def serialize(self, value: T) -> bytes:
+        """Serialize *value* to UTF-8 JSON bytes, omitting null fields."""
+        return value.model_dump_json(exclude_none=True).encode()
+
+    def content_type(self) -> str:
+        """Return the MIME type for this serializer."""
+        return "application/json"
 
 
 class JsonCodec[T: BaseModel](Codec[T]):
@@ -23,10 +45,11 @@ class JsonCodec[T: BaseModel](Codec[T]):
 
     def __init__(self, model_type: type[T]) -> None:
         self._model = model_type
+        self._serializer: JsonSerializer[T] = JsonSerializer()
 
     def serialize(self, value: T) -> bytes:
         """Serialize *value* to UTF-8 JSON bytes."""
-        return value.model_dump_json().encode()
+        return self._serializer.serialize(value)
 
     def deserialize(self, payload: bytes) -> T:
         """Deserialize UTF-8 JSON bytes into a model instance."""

@@ -178,7 +178,7 @@ class RequestReply:
             # from a future cancelled by close() propagates directly
             # instead of being converted to TimeoutError by the
             # asyncio.timeout() context manager (Python 3.12+).
-            done, pending = await asyncio.wait([future], timeout=timeout)
+            done, _ = await asyncio.wait([future], timeout=timeout)
             if not done:
                 raise TimeoutError(
                     f"Request {request_id!r} timed out after {timeout:.1f}s"

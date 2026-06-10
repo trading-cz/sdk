@@ -72,7 +72,3 @@ class TopicRegistry:
             name=f"{env}-stock-market-historical-data",
             partitions=1,
         )
-
-        self.execution_requests = TopicConfig(name=f"{env}-execution-request", partitions=1)
-        self.execution_responses = TopicConfig(name=f"{env}-execution-response", partitions=1)
-        self.positions = TopicConfig(name=f"{env}-position-events", partitions=1)
