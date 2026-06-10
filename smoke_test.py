@@ -34,15 +34,10 @@ from tradingcz import SCHEMA_VERSION
 from tradingcz.common.config import KafkaSettings
 from tradingcz.models.headers import Header
 from tradingcz.framework.helpers import FireAndForget, RequestReply
-from tradingcz.serialization import JsonCodec
-from tradingcz.transport import (
-    KafkaMessage,
-    KafkaTransport,
-    TopicRegistry,
-    TypedConsumer,
-    TypedParser,
-    TypedProducer,
-)
+from tradingcz.core.serialization import JsonCodec
+from tradingcz.core.transport import KafkaMessage, KafkaTransport
+from tradingcz.core.messaging import TypedConsumer, TypedParser, TypedProducer
+from tradingcz.core.topics import TopicRegistry
 from tradingcz.core.transport.dedup import DedupFilter
 from tradingcz.core.transport.hash_utils import partition_for
 
@@ -330,7 +325,7 @@ async def test_5_signal_publisher() -> None:
 
     try:
         channel = await transport.channel(TEST_TOPIC, num_partitions=1, retention_ms=60_000)
-        faf = _FireAndForget(channel=channel, service_id="smoke_test")
+        faf = FireAndForget(channel=channel, service_id="smoke_test")
 
         from tradingcz.models.signal import TradingSignal
 
@@ -377,8 +372,8 @@ async def test_5_signal_publisher() -> None:
 
 
 async def test_6_request_reply_correlation() -> None:
-    """_RequestReply correlates request/response by request_id."""
-    section("Test 6: _RequestReply correlation")
+    """RequestReply correlates request/response by request_id."""
+    section("Test 6: RequestReply correlation")
 
     clean_topic(TEST_TOPIC, num_partitions=1)
     transport, _ = await make_transport()
@@ -386,7 +381,7 @@ async def test_6_request_reply_correlation() -> None:
     try:
         channel = await transport.channel(TEST_TOPIC, num_partitions=1, retention_ms=60_000)
 
-        rr = _RequestReply(
+        rr = RequestReply(
             channel=channel,
             service_id="smoke_test",
             message_types={"pong": Pong},

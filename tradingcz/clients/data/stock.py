@@ -74,7 +74,7 @@ class StockDataClient:
 
     # -- Streaming -----------------------------------------------------
 
-    def stream_quotes(
+    async def stream_quotes(
         self,
         symbols: list[str],
         *,
@@ -86,7 +86,7 @@ class StockDataClient:
         objects indefinitely.  Use ``async for`` to iterate, or wrap
         in ``async with`` for guaranteed unsubscribe on exit.
         """
-        return self._base._stream(
+        return await self._base._stream(
             symbols=symbols,
             asset="stock",
             stream_type="quotes",
@@ -94,7 +94,7 @@ class StockDataClient:
             timeout=timeout,
         )
 
-    def stream_trades(
+    async def stream_trades(
         self,
         symbols: list[str],
         *,
@@ -106,7 +106,7 @@ class StockDataClient:
         objects indefinitely.  Use ``async for`` to iterate, or wrap
         in ``async with`` for guaranteed unsubscribe on exit.
         """
-        return self._base._stream(
+        return await self._base._stream(
             symbols=symbols,
             asset="stock",
             stream_type="trades",

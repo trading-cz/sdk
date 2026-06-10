@@ -146,13 +146,20 @@ class RequestReplyClient[Req, Resp]:
         self._pending[req_id] = future
 
         try:
-            return await asyncio.wait_for(future, timeout=self._timeout)
-        except TimeoutError:
-            logger.error(
-                "Request timed out after %.1fs: req_id=%s channel=%s",
-                self._timeout, req_id, self._channel.name,
-            )
-            raise
+            # Use asyncio.wait (not wait_for) so that CancelledError
+            # from a future cancelled by close() propagates directly
+            # instead of being converted to TimeoutError by the
+            # asyncio.timeout() context manager (Python 3.12+).
+            done, pending = await asyncio.wait([future], timeout=self._timeout)
+            if not done:
+                logger.error(
+                    "Request timed out after %.1fs: req_id=%s channel=%s",
+                    self._timeout, req_id, self._channel.name,
+                )
+                raise TimeoutError(
+                    f"Request {req_id!r} timed out after {self._timeout:.1f}s"
+                )
+            return future.result()
         finally:
             self._pending.pop(req_id, None)
 
