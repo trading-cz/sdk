@@ -8,14 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class BaseEvent(BaseModel):
     """Base class for all events in the trading executor SDK. This class
-    can be extended to include common fields or methods that are shared across different event types.
-    """
+    can be extended to include common fields or methods that are shared across different event types."""
 
     model_config = ConfigDict(frozen=True, use_enum_values=True)
 
-    id: UUID = Field(
-        default_factory=uuid4, description="Unique identifier for the event"
-    )
+    id: UUID = Field(default_factory=uuid4, description="Unique identifier for the event")
     received_at: datetime | None = Field(
         default_factory=lambda: datetime.now(UTC),  # pylint: disable=no-member
         description="Timestamp when the order request event was received",

@@ -2,8 +2,8 @@
 
 from typing import Literal
 
+from tradingcz.executor.sdk.events.base_event import BaseEvent
 from tradingcz.models.enums.event import EventType
-from tradingcz.models.executor.events.base_event import BaseEvent
 
 
 class ServiceRequestEvent(BaseEvent):
