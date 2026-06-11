@@ -8,7 +8,7 @@ Usage::
     router = EventRouter(events_channel)
 
     router.on(
-        MessageType.DATA_REQUEST, DataRequest,
+        EventType.DATA_REQUEST, DataRequest,
         handler=lambda req, raw: service.on_request(req),
         filter=lambda req, _: req.broker == "alpaca",
         spawn_task=True,  # historical fetch is slow
@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from tradingcz.core.messaging.consumer import TypedParser
 from tradingcz.core.transport.kafka import KafkaChannel
 from tradingcz.core.transport.message import KafkaMessage
-from tradingcz.models.headers import MessageType
+from tradingcz.models.enums.event import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class EventRouter:
 
     def on[T: BaseModel](
         self,
-        msg_type: MessageType,
+        msg_type: EventType,
         model_class: type[T],
         handler: Callable[[T, KafkaMessage], Awaitable[None]],
         *,
@@ -75,7 +75,7 @@ class EventRouter:
         """Register a typed handler for *msg_type*.  Chainable.
 
         Args:
-            msg_type: The ``MessageType`` this handler subscribes to.
+            msg_type: The ``EventType`` this handler subscribes to.
             model_class: Pydantic model used to parse matching messages.
             handler: Async callable invoked with ``(model, raw_message)``.
             filter: Optional predicate; handler is called only when it

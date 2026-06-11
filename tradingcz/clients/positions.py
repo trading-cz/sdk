@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.framework.helpers import RequestReply
-from tradingcz.models.headers import MessageType
+from tradingcz.models.enums.event import EventType
 
 
 class Position(BaseModel):
@@ -37,7 +37,7 @@ class PositionClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(MessageType.POSITION_RESPONSE, PositionList)
+        self._rr.register_type(EventType.POSITION_RESPONSE, PositionList)
 
     async def get_positions(self, *, timeout: float = 30.0) -> list[Position]:
         """Return all currently open positions."""

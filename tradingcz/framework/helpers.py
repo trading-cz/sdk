@@ -16,7 +16,8 @@ import re
 from pydantic import BaseModel
 
 from tradingcz.core.transport.kafka import KafkaChannel
-from tradingcz.models.headers import Header, MessageType, build_event_key, make_headers
+from tradingcz.models.enums.event import EventType
+from tradingcz.models.headers import Header, build_event_key, make_event_headers
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
         self,
         message: BaseModel,
         *,
-        message_type: MessageType,
+        message_type: EventType,
         key: str = "",
         extra_headers: dict[str, str] | None = None,
     ) -> None:
@@ -44,15 +45,14 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
 
         Args:
             message: Pydantic model to serialize.
-            message_type: :class:`MessageType` enum value for the header.
+            message_type: :class:`EventType` enum value for the header.
             key: Kafka message key (empty = no partitioning).
             extra_headers: Additional headers merged into standard set.
         """
         self._seq += 1
-        headers = make_headers(
-            message_type=message_type,
+        headers = make_event_headers(
+            event_type=message_type,
             source_app=self._service_id,
-            sequence=self._seq,
             **(extra_headers or {}),
         )
         payload = message.model_dump_json(exclude_none=True).encode()
@@ -94,11 +94,11 @@ class RequestReply:
     # ------------------------------------------------------------------
 
     def register_type(
-        self, message_type: str | MessageType, model: type[BaseModel]
+        self, message_type: str | EventType, model: type[BaseModel]
     ) -> None:
         """Register a message_type → model mapping for response deserialization.
 
-        Accepts both :class:`MessageType` enum values and plain strings
+        Accepts both :class:`EventType` enum values and plain strings
         (for custom response types not in the standard enum).
         """
         self._types[str(message_type)] = model
@@ -135,7 +135,7 @@ class RequestReply:
         req: BaseModel,
         *,
         response_type: type[Resp],  # type-checker only, not used at runtime
-        request_type: MessageType | None = None,
+        request_type: EventType | None = None,
         timeout: float = 30.0,
     ) -> Resp:
         """Send *req*, await a correlated *Resp*.
@@ -143,7 +143,7 @@ class RequestReply:
         Args:
             req: The request model (must have ``request_id: str``).
             response_type: Expected response Pydantic model class.
-            request_type: :class:`MessageType` enum value for the header
+            request_type: :class:`EventType` enum value for the header
                 (auto-inferred from the request class name if None).
             timeout: Seconds to wait before raising TimeoutError.
 
@@ -163,10 +163,9 @@ class RequestReply:
         self._seq += 1
 
         payload = req.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
-        headers = make_headers(
-            message_type=mt,
+        headers = make_event_headers(
+            event_type=mt,
             source_app=self._service_id,
-            sequence=self._seq,
             request_id=request_id,
         )
         key = build_event_key(mt, self._service_id, request_id)
@@ -200,7 +199,7 @@ class RequestReply:
         logger.debug("RequestReply listener started on %s", self._channel.name)
         try:
             async for msg in self._channel.receive():
-                msg_type = msg.headers.get(Header.MESSAGE_TYPE, "")
+                msg_type = msg.headers.get(Header.EVENT_TYPE, "")
                 model_type = self._types.get(msg_type)
                 if model_type is None:
                     self._skipped += 1
@@ -230,22 +229,22 @@ class RequestReply:
         return self._skipped
 
 
-def _infer_message_type(model: BaseModel) -> MessageType:
-    """Infer MessageType from model class name: DataRequest → DATA_REQUEST.
+def _infer_message_type(model: BaseModel) -> EventType:
+    """Infer EventType from model class name: DataRequest → DATA_REQUEST.
 
     Converts CamelCase class name to snake_case and looks up the
-    corresponding :class:`MessageType` enum member.
+    corresponding :class:`EventType` enum member.
 
     Raises:
-        ValueError: If no MessageType matches the inferred name.
+        ValueError: If no EventType matches the inferred name.
             Pass an explicit ``request_type`` to avoid inference.
     """
     snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
     try:
-        return MessageType(snake)
+        return EventType(snake)
     except ValueError:
         raise ValueError(
-            f"Cannot infer MessageType from class {type(model).__name__!r}: "
+            f"Cannot infer EventType from class {type(model).__name__!r}: "
             f"'{snake}' is not a known message_type. "
             f"Pass an explicit 'request_type' parameter."
         ) from None

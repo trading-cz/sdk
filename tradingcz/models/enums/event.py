@@ -17,10 +17,44 @@ class EventStatus(StrEnum):
 
 
 class EventType(StrEnum):
-    """Event type for trading executor SDK."""
+    """Unified event type — used for both Kafka ``message_type`` headers
+    and ``event_type`` payload fields.
 
-    EXECUTION_REQUEST = "execution_request"
+    Canonical values driving deserialization routing and event dispatch.
+
+    Usage::
+
+        # Kafka wire header
+        make_headers(message_type=EventType.DATA_REQUEST, ...)
+        model = parse_message(EventType.DATA_READY, payload)
+
+        # Event payload
+        event = ExecutionRequestEvent(event_type=EventType.TRADING_SIGNAL, ...)
+    """
+
+    # ── Control-plane (event topic) ──────────────────────────────────────
+    DATA_REQUEST = "data_request"
+    DATA_READY = "data_ready"
+    DATA_ERROR = "data_error"
     SERVICE_REQUEST = "service_request"
+    SERVICE_LIFECYCLE = "service_lifecycle"
+
+    # ── Service responses (event topic) ──────────────────────────────────
+    POSITION_RESPONSE = "position_response"
+    BALANCE_RESPONSE = "balance_response"
+    ORDER_RESPONSE = "order_response"
+
+    # ── Event payload types ──────────────────────────────────────────────
+    EXECUTION_REQUEST = "execution_request"
+    TRADING_SIGNAL = "trading_signal"
+
+    # ── Market data (data topics) ────────────────────────────────────────
+    BAR = "bar"
+    QUOTE = "quote"
+    TRADE = "trade"
+    STREAM_QUOTE = "stream_quote"
+    SNAPSHOT = "snapshot"
+    OPTION_SNAPSHOT = "option_snapshot"
 
 
 class StrategyType(StrEnum):

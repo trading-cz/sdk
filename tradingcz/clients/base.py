@@ -16,7 +16,8 @@ from tradingcz.core.transport.dedup import DedupFilter
 from tradingcz.core.transport.kafka import KafkaTransport
 from tradingcz.framework.helpers import RequestReply
 from tradingcz.models.events import DataError, DataReady, DataRequest
-from tradingcz.models.headers import Header, MessageType
+from tradingcz.models.enums.event import EventType
+from tradingcz.models.headers import Header
 
 logger = logging.getLogger(__name__)
 
@@ -117,13 +118,13 @@ class _Unsubscribe:
             stream_type=self._stream_type,
         )
         # Fire-and-forget — no response expected for unsubscribe
-        self._rr.register_type(MessageType.DATA_READY, DataReady)
-        self._rr.register_type(MessageType.DATA_ERROR, DataError)
+        self._rr.register_type(EventType.DATA_READY, DataReady)
+        self._rr.register_type(EventType.DATA_ERROR, DataError)
         try:
             await self._rr.request(
                 req,
                 response_type=DataReady,
-                request_type=MessageType.DATA_REQUEST,
+                request_type=EventType.DATA_REQUEST,
                 timeout=5.0,
             )
         except Exception:
@@ -168,8 +169,8 @@ class BaseDataClient:
         self._service_id = service_id
         self._broker = broker
         self._dedup = DedupFilter(max_size=dedup_max_size)
-        rr.register_type(MessageType.DATA_READY, DataReady)
-        rr.register_type(MessageType.DATA_ERROR, DataError)
+        rr.register_type(EventType.DATA_READY, DataReady)
+        rr.register_type(EventType.DATA_ERROR, DataError)
 
     # -- Historical (request → consume → return dict) ------------------
 
@@ -215,7 +216,7 @@ class BaseDataClient:
         resp = await self._rr.request(
             req,
             response_type=DataReady,
-            request_type=MessageType.DATA_REQUEST,
+            request_type=EventType.DATA_REQUEST,
             timeout=timeout,
         )
 
@@ -298,7 +299,7 @@ class BaseDataClient:
         resp = await self._rr.request(
             req,
             response_type=DataReady,
-            request_type=MessageType.DATA_REQUEST,
+            request_type=EventType.DATA_REQUEST,
             timeout=timeout,
         )
 

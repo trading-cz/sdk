@@ -30,9 +30,9 @@ Usage::
 
     reader = RecoveryReader(events_channel, idle_timeout=2.0)
     async for msg_type, model, raw in reader.replay({
-        str(MessageType.DATA_REQUEST):       DataRequest,
-        str(MessageType.DATA_READY):         DataReady,
-        str(MessageType.SERVICE_LIFECYCLE):  ServiceLifecycle,
+        str(EventType.DATA_REQUEST):       DataRequest,
+        str(EventType.DATA_READY):         DataReady,
+        str(EventType.SERVICE_LIFECYCLE):  ServiceLifecycle,
     }):
         ...  # classify and reconstruct state
 
@@ -102,7 +102,7 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
         async for raw in self._channel.receive(
             idle_timeout=self._idle_timeout,
         ):
-            msg_type = raw.headers.get(Header.MESSAGE_TYPE, "")
+            msg_type = raw.headers.get(Header.EVENT_TYPE, "")
             model_cls = types.get(msg_type)
             if model_cls is None:
                 continue

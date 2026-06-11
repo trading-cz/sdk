@@ -20,7 +20,8 @@ from collections.abc import Awaitable, Callable
 
 from tradingcz.core.transport.kafka import KafkaChannel
 from tradingcz.framework.helpers import FireAndForget
-from tradingcz.models.headers import Header, MessageType, build_event_key
+from tradingcz.models.enums.event import EventType
+from tradingcz.models.headers import Header, build_event_key
 from tradingcz.models.health import ServiceLifecycle
 
 logger = logging.getLogger(__name__)
@@ -118,13 +119,12 @@ class HealthPublisher:
             service_id=self._service_id,
             event=event,  # type: ignore[arg-type]
         )
-        key = build_event_key(MessageType.SERVICE_LIFECYCLE, self._service_id, event)
+        key = build_event_key(EventType.SERVICE_LIFECYCLE, self._service_id, event)
         try:
             await self._faf.send(
                 lifecycle,
-                message_type=MessageType.SERVICE_LIFECYCLE,
+                message_type=EventType.SERVICE_LIFECYCLE,
                 key=key,
-                extra_headers={Header.LIFECYCLE_EVENT: event},
             )
             if event in ("up", "down"):
                 logger.info(
@@ -231,8 +231,8 @@ class HealthMonitor:
                 if not self._running:
                     break
                 if (
-                    msg.headers.get(Header.MESSAGE_TYPE)
-                    != MessageType.SERVICE_LIFECYCLE
+                    msg.headers.get(Header.EVENT_TYPE)
+                    != EventType.SERVICE_LIFECYCLE
                 ):
                     continue
                 try:

@@ -50,9 +50,8 @@ class BracketOrderRequest(OrderRequest):
     def check_tp_or_sl(self) -> Self:
         """Validate that both legs for exit side are provided."""
 
-        # TODO to be refined - validate legs and prices vs times
-        present_tp = sum([self.tp_limit_price is not None, self.tp_limit_time is not None])
-        present_sl = sum([self.sl_stop_price is not None, self.sl_limit_time is not None])
+        present_tp = 1 if (self.tp_limit_price is not None or self.tp_limit_time is not None) else 0
+        present_sl = 1 if (self.sl_stop_price is not None or self.sl_limit_time is not None) else 0
         if present_tp != 1 or present_sl != 1:
             raise ValueError(
                 "Bracket order requires 'tp_limit_price' or 'tp_limit_time' to be provided, "

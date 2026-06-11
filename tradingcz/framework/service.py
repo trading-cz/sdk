@@ -31,7 +31,7 @@ from tradingcz.core.topics import TopicRegistry
 from tradingcz.core.transport.kafka import KafkaChannel, KafkaTransport
 from tradingcz.framework.health import HealthPublisher
 from tradingcz.framework.helpers import FireAndForget
-from tradingcz.models.headers import MessageType
+from tradingcz.models.enums.event import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class ServiceApp:
         self,
         message: BaseModel,
         *,
-        message_type: MessageType,
+        message_type: EventType,
         key: str = "",
         **headers: str,
     ) -> None:
@@ -164,7 +164,7 @@ class ServiceApp:
 
             await self.publish(
                 DataReady(request_id="...", ...),
-                message_type=MessageType.DATA_READY,
+                message_type=EventType.DATA_READY,
                 key=request_id,
             )
         """

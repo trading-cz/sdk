@@ -30,7 +30,6 @@ from uuid import uuid4
 from confluent_kafka.admin import AdminClient
 from pydantic import BaseModel
 
-from tradingcz import SCHEMA_VERSION
 from tradingcz.common.config import KafkaSettings
 from tradingcz.core.messaging import TypedConsumer, TypedParser, TypedProducer
 from tradingcz.core.serialization import JsonCodec
@@ -156,13 +155,12 @@ async def test_1_channel_send_receive_with_headers() -> None:
 
         # Send with key and headers
         test_headers = {
-            Header.MESSAGE_TYPE: "ping",
+            Header.EVENT_TYPE: "ping",
             Header.SOURCE_APP: "smoke_test",
             Header.SEQUENCE: "1",
-            Header.SCHEMA_VERSION: SCHEMA_VERSION,
         }
         await channel.send(b'{"hello":"world"}', key="test-key", headers=test_headers)
-        ok("Sent message with key='test-key' + 4 headers")
+        ok("Sent message with key='test-key' + 3 headers")
 
         # Receive
         msg: KafkaMessage | None = None
@@ -176,16 +174,11 @@ async def test_1_channel_send_receive_with_headers() -> None:
 
         # Verify KafkaMessage fields
         assert_eq(msg.key, "test-key", "key")
-        assert_eq(msg.headers.get(Header.MESSAGE_TYPE), "ping", "header: message_type")
+        assert_eq(msg.headers.get(Header.EVENT_TYPE), "ping", "header: event_type")
         assert_eq(
             msg.headers.get(Header.SOURCE_APP), "smoke_test", "header: source_app"
         )
         assert_eq(msg.headers.get(Header.SEQUENCE), "1", "header: sequence")
-        assert_eq(
-            msg.headers.get(Header.SCHEMA_VERSION),
-            SCHEMA_VERSION,
-            "header: schema_version",
-        )
 
         ok(f"offset={msg.offset}, partition={msg.partition}, topic='{msg.topic}'")
         assert msg.offset >= 0 or fail(f"offset should be >=0, got {msg.offset}")
@@ -217,10 +210,9 @@ async def test_2_typed_producer_consumer_roundtrip() -> None:
             serializer=JsonCodec(Ping),
             key_fn=lambda p: p.request_id,
             headers_fn=lambda p: {
-                Header.MESSAGE_TYPE: "ping",
+                Header.EVENT_TYPE: "ping",
                 Header.SOURCE_APP: "smoke_test",
                 Header.SEQUENCE: str(seq_counter.pop(0) + 1),
-                Header.SCHEMA_VERSION: SCHEMA_VERSION,
             },
         )
 
@@ -251,7 +243,7 @@ async def test_2_typed_producer_consumer_roundtrip() -> None:
 
         if received_meta:
             assert_eq(
-                received_meta.headers.get(Header.MESSAGE_TYPE, ""),
+                received_meta.headers.get(Header.EVENT_TYPE, ""),
                 "ping",
                 "header round-trip: message_type",
             )
@@ -282,7 +274,6 @@ async def test_3_typed_parser_multiple_types() -> None:
                 "message_type": "ping",
                 "source_app": "smoke",
                 "sequence": "1",
-                "schema_version": SCHEMA_VERSION,
             },
         )
         # Produce Pong
@@ -293,7 +284,6 @@ async def test_3_typed_parser_multiple_types() -> None:
                 "message_type": "pong",
                 "source_app": "smoke",
                 "sequence": "2",
-                "schema_version": SCHEMA_VERSION,
             },
         )
 
@@ -359,23 +349,37 @@ async def test_5_signal_publisher() -> None:
         )
         faf = FireAndForget(channel=channel, service_id="smoke_test")
 
-        from tradingcz.models.signal import TradingSignal
+        from tradingcz.models.events.execution_request_event import ExecutionRequestEvent
+        from tradingcz.models.enums.event import EventType, StrategyType
+        from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
+        from tradingcz.models.orders.oto_order import OtoOrderRequest
 
-        signal = TradingSignal(
-            symbol="AAPL",
-            side="LONG",
-            strategy_id="test-strat",
-            open_price=150.0,
-            entry_price=151.0,
-            stop_loss=149.0,
-            valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
-            atr_period=3,
-            atr_value=2.5,
+        event = ExecutionRequestEvent(
+            event_type=EventType.TRADING_SIGNAL,
+            strategy_type=StrategyType.SINGLE_ORDER,
+            parameters={
+                "strategy_id": "test-strat",
+                "open_price": 150.0,
+                "atr_period": 3,
+                "atr_value": 2.5,
+            },
+            market_orders=[
+                OtoOrderRequest(
+                    symbol="AAPL",
+                    qty=1,
+                    side=OrderSide.BUY,
+                    time_in_force=TimeInForce.DAY,
+                    order_class=OrderClass.OTO,
+                    stop_price=151.0,
+                    sl_stop_price=149.0,
+                    sl_limit_time=datetime(2026, 6, 1, tzinfo=UTC),
+                ),
+            ],
         )
 
         await faf.send(
-            signal,
-            message_type="trading_signal",
+            event,
+            message_type=EventType.TRADING_SIGNAL,
             key="AAPL",
             extra_headers={"tracking_id": "trk-001", "strategy_id": "test-strat"},
         )
@@ -392,7 +396,7 @@ async def test_5_signal_publisher() -> None:
 
         assert_eq(msg.key, "AAPL", "signal key")
         assert_eq(
-            msg.headers.get("message_type"), "trading_signal", "signal message_type"
+            msg.headers.get("event_type"), "trading_signal", "signal event_type"
         )
         assert_eq(msg.headers.get("tracking_id"), "trk-001", "signal tracking_id")
         ok("Signal published with correct key + headers")
@@ -456,7 +460,6 @@ async def test_6_request_reply_correlation() -> None:
                     "message_type": "pong",
                     "source_app": "responder",
                     "request_id": "req-001",
-                    "schema_version": SCHEMA_VERSION,
                     "sequence": "99",
                 },
             )
@@ -502,7 +505,6 @@ async def test_7_dedup_in_channel_flow() -> None:
                     "message_type": "test",
                     "source_app": "dedup_test",
                     "sequence": str(seq),
-                    "schema_version": SCHEMA_VERSION,
                 },
             )
 
@@ -547,7 +549,6 @@ async def test_8_kcat_inspection() -> None:
                     "source": "ingestion",
                     "symbol": symbol,
                     "sequence": str(["AAPL", "TSLA", "SPY"].index(symbol) + 1),
-                    "schema_version": SCHEMA_VERSION,
                 },
             )
 

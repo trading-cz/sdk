@@ -51,9 +51,9 @@ class OtoOrderRequest(OrderRequest):
     def check_tp_or_sl(self) -> Self:
         """Validate that either 'take profit' or 'stop_loss' is provided, but not both."""
 
-        # TODO to be refined - validate legs and prices vs times
-        present_tp = sum([self.tp_limit_price is not None, self.tp_limit_time is not None])
-        present_sl = sum([self.sl_stop_price is not None, self.sl_limit_time is not None])
+        # Each leg is "present" if ANY of its fields are set
+        present_tp = 1 if (self.tp_limit_price is not None or self.tp_limit_time is not None) else 0
+        present_sl = 1 if (self.sl_stop_price is not None or self.sl_limit_time is not None) else 0
         if present_tp + present_sl != 1:
             raise ValueError("OTO order requires either stop loss or take profit leg, but not both")
 

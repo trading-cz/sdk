@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.framework.helpers import RequestReply
-from tradingcz.models.headers import MessageType
+from tradingcz.models.enums.event import EventType
 
 
 class OrderSummary(BaseModel):
@@ -40,7 +40,7 @@ class OrderClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(MessageType.ORDER_RESPONSE, OrderList)
+        self._rr.register_type(EventType.ORDER_RESPONSE, OrderList)
 
     async def get_orders(
         self,

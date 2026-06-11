@@ -1,8 +1,5 @@
 """Module containing the OrderRequestEvent model, which represents a market order request event received via generic listener."""
 
-from typing import Literal
-from uuid import UUID
-
 from pydantic import Field
 
 from tradingcz.models.enums.event import EventType, StrategyType
@@ -14,12 +11,14 @@ class ExecutionRequestEvent(BaseEvent):
     """Represents an execution request event received via generic listener.
     Basic and immutable recipe for ExecutionRequestEvent model, with static field values, frozen."""
 
-    id: UUID = Field(..., description="Unique identifier for the order")
     strategy_type: StrategyType = Field(
         ...,
         description="Type of the strategy that generated the order request",
     )
-    event_type: Literal[EventType.EXECUTION_REQUEST]
+    event_type: EventType = Field(
+        default=EventType.EXECUTION_REQUEST,
+        description="Type of the event: execution_request or trading_signal",
+    )
     market_orders: list[OrderRequest] = Field(
         ..., description="List of market orders in the order request"
     )

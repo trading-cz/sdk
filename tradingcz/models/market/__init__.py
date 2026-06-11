@@ -9,7 +9,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from tradingcz.models.headers import MessageType
+    from tradingcz.models.enums.event import EventType
 
 from tradingcz.models.market.bar import Bar
 from tradingcz.models.market.option_snapshot import OptionSnapshot
@@ -24,23 +24,23 @@ from tradingcz.models.market.trade import Trade
 MarketItem = Trade | Bar | Quote | StreamQuote | Snapshot | OptionSnapshot
 
 
-def market_item_message_type(item: MarketItem) -> MessageType:
-    """Infer the ``MessageType`` from a market data item's class name.
+def market_item_message_type(item: MarketItem) -> EventType:
+    """Infer the ``EventType`` from a market data item's class name.
 
     Converts CamelCase class name to snake_case and looks up the
-    corresponding ``MessageType`` enum member.  For example::
+    corresponding ``EventType`` enum member.  For example::
 
-        >>> market_item_message_type(Bar(...))       # → MessageType.BAR
-        >>> market_item_message_type(Trade(...))     # → MessageType.TRADE
-        >>> market_item_message_type(StreamQuote(...))  # → MessageType.STREAM_QUOTE
+        >>> market_item_message_type(Bar(...))       # → EventType.BAR
+        >>> market_item_message_type(Trade(...))     # → EventType.TRADE
+        >>> market_item_message_type(StreamQuote(...))  # → EventType.STREAM_QUOTE
 
     This is the canonical mapping for all market data types.
     Apps should use this instead of manually computing the
-    CamelCase → snake_case → MessageType chain.
+    CamelCase → snake_case → EventType chain.
     """
     # Deferred import to avoid circular dependency at module level
-    from tradingcz.models.headers import (
-        MessageType as _MT,  # pylint: disable=import-outside-toplevel
+    from tradingcz.models.enums.event import (
+        EventType as _MT,  # pylint: disable=import-outside-toplevel
     )
 
     snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(item).__name__).lower()

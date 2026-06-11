@@ -6,7 +6,7 @@ Two publishing patterns, one interface (:class:`TypedProducer`):
 
     from tradingcz.framework.service import ServiceApp
 
-    await app.publish(event, message_type=MessageType.DATA_READY, key=req_id)
+    await app.publish(event, message_type=EventType.DATA_READY, key=req_id)
 
 **Stream publishing** (high throughput, fire-and-forget)::
 
@@ -44,7 +44,7 @@ from typing import Any
 from tradingcz.core.messaging.consumer import TypedProducer
 from tradingcz.core.serialization import JsonSerializer
 from tradingcz.core.transport.kafka import KafkaChannel
-from tradingcz.models.headers import make_headers
+from tradingcz.models.headers import make_data_headers
 from tradingcz.models.market import MarketItem, market_item_message_type
 
 
@@ -56,7 +56,7 @@ def make_market_headers(
 ) -> Callable[[Any], dict[str, str]]:
     """Return a ``headers_fn`` for ``TypedProducer`` on market data channels.
 
-    The returned callable auto-infers ``message_type`` from the item's
+    The returned callable auto-infers ``event_type`` from the item's
     class name (via :func:`market_item_message_type`) and fills in
     ``source_app``, ``source``, ``broker``, and ``symbol``.
 
@@ -77,8 +77,8 @@ def make_market_headers(
 
     def _headers(item: Any) -> dict[str, str]:
         msg_type = market_item_message_type(item)
-        return make_headers(
-            message_type=msg_type,
+        return make_data_headers(
+            event_type=msg_type,
             source_app=source_app,
             source=_source,
             broker=_broker,

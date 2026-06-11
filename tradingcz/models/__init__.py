@@ -5,6 +5,7 @@ from tradingcz.models.enums import (
     SortOrder,
     Timeframe,
 )
+from tradingcz.models.enums.event import EventType
 from tradingcz.models.events import (
     DataError,
     DataReady,
@@ -13,12 +14,12 @@ from tradingcz.models.events import (
 )
 from tradingcz.models.headers import (
     Header,
-    MessageType,
     build_event_key,
+    make_data_headers,
+    make_event_headers,
     make_headers,
-    message_model,
-    parse_message,
 )
+from tradingcz.models.dispatch import model_for, parse_message
 from tradingcz.models.health import ServiceLifecycle
 from tradingcz.models.market import (
     Bar,
@@ -28,7 +29,11 @@ from tradingcz.models.market import (
     Trade,
     market_item_message_type,
 )
-from tradingcz.models.signal import TradingSignal
+from tradingcz.models.events.execution_request_event import ExecutionRequestEvent
+from tradingcz.models.orders.order import OrderRequest
+from tradingcz.models.orders.oto_order import OtoOrderRequest
+from tradingcz.models.orders.bracket_order import BracketOrderRequest
+from tradingcz.models.orders.market_order import MarketOrderRequest
 
 __all__ = [
     # Enums
@@ -39,11 +44,13 @@ __all__ = [
     "OrderType",
     # Wire format
     "Header",
-    "MessageType",
+    "EventType",
     "build_event_key",
+    "make_data_headers",
+    "make_event_headers",
     "make_headers",
+    "model_for",
     "parse_message",
-    "message_model",
     # Domain Models
     "Bar",
     "Quote",
@@ -59,6 +66,10 @@ __all__ = [
     "DataReady",
     "DataError",
     "ServiceRequest",
-    # Signals
-    "TradingSignal",
+    # Orders & Signals
+    "ExecutionRequestEvent",
+    "OrderRequest",
+    "OtoOrderRequest",
+    "BracketOrderRequest",
+    "MarketOrderRequest",
 ]

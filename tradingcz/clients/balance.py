@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.framework.helpers import RequestReply
-from tradingcz.models.headers import MessageType
+from tradingcz.models.enums.event import EventType
 
 
 class Balance(BaseModel):
@@ -35,7 +35,7 @@ class BalanceClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(MessageType.BALANCE_RESPONSE, BalanceResponse)
+        self._rr.register_type(EventType.BALANCE_RESPONSE, BalanceResponse)
 
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""
