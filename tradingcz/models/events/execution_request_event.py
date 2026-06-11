@@ -5,9 +5,9 @@ from uuid import UUID
 
 from pydantic import Field
 
-from tradingcz.executor.sdk.events.base_event import BaseEvent
-from tradingcz.executor.sdk.orders.single_order_request import SingleOrderRequest
 from tradingcz.models.enums.event import EventType, StrategyType
+from tradingcz.models.events.base_event import BaseEvent
+from tradingcz.models.orders.order import OrderRequest
 
 
 class ExecutionRequestEvent(BaseEvent):
@@ -20,6 +20,6 @@ class ExecutionRequestEvent(BaseEvent):
         description="Type of the strategy that generated the order request",
     )
     event_type: Literal[EventType.EXECUTION_REQUEST]
-    market_orders: list[SingleOrderRequest] = Field(
+    market_orders: list[OrderRequest] = Field(
         ..., description="List of market orders in the order request"
     )

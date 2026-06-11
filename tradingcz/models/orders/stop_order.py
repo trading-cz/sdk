@@ -2,28 +2,18 @@
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.models.enums.order import OrderClass
+from tradingcz.models.orders.order import OrderRequest
 
 
-class StopOrderRequest(BaseModel):
+class StopOrderRequest(OrderRequest):
     """Model for Stop Order request"""
 
     # Non-optional fields for stop order
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
-    qty: float | None = Field(default=None)
-    notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
-    time_in_force: TimeInForce = Field(
-        ..., description="Lifecycle of the order: day,  gtc, etc."
-    )
     order_class: OrderClass | None = Field(default=OrderClass.SIMPLE)
-    stop_price: float | None = Field(
-        ..., description="Stop price for buying or selling"
-    )
-
-    group_id: str | None = Field(default=None, index=True)
+    stop_price: float | None = Field(..., description="Stop price for buying or selling")
 
     @model_validator(mode="after")
     def check_qty_or_notional(self) -> Self:

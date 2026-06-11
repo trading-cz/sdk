@@ -2,25 +2,17 @@
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.models.enums.order import OrderClass
+from tradingcz.models.orders.order import OrderRequest
 
 
-class TrailingStopOrderRequest(BaseModel):
+class TrailingStopOrderRequest(OrderRequest):
     """Model for Trailing Stop Order request"""
 
     # Non-optional fields for trailing stop order
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
-    qty: float | None = Field(default=None)
-    notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
-    time_in_force: TimeInForce = Field(
-        ..., description="Lifecycle of the order: day,  gtc, etc."
-    )
     order_class: OrderClass | None = Field(default=OrderClass.SIMPLE)
-
-    group_id: str | None = Field(default=None, index=True)
 
     # Trailing stop fields
     trail_price: float | None = Field(
@@ -49,8 +41,6 @@ class TrailingStopOrderRequest(BaseModel):
         """Validate that trailing stop fields are provided correctly"""
 
         if (self.trail_price is not None) and (self.trail_percent is not None):
-            raise ValueError(
-                "Only one of 'trail_price' or 'trail_percent' can be provided"
-            )
+            raise ValueError("Only one of 'trail_price' or 'trail_percent' can be provided")
 
         return self

@@ -3,31 +3,19 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.models.enums.order import OrderClass
+from tradingcz.models.orders.order import OrderRequest
 
 
-class BracketOrderRequest(BaseModel):
-    """Model for Bracket Order request. Also called OTOCO: OTO wehre exit side is OCO"""
+class BracketOrderRequest(OrderRequest):
+    """Model for Bracket Order request. Also called OTOCO: OTO where exit side is OCO"""
 
     # Basic fields for entry side - limit is optional
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
-    qty: float | None = Field(default=None)
-    notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
-    time_in_force: TimeInForce = Field(
-        ..., description="Lifecycle of the order: day,  gtc, etc."
-    )
-    order_class: OrderClass | None = Field(default=OrderClass.SIMPLE)
-    limit_price: float | None = Field(
-        default=None, description="Limit price for buying or selling"
-    )
-    stop_price: float | None = Field(
-        default=None, description="Stop price for buying or selling"
-    )
-
-    group_id: str | None = Field(default=None, index=True)
+    order_class: OrderClass | None = Field(default=OrderClass.BRACKET)
+    limit_price: float | None = Field(default=None, description="Limit price for buying or selling")
+    stop_price: float | None = Field(default=None, description="Stop price for buying or selling")
 
     # Leg fields for exit side
     tp_limit_price: float | None = Field(
@@ -63,12 +51,8 @@ class BracketOrderRequest(BaseModel):
         """Validate that both legs for exit side are provided."""
 
         # TODO to be refined - validate legs and prices vs times
-        present_tp = sum(
-            [self.tp_limit_price is not None, self.tp_limit_time is not None]
-        )
-        present_sl = sum(
-            [self.sl_stop_price is not None, self.sl_limit_time is not None]
-        )
+        present_tp = sum([self.tp_limit_price is not None, self.tp_limit_time is not None])
+        present_sl = sum([self.sl_stop_price is not None, self.sl_limit_time is not None])
         if present_tp != 1 or present_sl != 1:
             raise ValueError(
                 "Bracket order requires 'tp_limit_price' or 'tp_limit_time' to be provided, "
@@ -76,8 +60,3 @@ class BracketOrderRequest(BaseModel):
             )
 
         return self
-
-    # Alpaca Error (oto can only have on exit leg):
-    # raise APIError(error, http_error) alpaca.common.exceptions.APIError: {
-    # "code": 40010001,
-    # "message": "oto orders require either take_profit or stop_loss",}

@@ -3,42 +3,28 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.models.enums.order import OrderClass
+from tradingcz.models.orders.order import OrderRequest
 
 
-class OcoOrderRequest(BaseModel):
+class OcoOrderRequest(OrderRequest):
     """Model for OCO Order request. One Cancels Other: create two legs of
     the same side order, take profit and stop loss leg. Both are mandatory.
     Take profit leg can be replaced with timed leg - order will be closed at given time,
     if stop loss leg is not triggered before."""
 
     # Basic fields for OCO order
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
-    qty: float | None = Field(default=None)
-    notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
-    time_in_force: TimeInForce = Field(
-        ..., description="Lifecycle of the order: day,  gtc, etc."
-    )
-    order_class: OrderClass = Field(default=OrderClass.SIMPLE)
-    limit_price: float | None = Field(
-        default=None, description="Limit price for buying or selling"
-    )
-    stop_price: float | None = Field(
-        default=None, description="Stop price for buying or selling"
-    )
-
-    group_id: str | None = Field(default=None, index=True)
+    order_class: OrderClass = Field(default=OrderClass.OCO)
+    limit_price: float | None = Field(default=None, description="Limit price for buying or selling")
+    stop_price: float | None = Field(default=None, description="Stop price for buying or selling")
 
     # Leg fields
     tp_limit_price: float | None = Field(
         default=None, description="Limit price for take profit order"
     )
-    sl_stop_price: float = Field(
-        ..., description="Stop price (trigger) for stop loss order"
-    )
+    sl_stop_price: float = Field(..., description="Stop price (trigger) for stop loss order")
     sl_limit_price: float | None = Field(
         default=None, description="Limit price for stop loss order"
     )
@@ -64,8 +50,6 @@ class OcoOrderRequest(BaseModel):
 
         present = sum([self.tp_limit_price is not None, self.tp_limit_time is not None])
         if present != 1:
-            raise ValueError(
-                "Exactly one of 'tp_limit_price' or 'tp_limit_time' must be provided"
-            )
+            raise ValueError("Exactly one of 'tp_limit_price' or 'tp_limit_time' must be provided")
 
         return self
