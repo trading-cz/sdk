@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from tradingcz.core.transport.kafka import KafkaChannel
 from tradingcz.framework.helpers import FireAndForget
 from tradingcz.models.enums.event import EventType
-from tradingcz.models.headers import Header, build_event_key
+from tradingcz.models.headers import Header, KafkaKey
 from tradingcz.models.health import ServiceLifecycle
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class HealthPublisher:
             service_id=self._service_id,
             event=event,  # type: ignore[arg-type]
         )
-        key = build_event_key(EventType.SERVICE_LIFECYCLE, self._service_id, event)
+        key = str(KafkaKey.for_event(EventType.SERVICE_LIFECYCLE, self._service_id, event))
         try:
             await self._faf.send(
                 lifecycle,

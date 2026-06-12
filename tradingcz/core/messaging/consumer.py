@@ -16,15 +16,19 @@ Usage::
 """
 
 import logging
+import os
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 from pydantic import BaseModel
 
+from tradingcz.core.serialization import JsonSerializer
 from tradingcz.core.serialization.protocol import Deserializer, Serializer
 from tradingcz.core.transport.kafka import KafkaChannel
 from tradingcz.core.transport.message import KafkaMessage
 from tradingcz.models.enums.event import EventType
-from tradingcz.models.headers import Header, make_data_headers
+from tradingcz.models.headers import DataHeaders, Header
+from tradingcz.models.market import MarketItem, market_item_message_type
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +56,10 @@ def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
                 f"'{snake}' is not a known message_type. "
                 f"Supply an explicit 'headers_fn' to TypedProducer."
             ) from None
-        return make_data_headers(
+        return DataHeaders(
             event_type=mt,
             source_app=source_app,
-        )
+        ).to_kafka()
 
     return _fn
 
@@ -246,3 +250,89 @@ class TypedParser:
                 )
                 continue
             yield msg_type, parsed, msg
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Pre-configured producer factories
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def make_market_headers(
+    *,
+    source_app: str,
+    source: str | None = None,
+    broker: str | None = None,
+) -> Callable[[Any], dict[str, str]]:
+    """Return a ``headers_fn`` for ``TypedProducer`` on market data channels.
+
+    The returned callable auto-infers ``event_type`` from the item's
+    class name (via :func:`market_item_message_type`) and fills in
+    ``source_app``, ``source``, ``broker``, and ``symbol``.
+
+    Args:
+        source_app: Service identifier (e.g. ``"ingestion"``, ``"executor"``).
+            Becomes the ``Header.SOURCE_APP`` value in every message.
+        source: Optional source label.  Defaults to *source_app*.
+            Becomes the ``Header.SOURCE`` value.
+        broker: Broker identifier (e.g. ``"alpaca"``).  Defaults to
+            the ``SDK_BROKER`` environment variable, or ``""``.
+
+    Returns:
+        A callable ``(item) → dict[str, str]`` suitable for
+        ``TypedProducer(headers_fn=...)``.
+    """
+    _source = source or source_app
+    _broker = broker or os.environ.get("SDK_BROKER", "")
+
+    def _headers(item: Any) -> dict[str, str]:
+        msg_type = market_item_message_type(item)
+        return DataHeaders(
+            event_type=msg_type,
+            source_app=source_app,
+            source=_source,
+            broker=_broker,
+            symbol=item.symbol,
+        ).to_kafka()
+
+    return _headers
+
+
+def stream_producer(
+    channel: KafkaChannel,
+    *,
+    source_app: str,
+    broker: str | None = None,
+) -> TypedProducer[MarketItem]:
+    """Create a ``TypedProducer`` pre-configured for market data streaming.
+
+    One-liner that bundles the common stream-publishing pattern.
+
+    **Long-lived** (stream handler keeps producer for its lifetime)::
+
+        producer = stream_producer(channel, source_app="ingestion", broker="alpaca")
+        for item in items:
+            await producer.send(item)   # JSON, per-symbol key, auto-headers
+        await producer.flush()          # guarantee delivery before shutdown
+
+    **Scoped** (auto-flush on exit)::
+
+        async with stream_producer(channel, source_app="ingestion") as producer:
+            for item in items:
+                await producer.send(item)
+        # flush() called automatically
+
+    Use this for high-throughput market data channels (bars, trades,
+    quotes, snapshots).  For control-plane event publishing, use
+    ``ServiceApp.publish()`` instead — stateless, no cleanup needed.
+
+    Performance tuning goes through environment variables — no code
+    changes needed::
+
+        KAFKA_PRODUCER_OVERRIDES='{"linger.ms": "5", "compression.type": "snappy"}'
+    """
+    return TypedProducer(
+        channel=channel,
+        serializer=JsonSerializer(),
+        key_fn=lambda item: item.symbol,  # type: ignore[union-attr]
+        headers_fn=make_market_headers(source_app=source_app, broker=broker),
+    )

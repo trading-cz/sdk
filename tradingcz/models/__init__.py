@@ -13,7 +13,10 @@ from tradingcz.models.events import (
     ServiceRequest,
 )
 from tradingcz.models.headers import (
+    DataHeaders,
+    EventHeaders,
     Header,
+    KafkaKey,
     build_event_key,
     make_data_headers,
     make_event_headers,
@@ -45,6 +48,9 @@ __all__ = [
     # Wire format
     "Header",
     "EventType",
+    "EventHeaders",
+    "DataHeaders",
+    "KafkaKey",
     "build_event_key",
     "make_data_headers",
     "make_event_headers",

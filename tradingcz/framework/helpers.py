@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from tradingcz.core.transport.kafka import KafkaChannel
 from tradingcz.models.enums.event import EventType
-from tradingcz.models.headers import Header, build_event_key, make_event_headers
+from tradingcz.models.headers import EventHeaders, Header, KafkaKey
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +50,11 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
             extra_headers: Additional headers merged into standard set.
         """
         self._seq += 1
-        headers = make_event_headers(
+        headers = EventHeaders(
             event_type=message_type,
             source_app=self._service_id,
             **(extra_headers or {}),
-        )
+        ).to_kafka()
         payload = message.model_dump_json(exclude_none=True).encode()
         await self._channel.send(payload, key=key, headers=headers)
 
@@ -163,12 +163,12 @@ class RequestReply:
         self._seq += 1
 
         payload = req.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
-        headers = make_event_headers(
+        headers = EventHeaders(
             event_type=mt,
             source_app=self._service_id,
             request_id=request_id,
-        )
-        key = build_event_key(mt, self._service_id, request_id)
+        ).to_kafka()
+        key = str(KafkaKey.for_event(mt, self._service_id, request_id))
         # Send + flush — request delivery must be guaranteed before awaiting response
         await self._channel.send(payload, key=key, headers=headers)
         await self._channel.flush()

@@ -2,7 +2,10 @@
 
 from tradingcz.models.enums.event import EventType
 from tradingcz.models.headers import (
+    DataHeaders,
+    EventHeaders,
     Header,
+    KafkaKey,
     build_event_key,
     make_data_headers,
     make_event_headers,
@@ -131,3 +134,128 @@ class TestParseMessage:
             raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# New Pydantic model tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestEventHeadersModel:
+    """Tests for EventHeaders Pydantic model."""
+
+    def test_minimal(self) -> None:
+        h = EventHeaders(event_type=EventType.DATA_REQUEST)
+        d = h.to_kafka()
+        assert d["event_type"] == "data_request"
+        assert d["source_app"] == ""
+        assert "sequence" not in d
+
+    def test_full(self) -> None:
+        h = EventHeaders(
+            event_type=EventType.DATA_REQUEST,
+            source_app="ingestion",
+            request_id="abc-123",
+        )
+        d = h.to_kafka()
+        assert d["event_type"] == "data_request"
+        assert d["source_app"] == "ingestion"
+        assert d["request_id"] == "abc-123"
+        assert "sequence" not in d
+
+    def test_from_kafka_roundtrip(self) -> None:
+        original = EventHeaders(
+            event_type=EventType.DATA_READY,
+            source_app="ingestion",
+            request_id="req-1",
+        )
+        parsed = EventHeaders.from_kafka(original.to_kafka())
+        assert parsed.event_type == EventType.DATA_READY
+        assert parsed.source_app == "ingestion"
+        assert parsed.request_id == "req-1"
+
+    def test_from_kafka_preserves_unknown(self) -> None:
+        parsed = EventHeaders.from_kafka({
+            "event_type": "data_request",
+            "source_app": "test",
+            "custom_header": "should-be-preserved",
+        })
+        assert parsed.event_type == EventType.DATA_REQUEST
+        # With extra="allow", unknown fields are accessible via model_extra
+        assert parsed.model_extra == {"custom_header": "should-be-preserved"}
+
+    def test_type_safety_rejects_invalid_enum(self) -> None:
+        import pytest
+        with pytest.raises(Exception):  # Pydantic validation error
+            EventHeaders(event_type="not_a_valid_type")  # type: ignore[arg-type]
+
+
+class TestDataHeadersModel:
+    """Tests for DataHeaders Pydantic model."""
+
+    def test_minimal(self) -> None:
+        h = DataHeaders(event_type=EventType.BAR)
+        d = h.to_kafka()
+        assert d["event_type"] == "bar"
+        assert d["sequence"] == "0"
+
+    def test_full(self) -> None:
+        h = DataHeaders(
+            event_type=EventType.BAR,
+            source_app="ingestion",
+            broker="alpaca",
+            symbol="AAPL",
+            sequence=42,
+        )
+        d = h.to_kafka()
+        assert d["event_type"] == "bar"
+        assert d["source_app"] == "ingestion"
+        assert d["broker"] == "alpaca"
+        assert d["symbol"] == "AAPL"
+        assert d["sequence"] == "42"
+
+    def test_from_kafka_roundtrip(self) -> None:
+        original = DataHeaders(
+            event_type=EventType.TRADE,
+            source_app="ingestion",
+            broker="alpaca",
+            symbol="MSFT",
+            sequence=7,
+        )
+        parsed = DataHeaders.from_kafka(original.to_kafka())
+        assert parsed.event_type == EventType.TRADE
+        assert parsed.symbol == "MSFT"
+        assert parsed.sequence == 7
+
+
+class TestKafkaKeyModel:
+    """Tests for KafkaKey Pydantic model."""
+
+    def test_for_event_basic(self) -> None:
+        key = KafkaKey.for_event(EventType.DATA_REQUEST, "test-app", "abc")
+        assert str(key) == "data_request:test-app:abc"
+        assert key.value == "data_request:test-app:abc"
+
+    def test_for_event_no_extra(self) -> None:
+        key = KafkaKey.for_event(EventType.DATA_READY, "ingestion")
+        assert str(key) == "data_ready:ingestion"
+
+    def test_for_symbol(self) -> None:
+        key = KafkaKey.for_symbol("AAPL")
+        assert str(key) == "AAPL"
+
+    def test_custom_value(self) -> None:
+        key = KafkaKey(value="custom-key")
+        assert str(key) == "custom-key"
+
+    def test_frozen_immutable(self) -> None:
+        import pytest
+        key = KafkaKey(value="test")
+        with pytest.raises(Exception):
+            key.value = "changed"  # type: ignore[misc]
+
+    def test_equality(self) -> None:
+        a = KafkaKey.for_event(EventType.DATA_REQUEST, "app", "id")
+        b = KafkaKey(value="data_request:app:id")
+        assert a == b
+        assert a.value == b.value
