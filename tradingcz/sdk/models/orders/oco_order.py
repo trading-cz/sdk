@@ -3,19 +3,26 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from tradingcz.sdk.models.enums.order import OrderClass
-from tradingcz.sdk.models.orders.order import OrderRequest
+from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
 
 
-class OcoOrderRequest(OrderRequest):
+class OcoOrderRequest(BaseModel):
     """Model for OCO Order request. One Cancels Other: create two legs of
     the same side order, take profit and stop loss leg. Both are mandatory.
     Take profit leg can be replaced with timed leg - order will be closed at given time,
     if stop loss leg is not triggered before."""
 
     # Basic fields for OCO order
+    symbol: str = Field(..., description="Ticker symbol", min_length=1)
+    qty: float | None = Field(default=None)
+    notional: float | None = Field(default=None)
+    side: OrderSide = Field(..., description="Order side, sell or buy")
+    time_in_force: TimeInForce = Field(..., description="Lifecycle of the order: day,  gtc, etc.")
+    group_id: str | None = Field(
+        default=None, index=True, description="Not sure what's this for. In case?"
+    )
     order_class: OrderClass = Field(default=OrderClass.OCO)
     limit_price: float | None = Field(default=None, description="Limit price for buying or selling")
     stop_price: float | None = Field(default=None, description="Stop price for buying or selling")

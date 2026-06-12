@@ -1,5 +1,13 @@
 from enum import StrEnum
 
+from tradingcz.sdk.models.orders.bracket_order import BracketOrderRequest
+from tradingcz.sdk.models.orders.limit_order import LimitOrderRequest
+from tradingcz.sdk.models.orders.market_order import MarketOrderRequest
+from tradingcz.sdk.models.orders.oco_order import OcoOrderRequest
+from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
+from tradingcz.sdk.models.orders.stop_order import StopOrderRequest
+from tradingcz.sdk.models.orders.trailing_stop_order import TrailingStopOrderRequest
+
 
 class EventStatus(StrEnum):
     """Status of the event processing."""
@@ -70,3 +78,14 @@ class ServiceRequestType(StrEnum):
     REQUEST_CURRENT_POSITIONS = "request_current_positions"
     REQUEST_ORDERS_FOR_EVENT = "request_orders_for_event"
     REQUEST_CASH_BALANCE = "request_cash_balance"
+
+
+type OrderRequest = (
+    BracketOrderRequest
+    | LimitOrderRequest
+    | MarketOrderRequest
+    | OcoOrderRequest
+    | OtoOrderRequest
+    | StopOrderRequest
+    | TrailingStopOrderRequest
+)

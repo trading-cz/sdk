@@ -2,16 +2,23 @@
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from tradingcz.sdk.models.enums.order import OrderClass
-from tradingcz.sdk.models.orders.order import OrderRequest
+from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
 
 
-class LimitOrderRequest(OrderRequest):
+class LimitOrderRequest(BaseModel):
     """Model for Limit Order request"""
 
     # Non-optional fields for limit order
+    symbol: str = Field(..., description="Ticker symbol", min_length=1)
+    qty: float | None = Field(default=None)
+    notional: float | None = Field(default=None)
+    side: OrderSide = Field(..., description="Order side, sell or buy")
+    time_in_force: TimeInForce = Field(..., description="Lifecycle of the order: day,  gtc, etc.")
+    group_id: str | None = Field(
+        default=None, index=True, description="Not sure what's this for. In case?"
+    )
     order_class: OrderClass | None = Field(default=OrderClass.SIMPLE)
     limit_price: float | None = Field(..., description="Limit price for buying or selling")
 

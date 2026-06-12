@@ -2,9 +2,8 @@
 
 from pydantic import Field
 
-from tradingcz.sdk.models.enums.event import EventType, StrategyType
+from tradingcz.sdk.models.enums.event import EventType, OrderRequest, StrategyType
 from tradingcz.sdk.models.events.base_event import BaseEvent
-from tradingcz.sdk.models.orders.order import OrderRequest
 
 
 class ExecutionRequestEvent(BaseEvent):
@@ -19,6 +18,6 @@ class ExecutionRequestEvent(BaseEvent):
         default=EventType.EXECUTION_REQUEST,
         description="Type of the event: execution_request or trading_signal",
     )
-    market_orders: list[OrderRequest] = Field(
+    orders: list[OrderRequest] = Field(
         ..., description="List of market orders in the order request"
     )
