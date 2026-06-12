@@ -33,8 +33,7 @@ from tradingcz.sdk.models.market import (
     market_item_message_type,
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
-# TODO: OrderRequest base class not yet created on this branch
-# from tradingcz.sdk.models.orders.order import OrderRequest
+from tradingcz.sdk.models.enums.event import OrderRequest
 from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
 from tradingcz.sdk.models.orders.bracket_order import BracketOrderRequest
 from tradingcz.sdk.models.orders.market_order import MarketOrderRequest
@@ -75,7 +74,7 @@ __all__ = [
     "ServiceRequest",
     # Orders & Signals
     "ExecutionRequestEvent",
-    # "OrderRequest",  # TODO: base class not yet created
+    "OrderRequest",
     "OtoOrderRequest",
     "BracketOrderRequest",
     "MarketOrderRequest",
