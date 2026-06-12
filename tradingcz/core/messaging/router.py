@@ -10,7 +10,7 @@ Usage::
     router.on(
         EventType.DATA_REQUEST, DataRequest,
         handler=lambda req, raw: service.on_request(req),
-        filter=lambda req, _: req.broker == "alpaca",
+        filter_fn=lambda req, _: req.broker == "alpaca",
         spawn_task=True,  # historical fetch is slow
     )
 
@@ -67,9 +67,9 @@ class EventRouter:
         model_class: type[T],
         handler: Callable[[T, KafkaMessage], Awaitable[None]],
         *,
-        filter: (
+        filter_fn: (
             Callable[[T, KafkaMessage], bool] | None
-        ) = None,  # noqa: A002  # pylint: disable=redefined-builtin
+        ) = None,
         spawn_task: bool = False,
     ) -> EventRouter:
         """Register a typed handler for *msg_type*.  Chainable.
@@ -78,7 +78,7 @@ class EventRouter:
             msg_type: The ``EventType`` this handler subscribes to.
             model_class: Pydantic model used to parse matching messages.
             handler: Async callable invoked with ``(model, raw_message)``.
-            filter: Optional predicate; handler is called only when it
+            filter_fn: Optional predicate; handler is called only when it
                 returns ``True``.  Receives the parsed model and raw message.
             spawn_task: When ``False`` (default) the handler is ``await``ed
                 inline — next message waits until the handler completes.
@@ -95,7 +95,7 @@ class EventRouter:
                 msg_type=str(msg_type),
                 model_class=model_class,
                 handler=handler,
-                filter_fn=filter,
+                filter_fn=filter_fn,
                 spawn_task=spawn_task,
             )
         )
