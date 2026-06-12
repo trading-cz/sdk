@@ -315,9 +315,12 @@ class KafkaTransport:
             try:
                 future.result()
                 logger.info("Created topic '%s'", topic)
-            except Exception:
-                logger.exception("Failed to create topic '%s'", topic)
-                raise
+            except Exception as exc:
+                if "TOPIC_ALREADY_EXISTS" in str(exc):
+                    logger.debug("Topic '%s' already exists (race — created by another client)", topic)
+                else:
+                    logger.exception("Failed to create topic '%s'", topic)
+                    raise
 
         self._topics_created.add(name)
 
