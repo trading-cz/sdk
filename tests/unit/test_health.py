@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tradingcz.framework.health import HealthPublisher
-from tradingcz.models.health import ServiceLifecycle
+from tradingcz.sdk.framework.health import HealthPublisher
+from tradingcz.sdk.models.health import ServiceLifecycle
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """Unit tests for tradingcz.transport.hash (Murmur2, partition_for)."""
 
-from tradingcz.core.transport.hash_utils import murmur2, partition_for
+from tradingcz.sdk.core.transport.hash_utils import murmur2, partition_for
 
 
 class TestMurmur2:

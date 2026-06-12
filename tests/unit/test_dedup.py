@@ -1,6 +1,6 @@
 """Unit tests for tradingcz.transport._dedup.DedupFilter."""
 
-from tradingcz.core.transport.dedup import DedupFilter
+from tradingcz.sdk.core.transport.dedup import DedupFilter
 
 
 class TestDedupFilter:

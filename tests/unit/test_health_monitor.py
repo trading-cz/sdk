@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tradingcz.framework.health import HealthMonitor
-from tradingcz.models.health import ServiceLifecycle
+from tradingcz.sdk.framework.health import HealthMonitor
+from tradingcz.sdk.models.health import ServiceLifecycle
 
 
 class TestHealthMonitor:

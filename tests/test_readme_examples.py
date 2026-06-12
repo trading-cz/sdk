@@ -10,12 +10,12 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.fake_kafka import FakeKafkaTransport
-from tradingcz.common.config import KafkaSettings
-from tradingcz.framework import ServiceApp, TradingApp
-from tradingcz.models.enums.event import EventType, StrategyType
-from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
-from tradingcz.models.events.execution_request_event import ExecutionRequestEvent
-from tradingcz.models.orders.oto_order import OtoOrderRequest
+from tradingcz.sdk.common.config import KafkaSettings
+from tradingcz.sdk.framework import ServiceApp, TradingApp
+from tradingcz.sdk.models.enums.event import EventType, StrategyType
+from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
+from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Use FakeKafkaTransport to avoid needing a real Kafka broker
@@ -80,7 +80,7 @@ class TestReadmeHistoricalData:
 
     def test_data_request_model(self) -> None:
         """Verify the DataRequest model used in README examples."""
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
 
         req = DataRequest(
             type="historic",
@@ -116,7 +116,7 @@ class TestReadmeServiceApp:
     ) -> None:
         """The README example: start a ServiceApp, send a message, shutdown."""
         # Inject FakeKafkaTransport so we don't need a real broker
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 
@@ -159,7 +159,7 @@ class TestReadmeServiceApp:
         self, fake_settings: KafkaSettings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify TradingApp starts/stops cleanly with FakeKafkaTransport."""
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 
@@ -187,7 +187,7 @@ class TestReadmeServiceApp:
         self, fake_settings: KafkaSettings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify feature flags work as described in README."""
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 

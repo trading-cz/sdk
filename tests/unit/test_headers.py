@@ -1,7 +1,7 @@
 """Unit tests for tradingcz.models.headers and tradingcz.models.dispatch."""
 
-from tradingcz.models.enums.event import EventType
-from tradingcz.models.headers import (
+from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.headers import (
     DataHeaders,
     EventHeaders,
     Header,
@@ -11,7 +11,7 @@ from tradingcz.models.headers import (
     make_event_headers,
     make_headers,  # backward-compat alias
 )
-from tradingcz.models.dispatch import model_for, parse_message
+from tradingcz.sdk.models.dispatch import model_for, parse_message
 
 
 class TestHeaderEnum:
@@ -106,11 +106,11 @@ class TestModelFor:
     """Tests for model_for() lookup."""
 
     def test_known_type(self) -> None:
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
         assert model_for(EventType.DATA_REQUEST) is DataRequest
 
     def test_str_accepted(self) -> None:
-        from tradingcz.models.events import DataReady
+        from tradingcz.sdk.models.events import DataReady
         assert model_for("data_ready") is DataReady
 
     def test_unknown_raises(self) -> None:
@@ -122,7 +122,7 @@ class TestParseMessage:
     """Tests for parse_message() dispatch."""
 
     def test_parse_data_request(self) -> None:
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
         payload = b'{"request_id":"abc","symbols":["AAPL"]}'
         result = parse_message(EventType.DATA_REQUEST, payload)
         assert isinstance(result, DataRequest)

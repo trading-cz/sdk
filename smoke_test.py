@@ -30,15 +30,15 @@ from uuid import uuid4
 from confluent_kafka.admin import AdminClient
 from pydantic import BaseModel
 
-from tradingcz.common.config import KafkaSettings
-from tradingcz.core.messaging import TypedConsumer, TypedParser, TypedProducer
-from tradingcz.core.serialization import JsonCodec
-from tradingcz.core.topics import TopicRegistry
-from tradingcz.core.transport import KafkaMessage, KafkaTransport
-from tradingcz.core.transport.dedup import DedupFilter
-from tradingcz.core.transport.hash_utils import partition_for
-from tradingcz.framework.helpers import FireAndForget, RequestReply
-from tradingcz.models.headers import Header
+from tradingcz.sdk.common.config import KafkaSettings
+from tradingcz.sdk.core.messaging import TypedConsumer, TypedParser, TypedProducer
+from tradingcz.sdk.core.serialization import JsonCodec
+from tradingcz.sdk.core.topics import TopicRegistry
+from tradingcz.sdk.core.transport import KafkaMessage, KafkaTransport
+from tradingcz.sdk.core.transport.dedup import DedupFilter
+from tradingcz.sdk.core.transport.hash_utils import partition_for
+from tradingcz.sdk.framework.helpers import FireAndForget, RequestReply
+from tradingcz.sdk.models.headers import Header
 
 # ── Config ──────────────────────────────────────────────────────────────────
 BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "46.224.59.47:30002")
@@ -349,10 +349,10 @@ async def test_5_signal_publisher() -> None:
         )
         faf = FireAndForget(channel=channel, service_id="smoke_test")
 
-        from tradingcz.models.events.execution_request_event import ExecutionRequestEvent
-        from tradingcz.models.enums.event import EventType, StrategyType
-        from tradingcz.models.enums.order import OrderClass, OrderSide, TimeInForce
-        from tradingcz.models.orders.oto_order import OtoOrderRequest
+        from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
+        from tradingcz.sdk.models.enums.event import EventType, StrategyType
+        from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+        from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
 
         event = ExecutionRequestEvent(
             event_type=EventType.TRADING_SIGNAL,

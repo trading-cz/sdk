@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.framework.helpers import (
+from tradingcz.sdk.framework.helpers import (
     FireAndForget,
     RequestReply,
     _infer_message_type,
 )
-from tradingcz.models.enums.event import EventType
-from tradingcz.models.headers import Header
+from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.headers import Header
 
 # ── Test models ─────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ def mock_channel() -> AsyncMock:
 
 class TestInferEventType:
     def test_data_request(self) -> None:
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
 
         req = DataRequest(
             type="historic", asset="stock", broker="alpaca", symbols=["AAPL"]
@@ -64,7 +64,7 @@ class TestInferEventType:
         assert _infer_message_type(req) == EventType.DATA_REQUEST
 
     def test_trading_signal(self) -> None:
-        from tradingcz.models.events import ServiceRequest
+        from tradingcz.sdk.models.events import ServiceRequest
 
         s = ServiceRequest(service="get_positions")
         assert _infer_message_type(s) == EventType.SERVICE_REQUEST

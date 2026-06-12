@@ -1,13 +1,21 @@
-"""Top-level `tradingcz` namespace for the trading SDK.
+"""Top-level ``tradingcz`` namespace.
 
-Public SDK API (stable):
-    - tradingcz.core.transport      — KafkaChannel, KafkaTransport, TypedProducer, TypedConsumer
-    - tradingcz.core.serialization  — Serializer, Deserializer, Codec, JsonCodec
-    - tradingcz.common              — KafkaSettings, LoggingSettings, ConfigurationError, SdkError, etc.
-    - tradingcz.models.market       — Bar, Quote, Trade, etc.
-    - tradingcz.models.events       — TradingSignal, etc.
-    - tradingcz.indicators          — ATR, SMA, etc.
-    - tradingcz.framework           — TradingApp, ServiceApp (business layer)
+Each sub-package lives in its own distribution (namespace package):
+
+    tradingcz.sdk       — SDK library (shared models, transport, framework)
+    tradingcz.ingestion — Market data ingestion service
+    tradingcz.strategy  — Trading strategies
+    tradingcz.executor  — Order execution engine
+    tradingcz.risk      — Risk management
+
+Public SDK API (``tradingcz.sdk``):
+    - tradingcz.sdk.core.transport       — KafkaChannel, KafkaTransport, TypedProducer, TypedConsumer
+    - tradingcz.sdk.core.serialization   — Serializer, Deserializer, Codec, JsonCodec
+    - tradingcz.sdk.common               — KafkaSettings, LoggingSettings, ConfigurationError
+    - tradingcz.sdk.models.market        — Bar, Quote, Trade, etc.
+    - tradingcz.sdk.models.events        — TradingSignal, DataRequest, etc.
+    - tradingcz.sdk.indicators           — ATR, SMA, etc.
+    - tradingcz.sdk.framework            — TradingApp, ServiceApp (business layer)
 """
 
 from pathlib import Path

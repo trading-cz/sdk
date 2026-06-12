@@ -1,6 +1,6 @@
 """Unit tests for OptionSnapshot model."""
 
-from tradingcz.models.market import OptionSnapshot, Quote, Trade
+from tradingcz.sdk.models.market import OptionSnapshot, Quote, Trade
 
 
 def test_option_snapshot_minimal() -> None:
