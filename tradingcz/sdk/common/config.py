@@ -22,9 +22,10 @@ class AlpacaSettings(BaseSettings):
     """Alpaca Markets API credentials — shared by ingestion, executor, etc.
 
     Environment variables:
-        ``ALPACA_API_KEY``    — Alpaca API key ID (required)
-        ``ALPACA_SECRET_KEY`` — Alpaca API secret key (required)
-        ``ALPACA_FEED``       — Data feed tier: ``"iex"`` (free) or ``"sip"`` (paid)
+        ``ALPACA_API_KEY``       — Alpaca API key ID (required)
+        ``ALPACA_SECRET_KEY``    — Alpaca API secret key (required)
+        ``ALPACA_DATA_API_URL``  — Override Data API base URL (for simulator)
+        ``ALPACA_FEED``          — Data feed tier: ``"iex"`` (free) or ``"sip"`` (paid)
     """
 
     model_config = SettingsConfigDict(env_prefix="ALPACA_", extra="ignore")
@@ -32,6 +33,10 @@ class AlpacaSettings(BaseSettings):
     api_key: str = Field("", description="Alpaca API key ID (env: ALPACA_API_KEY)")
     secret_key: str = Field(
         "", description="Alpaca API secret key (env: ALPACA_SECRET_KEY)"
+    )
+    data_api_url: str = Field(
+        "", description="Override Data API base URL (env: ALPACA_DATA_API_URL). "
+        "Leave empty for production. Set to http://localhost:8081 for simulator."
     )
     feed: Literal["sip", "iex"] = Field(
         "iex", description="Data feed tier: sip (paid) or iex (free)"
