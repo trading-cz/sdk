@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tradingcz.framework.health import HealthPublisher
-from tradingcz.models.health import ServiceLifecycle
+from tradingcz.sdk.framework.health import HealthPublisher
+from tradingcz.sdk.models.health import ServiceLifecycle
 
 
 @pytest.fixture
@@ -111,8 +111,11 @@ class TestHealthPublisher:
         assert call_args.kwargs["message_type"] == "service_lifecycle"
         assert call_args.kwargs["key"] == "service_lifecycle:test-service:up"
 
-        extra = call_args.kwargs.get("extra_headers", {})
-        assert extra.get("lifecycle_event") == "up"
+        # LIFECYCLE_EVENT header removed — event is in ServiceLifecycle payload
+        assert (
+            "extra_headers" not in call_args.kwargs
+            or call_args.kwargs.get("extra_headers") is None
+        )
 
         await hp.close()
 

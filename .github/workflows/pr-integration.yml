@@ -1,0 +1,32 @@
+name: PR Integration Test
+
+# ── Triggered by /integration-test comment or run-integration label ────────
+# Runs cross-service protocol tests — needs ingestion + strategy + Alpaca API.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  context:
+    if: |
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration-test')) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-integration')
+    uses: trading-cz/github-action/.github/workflows/pr-context.yml@main
+
+  test:
+    needs: context
+    uses: trading-cz/testing/.github/workflows/test-integration.yml@main
+    with:
+      app_repo: ${{ needs.context.outputs.repo }}
+      app_branch: ${{ needs.context.outputs.branch }}
+      pr_number: ${{ needs.context.outputs.pr_number }}
+    secrets:
+      alpaca_api_key: ${{ secrets.ALPACA_API_KEY }}
+      alpaca_secret_key: ${{ secrets.ALPACA_SECRET_KEY }}

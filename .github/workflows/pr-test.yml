@@ -1,20 +1,66 @@
-name: PR Test
+name: PR Test (All Tiers)
+
+# ── Triggered by /test comment or run-tests label ──────────────────────────
+# Runs all 3 tiers: smoke → regression → integration
 
 on:
   issue_comment:
     types: [created]
+  pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  test:
-    uses: trading-cz/github-action/.github/workflows/pr-test.yml@main
+  context:
+    if: (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test')) || (github.event_name == 'pull_request' && github.event.label.name == 'run-tests')
+    uses: trading-cz/github-action/.github/workflows/pr-context.yml@main
+
+  smoke:
+    needs: context
+    uses: trading-cz/testing/.github/workflows/test-smoke.yml@main
     with:
-      app_type: library
-      app_name: sdk
-      regression_partner: simple-strategy
-      regression_env: |
-        STRATEGY_ID=atr3_open_stop
-        SYMBOLS=["SPY"]
+      app_repo: ${{ needs.context.outputs.repo }}
+      app_branch: ${{ needs.context.outputs.branch }}
+      pr_number: ${{ needs.context.outputs.pr_number }}
+
+  regression:
+    needs: [context, smoke]
+    uses: trading-cz/testing/.github/workflows/test-regression.yml@main
+    with:
+      app_repo: ${{ needs.context.outputs.repo }}
+      app_branch: ${{ needs.context.outputs.branch }}
+      pr_number: ${{ needs.context.outputs.pr_number }}
+    secrets:
+      alpaca_api_key: ${{ secrets.ALPACA_API_KEY }}
+      alpaca_secret_key: ${{ secrets.ALPACA_SECRET_KEY }}
+
+  check-secrets:
+    needs: regression
+    runs-on: ubuntu-latest
+    outputs:
+      has_alpaca: ${{ steps.check.outputs.has_alpaca }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.ALPACA_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "has_alpaca=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_alpaca=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  integration:
+    needs: [context, regression, check-secrets]
+    if: ${{ needs.check-secrets.outputs.has_alpaca == 'true' }}
+    uses: trading-cz/testing/.github/workflows/test-integration.yml@main
+    with:
+      app_repo: ${{ needs.context.outputs.repo }}
+      app_branch: ${{ needs.context.outputs.branch }}
+      pr_number: ${{ needs.context.outputs.pr_number }}
+    secrets:
+      alpaca_api_key: ${{ secrets.ALPACA_API_KEY }}
+      alpaca_secret_key: ${{ secrets.ALPACA_SECRET_KEY }}

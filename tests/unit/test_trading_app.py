@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from tests.fake_kafka import FakeKafkaTransport
-from tradingcz.framework.trading import TradingApp
+from tradingcz.sdk.framework.trading import TradingApp
 
 
 @pytest.fixture
@@ -17,8 +17,8 @@ def fake_transport() -> None:
     override the mock to track call order when needed.
     """
     with (
-        patch("tradingcz.framework.service.KafkaTransport", FakeKafkaTransport),
-        patch("tradingcz.framework.service.HealthPublisher") as mock_hp_cls,
+        patch("tradingcz.sdk.framework.service.KafkaTransport", FakeKafkaTransport),
+        patch("tradingcz.sdk.framework.service.HealthPublisher") as mock_hp_cls,
     ):
         mock_hp = MagicMock()
         mock_hp.start = AsyncMock()
@@ -112,7 +112,7 @@ class TestTradingAppLifecycle:
     ) -> None:
         """Health must close BEFORE transport (so 'down' event can be sent)."""
         # Override the HealthPublisher mock with one that tracks call order
-        with patch("tradingcz.framework.service.HealthPublisher") as mock_hp_cls:
+        with patch("tradingcz.sdk.framework.service.HealthPublisher") as mock_hp_cls:
             mock_hp = MagicMock()
             mock_hp.start = AsyncMock()
             mock_hp.close = AsyncMock()

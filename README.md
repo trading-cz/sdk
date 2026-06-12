@@ -133,6 +133,16 @@ pass on every PR.
 
 **Rule**: No SDK PR merges without green CI (pytest + mypy + ruff).
 
+## Cross-service testing
+
+Smoke, regression, and integration tests live in the centralized test harness:
+**`trading-cz/testing`**.
+
+- PRs trigger the 3-tier pipeline: smoke → regression → integration
+- Trigger: `/test` comment or `run-tests` label on the PR
+
+See the testing repo README for local setup.
+
 ## Development
 
 ```bash

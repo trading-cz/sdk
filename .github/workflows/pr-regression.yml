@@ -1,0 +1,29 @@
+name: PR Regression Test
+
+# ── Triggered by /regression-test comment or run-regression label ──────────
+# Runs strategy logic tests — needs the app running, harness drives Kafka.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  context:
+    if: |
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/regression-test')) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-regression')
+    uses: trading-cz/github-action/.github/workflows/pr-context.yml@main
+
+  test:
+    needs: context
+    uses: trading-cz/testing/.github/workflows/test-regression.yml@main
+    with:
+      app_repo: ${{ needs.context.outputs.repo }}
+      app_branch: ${{ needs.context.outputs.branch }}
+      pr_number: ${{ needs.context.outputs.pr_number }}

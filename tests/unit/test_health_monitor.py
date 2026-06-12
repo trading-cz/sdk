@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tradingcz.framework.health import HealthMonitor
-from tradingcz.models.health import ServiceLifecycle
+from tradingcz.sdk.framework.health import HealthMonitor
+from tradingcz.sdk.models.health import ServiceLifecycle
 
 
 class TestHealthMonitor:
@@ -78,7 +78,7 @@ class TestHealthMonitor:
 
         for sid, evt in [("strat-1", "up"), ("strat-1", "heartbeat")]:
             msg = MagicMock()
-            msg.headers = {"message_type": "service_lifecycle"}
+            msg.headers = {"event_type": "service_lifecycle"}
             msg.payload = ServiceLifecycle(service_id=sid, event=evt).model_dump_json().encode()  # type: ignore[arg-type]
             events.append(msg)
 
@@ -122,7 +122,7 @@ class TestHealthMonitor:
         monitor.on_down(cb)
 
         msg = MagicMock()
-        msg.headers = {"message_type": "service_lifecycle"}
+        msg.headers = {"event_type": "service_lifecycle"}
         msg.payload = ServiceLifecycle(service_id="strat-1", event="down").model_dump_json().encode()  # type: ignore[arg-type]
 
         async def _receive(

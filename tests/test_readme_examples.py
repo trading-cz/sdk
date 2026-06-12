@@ -10,9 +10,12 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.fake_kafka import FakeKafkaTransport
-from tradingcz.common.config import KafkaSettings
-from tradingcz.framework import ServiceApp, TradingApp
-from tradingcz.models.signal import TradingSignal
+from tradingcz.sdk.common.config import KafkaSettings
+from tradingcz.sdk.framework import ServiceApp, TradingApp
+from tradingcz.sdk.models.enums.event import EventType, StrategyType
+from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
+from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Use FakeKafkaTransport to avoid needing a real Kafka broker
@@ -38,26 +41,38 @@ class TestReadmeTradingSignal:
     @pytest.mark.asyncio
     async def test_publish_signal(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The README example: create a signal and publish it."""
-        signal = TradingSignal(
-            symbol="AAPL",
-            side="LONG",
-            open_price=150.0,
-            entry_price=151.0,
-            stop_loss=149.0,
-            valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
-            atr_value=2.5,
+        event = ExecutionRequestEvent(
+            event_type=EventType.TRADING_SIGNAL,
+            strategy_type=StrategyType.SINGLE_ORDER,
+            parameters={
+                "open_price": 150.0,
+                "atr_value": 2.5,
+            },
+            orders=[
+                OtoOrderRequest(
+                    symbol="AAPL",
+                    qty=1,
+                    side=OrderSide.BUY,
+                    time_in_force=TimeInForce.DAY,
+                    order_class=OrderClass.OTO,
+                    stop_price=151.0,
+                    sl_stop_price=149.0,
+                    sl_limit_time=datetime(2026, 6, 1, tzinfo=UTC),
+                ),
+            ],
         )
 
-        assert signal.symbol == "AAPL"
-        assert signal.side == "LONG"
-        assert signal.open_price == 150.0
-        assert signal.atr_value == 2.5
+        assert event.event_type == EventType.TRADING_SIGNAL
+        assert event.orders[0].symbol == "AAPL"
+        assert event.orders[0].side == OrderSide.BUY
+        assert event.parameters is not None
+        assert event.parameters["atr_value"] == 2.5
 
         # Verify it serializes to JSON and back
-        json_str = signal.model_dump_json()
-        restored = TradingSignal.model_validate_json(json_str)
-        assert restored.symbol == "AAPL"
-        assert restored.side == "LONG"
+        json_str = event.model_dump_json()
+        restored = ExecutionRequestEvent.model_validate_json(json_str)
+        assert restored.orders[0].symbol == "AAPL"
+        assert restored.orders[0].side == OrderSide.BUY
 
 
 class TestReadmeHistoricalData:
@@ -65,7 +80,7 @@ class TestReadmeHistoricalData:
 
     def test_data_request_model(self) -> None:
         """Verify the DataRequest model used in README examples."""
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
 
         req = DataRequest(
             type="historic",
@@ -101,7 +116,7 @@ class TestReadmeServiceApp:
     ) -> None:
         """The README example: start a ServiceApp, send a message, shutdown."""
         # Inject FakeKafkaTransport so we don't need a real broker
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 
@@ -144,7 +159,7 @@ class TestReadmeServiceApp:
         self, fake_settings: KafkaSettings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify TradingApp starts/stops cleanly with FakeKafkaTransport."""
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 
@@ -172,7 +187,7 @@ class TestReadmeServiceApp:
         self, fake_settings: KafkaSettings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify feature flags work as described in README."""
-        import tradingcz.framework.service as svc_mod
+        import tradingcz.sdk.framework.service as svc_mod
 
         original_init = svc_mod.KafkaTransport
 

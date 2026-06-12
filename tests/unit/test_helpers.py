@@ -1,18 +1,18 @@
 """Unit tests for tradingcz.sdk._helpers (FireAndForget, RequestReply)."""
 
 import asyncio
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
 
-from tradingcz.framework.helpers import (
+from tradingcz.sdk.framework.helpers import (
     FireAndForget,
     RequestReply,
     _infer_message_type,
 )
-from tradingcz.models.headers import Header, MessageType
+from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.headers import Header
 
 # ── Test models ─────────────────────────────────────────────────────────────
 
@@ -53,34 +53,26 @@ def mock_channel() -> AsyncMock:
 # ── _infer_message_type ─────────────────────────────────────────────────────
 
 
-class TestInferMessageType:
+class TestInferEventType:
     def test_data_request(self) -> None:
-        from tradingcz.models.events import DataRequest
+        from tradingcz.sdk.models.events import DataRequest
 
         req = DataRequest(
             type="historic", asset="stock", broker="alpaca", symbols=["AAPL"]
         )
-        assert _infer_message_type(req) == MessageType.DATA_REQUEST
+        assert _infer_message_type(req) == EventType.DATA_REQUEST
 
     def test_trading_signal(self) -> None:
-        from tradingcz.models.signal import TradingSignal
+        from tradingcz.sdk.models.events import ServiceRequest
 
-        s = TradingSignal(
-            symbol="AAPL",
-            side="LONG",
-            open_price=150.0,
-            entry_price=151.0,
-            stop_loss=149.0,
-            valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
-            atr_value=2.5,
-        )
-        assert _infer_message_type(s) == MessageType.TRADING_SIGNAL
+        s = ServiceRequest(service="get_positions")
+        assert _infer_message_type(s) == EventType.SERVICE_REQUEST
 
     def test_unknown_class_raises(self) -> None:
         class MyCustomEvent(BaseModel):
             request_id: str = ""
 
-        with pytest.raises(ValueError, match="Cannot infer MessageType"):
+        with pytest.raises(ValueError, match="Cannot infer EventType"):
             _infer_message_type(MyCustomEvent())
 
 
@@ -93,29 +85,26 @@ class TestFireAndForget:
         faf = FireAndForget(mock_channel, "test-service")
         ping = Ping(request_id="r1", message="hello")
 
-        await faf.send(ping, message_type=MessageType.DATA_REQUEST, key="my-key")
+        await faf.send(ping, message_type=EventType.DATA_REQUEST, key="my-key")
 
         mock_channel.send.assert_awaited_once()
         call_kwargs = mock_channel.send.await_args.kwargs
         assert call_kwargs["key"] == "my-key"
         headers = call_kwargs["headers"]
-        assert headers[Header.MESSAGE_TYPE] == "data_request"
+        assert headers[Header.EVENT_TYPE] == "data_request"
         assert headers[Header.SOURCE_APP] == "test-service"
-        assert headers[Header.SEQUENCE] == "1"
+        assert Header.SEQUENCE not in headers  # event messages have no sequence
 
     @pytest.mark.asyncio
     async def test_send_increments_sequence(self, mock_channel: AsyncMock) -> None:
         faf = FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="a")
 
-        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
-        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
+        await faf.send(ping, message_type=EventType.DATA_REQUEST)
+        await faf.send(ping, message_type=EventType.DATA_REQUEST)
 
         assert mock_channel.send.await_count == 2
-        seq1 = mock_channel.send.await_args_list[0].kwargs["headers"][Header.SEQUENCE]
-        seq2 = mock_channel.send.await_args_list[1].kwargs["headers"][Header.SEQUENCE]
-        assert seq1 == "1"
-        assert seq2 == "2"
+        # sequence counter is internal only — not exposed in event headers
 
     @pytest.mark.asyncio
     async def test_extra_headers_merged(self, mock_channel: AsyncMock) -> None:
@@ -124,7 +113,7 @@ class TestFireAndForget:
 
         await faf.send(
             ping,
-            message_type=MessageType.DATA_REQUEST,
+            message_type=EventType.DATA_REQUEST,
             extra_headers={"tracking_id": "trk-1", "strategy_id": "strat-1"},
         )
 
@@ -137,7 +126,7 @@ class TestFireAndForget:
         faf = FireAndForget(mock_channel, "test")
         ping = Ping(request_id="r1", message="hello")
 
-        await faf.send(ping, message_type=MessageType.DATA_REQUEST)
+        await faf.send(ping, message_type=EventType.DATA_REQUEST)
 
         # payload is the first positional argument to channel.send()
         payload = mock_channel.send.await_args.args[0]
@@ -169,7 +158,7 @@ class TestRequestReply:
         asyncio.create_task(_simulate_response())
 
         resp = await rr.request(
-            ping, response_type=Pong, request_type=MessageType.DATA_REQUEST, timeout=2.0
+            ping, response_type=Pong, request_type=EventType.DATA_REQUEST, timeout=2.0
         )
 
         assert isinstance(resp, Pong)
@@ -183,7 +172,7 @@ class TestRequestReply:
     @pytest.mark.asyncio
     async def test_request_builds_headers(self, mock_channel: AsyncMock) -> None:
         rr = RequestReply(
-            mock_channel, "test-service", message_types={MessageType.DATA_READY: Pong}
+            mock_channel, "test-service", message_types={EventType.DATA_READY: Pong}
         )
         await rr.start()
 
@@ -198,14 +187,14 @@ class TestRequestReply:
         asyncio.create_task(_respond())
 
         await rr.request(
-            ping, response_type=Pong, request_type=MessageType.DATA_REQUEST, timeout=2.0
+            ping, response_type=Pong, request_type=EventType.DATA_REQUEST, timeout=2.0
         )
 
         headers = mock_channel.send.await_args.kwargs["headers"]
-        assert headers[Header.MESSAGE_TYPE] == "data_request"
+        assert headers[Header.EVENT_TYPE] == "data_request"
         assert headers[Header.SOURCE_APP] == "test-service"
         assert headers[Header.REQUEST_ID] == "req-h"
-        assert Header.SEQUENCE in headers
+        assert Header.SEQUENCE not in headers  # event topic, no sequence
 
         await rr.close()
 
@@ -232,7 +221,7 @@ class TestRequestReply:
             await rr.request(
                 ping,
                 response_type=Pong,
-                request_type=MessageType.DATA_REQUEST,
+                request_type=EventType.DATA_REQUEST,
                 timeout=0.1,
             )
 
@@ -241,7 +230,7 @@ class TestRequestReply:
     @pytest.mark.asyncio
     async def test_register_type(self, mock_channel: AsyncMock) -> None:
         rr = RequestReply(mock_channel, "test")
-        rr.register_type(MessageType.DATA_READY, Pong)
+        rr.register_type(EventType.DATA_READY, Pong)
         assert rr._types["data_ready"] is Pong
 
     @pytest.mark.asyncio
