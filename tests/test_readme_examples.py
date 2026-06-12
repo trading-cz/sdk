@@ -48,7 +48,7 @@ class TestReadmeTradingSignal:
                 "open_price": 150.0,
                 "atr_value": 2.5,
             },
-            market_orders=[
+            orders=[
                 OtoOrderRequest(
                     symbol="AAPL",
                     qty=1,
@@ -63,16 +63,16 @@ class TestReadmeTradingSignal:
         )
 
         assert event.event_type == EventType.TRADING_SIGNAL
-        assert event.market_orders[0].symbol == "AAPL"
-        assert event.market_orders[0].side == OrderSide.BUY
+        assert event.orders[0].symbol == "AAPL"
+        assert event.orders[0].side == OrderSide.BUY
         assert event.parameters is not None
         assert event.parameters["atr_value"] == 2.5
 
         # Verify it serializes to JSON and back
         json_str = event.model_dump_json()
         restored = ExecutionRequestEvent.model_validate_json(json_str)
-        assert restored.market_orders[0].symbol == "AAPL"
-        assert restored.market_orders[0].side == OrderSide.BUY
+        assert restored.orders[0].symbol == "AAPL"
+        assert restored.orders[0].side == OrderSide.BUY
 
 
 class TestReadmeHistoricalData:
