@@ -186,7 +186,8 @@ class TestEventHeadersModel:
 
     def test_type_safety_rejects_invalid_enum(self) -> None:
         import pytest
-        with pytest.raises(Exception):  # Pydantic validation error
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             EventHeaders(event_type="not_a_valid_type")  # type: ignore[arg-type]
 
 
@@ -250,8 +251,9 @@ class TestKafkaKeyModel:
 
     def test_frozen_immutable(self) -> None:
         import pytest
+        from pydantic import ValidationError
         key = KafkaKey(value="test")
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             key.value = "changed"  # type: ignore[misc]
 
     def test_equality(self) -> None:

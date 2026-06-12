@@ -13,11 +13,12 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  HAS_ALPACA_KEY: ${{ secrets.ALPACA_API_KEY != '' }}
+
 jobs:
   context:
-    if: |
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test')) ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'run-tests')
+    if: (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test')) || (github.event_name == 'pull_request' && github.event.label.name == 'run-tests')
     uses: trading-cz/github-action/.github/workflows/pr-context.yml@main
 
   smoke:
@@ -29,7 +30,7 @@ jobs:
       pr_number: ${{ needs.context.outputs.pr_number }}
 
   regression:
-    needs: smoke
+    needs: [context, smoke]
     uses: trading-cz/testing/.github/workflows/test-regression.yml@main
     with:
       app_repo: ${{ needs.context.outputs.repo }}
@@ -40,8 +41,8 @@ jobs:
       alpaca_secret_key: ${{ secrets.ALPACA_SECRET_KEY }}
 
   integration:
-    needs: regression
-    if: ${{ secrets.ALPACA_API_KEY != '' }}
+    needs: [context, regression]
+    if: ${{ env.HAS_ALPACA_KEY == 'true' }}
     uses: trading-cz/testing/.github/workflows/test-integration.yml@main
     with:
       app_repo: ${{ needs.context.outputs.repo }}
