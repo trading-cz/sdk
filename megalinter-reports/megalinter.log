@@ -12,7 +12,7 @@ The MegaLinter documentation can be found at:
 MegaLinter will analyze workspace [/github/workspace]
 GITHUB_REPOSITORY: trading-cz/sdk
 GITHUB_REF: refs/pull/34/merge
-GITHUB_RUN_ID: 27414875522
+GITHUB_RUN_ID: 27418427809
 PAT: not set
 
 [Pre] run: [apk add --no-cache build-base python3-dev] in cwd [/github/workspace]
@@ -38,7 +38,7 @@ Requirement already satisfied: setuptools in /usr/local/lib/python3.14/site-pack
 Requirement already satisfied: wheel in /usr/local/lib/python3.14/site-packages (0.47.0)
 Requirement already satisfied: packaging>=24.0 in /usr/local/lib/python3.14/site-packages (from wheel) (26.2)
 Downloading pip-26.1.2-py3-none-any.whl (1.8 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 20.7 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 40.4 MB/s  0:00:00
 Installing collected packages: pip
   Attempting uninstall: pip
     Found existing installation: pip 26.1.1
@@ -86,7 +86,7 @@ Collecting ruff>=0.7.0 (from trading-sdk==0.1.8)
   Downloading ruff-0.15.17-py3-none-musllinux_1_2_x86_64.whl.metadata (26 kB)
 Collecting aiokafka<0.13,>=0.10 (from mockafka-py==0.2.3->trading-sdk==0.1.8)
   Downloading aiokafka-0.12.0.tar.gz (564 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 565.0/565.0 kB 26.3 MB/s  0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 565.0/565.0 kB 33.4 MB/s  0:00:00
   Installing build dependencies: started
   Installing build dependencies: finished with status 'done'
   Getting requirements to build wheel: started
@@ -115,28 +115,28 @@ Collecting pluggy<2,>=1.5 (from pytest>=8.3.0->trading-sdk==0.1.8)
 Requirement already satisfied: pygments>=2.7.2 in /usr/local/lib/python3.14/site-packages (from pytest>=8.3.0->trading-sdk==0.1.8) (2.20.0)
 Downloading mockafka_py-0.2.3-py3-none-any.whl (26 kB)
 Downloading mypy-2.1.0-cp314-cp314-musllinux_1_2_x86_64.whl (15.3 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.3/15.3 MB 81.4 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.3/15.3 MB 189.8 MB/s  0:00:00
 Downloading ast_serialize-0.5.0-cp39-abi3-musllinux_1_2_x86_64.whl (1.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 174.3 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 283.8 MB/s  0:00:00
 Downloading librt-0.11.0-cp314-cp314-musllinux_1_2_x86_64.whl (546 kB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 546.3/546.3 kB 377.4 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 546.3/546.3 kB 306.2 MB/s  0:00:00
 Downloading pathspec-1.1.1-py3-none-any.whl (57 kB)
 Downloading pytest-9.0.3-py3-none-any.whl (375 kB)
 Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
 Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
 Downloading pytest_asyncio-1.4.0-py3-none-any.whl (16 kB)
 Downloading ruff-0.15.17-py3-none-musllinux_1_2_x86_64.whl (11.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.7/11.7 MB 233.9 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.7/11.7 MB 231.7 MB/s  0:00:00
 Downloading async_timeout-5.0.1-py3-none-any.whl (6.2 kB)
 Building wheels for collected packages: trading-sdk, aiokafka, confluent-kafka
   Building editable for trading-sdk (pyproject.toml): started
   Building editable for trading-sdk (pyproject.toml): finished with status 'done'
   Created wheel for trading-sdk: filename=trading_sdk-0.1.8-py3-none-any.whl size=3788 sha256=b49d3d0306fde32d5f84649bede58beefb214bc1a3ea365f59d58cf9acab51b2
-  Stored in directory: /tmp/pip-ephem-wheel-cache-45a6ymzw/wheels/79/f7/09/e1ebb53364e886b8e06ebf8d34ae65303ab5a958a365f38a79
+  Stored in directory: /tmp/pip-ephem-wheel-cache-q3kzex1u/wheels/79/f7/09/e1ebb53364e886b8e06ebf8d34ae65303ab5a958a365f38a79
   Building wheel for aiokafka (pyproject.toml): started
   Building wheel for aiokafka (pyproject.toml): finished with status 'done'
-  Created wheel for aiokafka: filename=aiokafka-0.12.0-cp314-cp314-linux_x86_64.whl size=1137717 sha256=12c738b0c11822ea4dc01efb0435a0a5e18515792517b6dacd7e0008a855e52a
-  Stored in directory: /tmp/pip-ephem-wheel-cache-45a6ymzw/wheels/45/33/bc/58e7e1b78c42a292682e14f3f1c0cb9d289bf89cb860f3a458
+  Created wheel for aiokafka: filename=aiokafka-0.12.0-cp314-cp314-linux_x86_64.whl size=1137722 sha256=69d6c10e937ea14cf8e5a82cf5b7d17ca7fa3ba0d68a4ae8238fcb78396d258b
+  Stored in directory: /tmp/pip-ephem-wheel-cache-q3kzex1u/wheels/45/33/bc/58e7e1b78c42a292682e14f3f1c0cb9d289bf89cb860f3a458
   Building wheel for confluent-kafka (pyproject.toml): started
   Building wheel for confluent-kafka (pyproject.toml): finished with status 'error'
   error: subprocess-exited-with-error
@@ -144,7 +144,7 @@ Building wheels for collected packages: trading-sdk, aiokafka, confluent-kafka
   × Building wheel for confluent-kafka (pyproject.toml) did not run successfully.
   │ exit code: 1
   ╰─> [172 lines of output]
-      /tmp/pip-build-env-5zcuql97/overlay/lib/python3.14/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      /tmp/pip-build-env-rwl8arbx/overlay/lib/python3.14/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
       !!
       
               ********************************************************************************
@@ -157,7 +157,7 @@ Building wheels for collected packages: trading-sdk, aiokafka, confluent-kafka
       
       !!
         dist._finalize_license_expression()
-      /tmp/pip-build-env-5zcuql97/overlay/lib/python3.14/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      /tmp/pip-build-env-rwl8arbx/overlay/lib/python3.14/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
       !!
       
               ********************************************************************************
@@ -308,10 +308,10 @@ Building wheels for collected packages: trading-sdk, aiokafka, confluent-kafka
       copying src/confluent_kafka/py.typed -> build/lib.linux-x86_64-cpython-314/confluent_kafka
       running build_ext
       building 'confluent_kafka.cimpl' extension
-      creating build/temp.linux-x86_64-cpython-314/tmp/pip-install-tvmqetd0/confluent-kafka_7aa37ce3214c490ab6c34b91b2dec15a/src/confluent_kafka/src
-      gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC -I/usr/local/include/python3.14 -c /tmp/pip-install-tvmqetd0/confluent-kafka_7aa37ce3214c490ab6c34b91b2dec15a/src/confluent_kafka/src/Admin.c -o build/temp.linux-x86_64-cpython-314/tmp/pip-install-tvmqetd0/confluent-kafka_7aa37ce3214c490ab6c34b91b2dec15a/src/confluent_kafka/src/Admin.o
-      In file included from /tmp/pip-install-tvmqetd0/confluent-kafka_7aa37ce3214c490ab6c34b91b2dec15a/src/confluent_kafka/src/Admin.c:28:
-      /tmp/pip-install-tvmqetd0/confluent-kafka_7aa37ce3214c490ab6c34b91b2dec15a/src/confluent_kafka/src/confluent_kafka.h:23:10: fatal error: librdkafka/rdkafka.h: No such file or directory
+      creating build/temp.linux-x86_64-cpython-314/tmp/pip-install-n4cjwwoz/confluent-kafka_63e0caa56f8e42fca9db95a1e8d61c9f/src/confluent_kafka/src
+      gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC -I/usr/local/include/python3.14 -c /tmp/pip-install-n4cjwwoz/confluent-kafka_63e0caa56f8e42fca9db95a1e8d61c9f/src/confluent_kafka/src/Admin.c -o build/temp.linux-x86_64-cpython-314/tmp/pip-install-n4cjwwoz/confluent-kafka_63e0caa56f8e42fca9db95a1e8d61c9f/src/confluent_kafka/src/Admin.o
+      In file included from /tmp/pip-install-n4cjwwoz/confluent-kafka_63e0caa56f8e42fca9db95a1e8d61c9f/src/confluent_kafka/src/Admin.c:28:
+      /tmp/pip-install-n4cjwwoz/confluent-kafka_63e0caa56f8e42fca9db95a1e8d61c9f/src/confluent_kafka/src/confluent_kafka.h:23:10: fatal error: librdkafka/rdkafka.h: No such file or directory
          23 | #include <librdkafka/rdkafka.h>
             |          ^~~~~~~~~~~~~~~~~~~~~~
       compilation terminated.
@@ -357,7 +357,7 @@ Building wheels for collected packages: trading-sdk, confluent-kafka
   Building editable for trading-sdk (pyproject.toml): started
   Building editable for trading-sdk (pyproject.toml): finished with status 'done'
   Created wheel for trading-sdk: filename=trading_sdk-0.1.8-py3-none-any.whl size=3788 sha256=b49d3d0306fde32d5f84649bede58beefb214bc1a3ea365f59d58cf9acab51b2
-  Stored in directory: /tmp/pip-ephem-wheel-cache-vap3__tf/wheels/79/f7/09/e1ebb53364e886b8e06ebf8d34ae65303ab5a958a365f38a79
+  Stored in directory: /tmp/pip-ephem-wheel-cache-imlitnpq/wheels/79/f7/09/e1ebb53364e886b8e06ebf8d34ae65303ab5a958a365f38a79
   Building wheel for confluent-kafka (pyproject.toml): started
   Building wheel for confluent-kafka (pyproject.toml): finished with status 'error'
   error: subprocess-exited-with-error
@@ -365,7 +365,7 @@ Building wheels for collected packages: trading-sdk, confluent-kafka
   × Building wheel for confluent-kafka (pyproject.toml) did not run successfully.
   │ exit code: 1
   ╰─> [172 lines of output]
-      /tmp/pip-build-env-ufu9vjvw/overlay/lib/python3.14/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      /tmp/pip-build-env-uila7r8i/overlay/lib/python3.14/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
       !!
       
               ********************************************************************************
@@ -378,7 +378,7 @@ Building wheels for collected packages: trading-sdk, confluent-kafka
       
       !!
         dist._finalize_license_expression()
-      /tmp/pip-build-env-ufu9vjvw/overlay/lib/python3.14/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      /tmp/pip-build-env-uila7r8i/overlay/lib/python3.14/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
       !!
       
               ********************************************************************************
@@ -529,10 +529,10 @@ Building wheels for collected packages: trading-sdk, confluent-kafka
       copying src/confluent_kafka/py.typed -> build/lib.linux-x86_64-cpython-314/confluent_kafka
       running build_ext
       building 'confluent_kafka.cimpl' extension
-      creating build/temp.linux-x86_64-cpython-314/tmp/pip-install-8qd7wwk8/confluent-kafka_901c56d760c042fb955d661417dea7c4/src/confluent_kafka/src
-      gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC -I/usr/local/include/python3.14 -c /tmp/pip-install-8qd7wwk8/confluent-kafka_901c56d760c042fb955d661417dea7c4/src/confluent_kafka/src/Admin.c -o build/temp.linux-x86_64-cpython-314/tmp/pip-install-8qd7wwk8/confluent-kafka_901c56d760c042fb955d661417dea7c4/src/confluent_kafka/src/Admin.o
-      In file included from /tmp/pip-install-8qd7wwk8/confluent-kafka_901c56d760c042fb955d661417dea7c4/src/confluent_kafka/src/Admin.c:28:
-      /tmp/pip-install-8qd7wwk8/confluent-kafka_901c56d760c042fb955d661417dea7c4/src/confluent_kafka/src/confluent_kafka.h:23:10: fatal error: librdkafka/rdkafka.h: No such file or directory
+      creating build/temp.linux-x86_64-cpython-314/tmp/pip-install-r9vj0klr/confluent-kafka_40b7ebc5223d4a60a710bb3068969c89/src/confluent_kafka/src
+      gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC -I/usr/local/include/python3.14 -c /tmp/pip-install-r9vj0klr/confluent-kafka_40b7ebc5223d4a60a710bb3068969c89/src/confluent_kafka/src/Admin.c -o build/temp.linux-x86_64-cpython-314/tmp/pip-install-r9vj0klr/confluent-kafka_40b7ebc5223d4a60a710bb3068969c89/src/confluent_kafka/src/Admin.o
+      In file included from /tmp/pip-install-r9vj0klr/confluent-kafka_40b7ebc5223d4a60a710bb3068969c89/src/confluent_kafka/src/Admin.c:28:
+      /tmp/pip-install-r9vj0klr/confluent-kafka_40b7ebc5223d4a60a710bb3068969c89/src/confluent_kafka/src/confluent_kafka.h:23:10: fatal error: librdkafka/rdkafka.h: No such file or directory
          23 | #include <librdkafka/rdkafka.h>
             |          ^~~~~~~~~~~~~~~~~~~~~~
       compilation terminated.
@@ -585,7 +585,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [actionlint .github/workflows/megalinter.yml .github/workflows/pr-integration.yml .github/workflows/pr-regression.yml .github/workflows/pr-smoke.yml .github/workflows/pr-test.yml .github/workflows/python-build-wheel.yml .github/workflows/python-ci.yml...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [MARKDOWN] files with [markdownlint] successfully - (0.65s)[0m (expand for details)
+::group::[32m✅ Linted [MARKDOWN] files with [markdownlint] successfully - (0.7s)[0m (expand for details)
 - Using [markdownlint v0.48.0] https://megalinter.io/9.5.0/descriptors/markdown_markdownlint
 - MegaLinter key: [MARKDOWN_MARKDOWNLINT]
 - Rules config: [.markdownlint.json]
@@ -601,7 +601,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [markdown-table-formatter README.md docs/python314.md]
 ::endgroup::
-::group::[32m✅ Linted [PYTHON] files with [black] successfully - (1.57s)[0m (expand for details)
+::group::[32m✅ Linted [PYTHON] files with [black] successfully - (1.99s)[0m (expand for details)
 - Using [black v26.3.1] https://megalinter.io/9.5.0/descriptors/python_black
 - MegaLinter key: [PYTHON_BLACK]
 - Rules config: [/github/workspace/pyproject.toml]
@@ -609,7 +609,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [black --config /github/workspace/pyproject.toml tests/__init__.py tests/fake_kafka.py tests/test_readme_examples.py tests/unit/__init__.py tests/unit/test_codec.py tests/unit/test_dedup.py tests/unit/test_hash.py tests/unit/test_headers.py tests/unit...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [PYTHON] files with [isort] successfully - (0.28s)[0m (expand for details)
+::group::[32m✅ Linted [PYTHON] files with [isort] successfully - (0.34s)[0m (expand for details)
 - Using [isort v8.0.1] https://megalinter.io/9.5.0/descriptors/python_isort
 - MegaLinter key: [PYTHON_ISORT]
 - Rules config: [/github/workspace/pyproject.toml]
@@ -617,7 +617,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [isort --profile black --settings-file /github/workspace/pyproject.toml tests/__init__.py tests/fake_kafka.py tests/test_readme_examples.py tests/unit/__init__.py tests/unit/test_codec.py tests/unit/test_dedup.py tests/unit/test_hash.py tests/unit/tes...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [PYTHON] files with [mypy] successfully - (2.66s)[0m (expand for details)
+::group::[32m✅ Linted [PYTHON] files with [mypy] successfully - (2.93s)[0m (expand for details)
 - Using [mypy v1.19.1] https://megalinter.io/9.5.0/descriptors/python_mypy
 - MegaLinter key: [PYTHON_MYPY]
 - Rules config: [/github/workspace/pyproject.toml]
@@ -625,7 +625,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [mypy --install-types --non-interactive --python-version=3.14 --config-file /github/workspace/pyproject.toml tradingcz/__init__.py tradingcz/sdk/__init__.py tradingcz/sdk/clients/__init__.py tradingcz/sdk/clients/balance.py tradingcz/sdk/clients/base....(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [PYTHON] files with [pylint] successfully - (7.03s)[0m (expand for details)
+::group::[32m✅ Linted [PYTHON] files with [pylint] successfully - (7.37s)[0m (expand for details)
 - Using [pylint v4.0.5] https://megalinter.io/9.5.0/descriptors/python_pylint
 - MegaLinter key: [PYTHON_PYLINT]
 - Rules config: [/github/workspace/.pylintrc]
@@ -633,7 +633,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [pylint --rcfile /github/workspace/.pylintrc tradingcz/__init__.py tradingcz/sdk/__init__.py tradingcz/sdk/clients/__init__.py tradingcz/sdk/clients/balance.py tradingcz/sdk/clients/base.py tradingcz/sdk/clients/data/__init__.py tradingcz/sdk/clients/...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [PYTHON] files with [ruff] successfully - (0.02s)[0m (expand for details)
+::group::[32m✅ Linted [PYTHON] files with [ruff] successfully - (0.03s)[0m (expand for details)
 - Using [ruff v0.15.13] https://megalinter.io/9.5.0/descriptors/python_ruff
 - MegaLinter key: [PYTHON_RUFF]
 - Rules config: [/github/workspace/pyproject.toml]
@@ -641,21 +641,21 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [ruff check --fix --config /github/workspace/pyproject.toml tests/__init__.py tests/fake_kafka.py tests/test_readme_examples.py tests/unit/__init__.py tests/unit/test_codec.py tests/unit/test_dedup.py tests/unit/test_hash.py tests/unit/test_headers.py...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [REPOSITORY] files with [gitleaks] successfully - (0.81s)[0m (expand for details)
+::group::[32m✅ Linted [REPOSITORY] files with [gitleaks] successfully - (0.61s)[0m (expand for details)
 - Using [gitleaks v8.30.1] https://megalinter.io/9.5.0/descriptors/repository_gitleaks
 - MegaLinter key: [REPOSITORY_GITLEAKS]
 - Rules config: [.gitleaks.toml]
 - CWD: [/github/workspace]
 - Command: [gitleaks detect --redact -c /action/lib/.automation/.gitleaks.toml --verbose --source .]
 ::endgroup::
-::group::[32m✅ Linted [REPOSITORY] files with [trivy] successfully - (7.35s)[0m (expand for details)
+::group::[32m✅ Linted [REPOSITORY] files with [trivy] successfully - (10.07s)[0m (expand for details)
 - Using [trivy v0.70.0] https://megalinter.io/9.5.0/descriptors/repository_trivy
 - MegaLinter key: [REPOSITORY_TRIVY]
 - Rules config: identified by [trivy]
 - CWD: [/github/workspace]
 - Command: [trivy fs --scanners vuln,misconfig --exit-code 1 --severity MEDIUM,HIGH,CRITICAL .]
 ::endgroup::
-::group::[32m✅ Linted [SPELL] files with [lychee] successfully - (0.22s)[0m (expand for details)
+::group::[32m✅ Linted [SPELL] files with [lychee] successfully - (0.34s)[0m (expand for details)
 - Using [lychee v0.24.2] https://megalinter.io/9.5.0/descriptors/spell_lychee
 - MegaLinter key: [SPELL_LYCHEE]
 - Rules config: identified by [lychee]
@@ -663,7 +663,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [lychee --format detailed --no-progress .github/workflows/megalinter.yml .github/workflows/pr-integration.yml .github/workflows/pr-regression.yml .github/workflows/pr-smoke.yml .github/workflows/pr-test.yml .github/workflows/python-build-wheel.yml .gi...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [YAML] files with [prettier] successfully - (0.43s)[0m (expand for details)
+::group::[32m✅ Linted [YAML] files with [prettier] successfully - (0.53s)[0m (expand for details)
 - Using [prettier v3.8.3] https://megalinter.io/9.5.0/descriptors/yaml_prettier
 - MegaLinter key: [YAML_PRETTIER]
 - Rules config: identified by [prettier]
@@ -671,7 +671,7 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 - CWD: [/github/workspace]
 - Command: [prettier --write --single-quote .github/workflows/megalinter.yml .github/workflows/pr-integration.yml .github/workflows/pr-regression.yml .github/workflows/pr-smoke.yml .github/workflows/pr-test.yml .github/workflows/python-build-wheel.yml .github/wo...(truncated)]
 ::endgroup::
-::group::[32m✅ Linted [YAML] files with [yamllint] successfully - (0.45s)[0m (expand for details)
+::group::[32m✅ Linted [YAML] files with [yamllint] successfully - (0.38s)[0m (expand for details)
 - Using [yamllint v1.38.0] https://megalinter.io/9.5.0/descriptors/yaml_yamllint
 - MegaLinter key: [YAML_YAMLLINT]
 - Rules config: [.yamllint.yml]
@@ -685,21 +685,21 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 | Descriptor    | Linter                   | Mode          | Files | Fixed | Errors | Warnings | Elapsed time |
 +---------------+--------------------------+---------------+-------+-------+--------+----------+--------------+
 | ✅ ACTION     | actionlint               | list_of_files |     7 |       |      0 |        0 | 0.02s        |
-| ✅ MARKDOWN   | markdownlint             | list_of_files |     2 |     0 |      0 |        0 | 0.65s        |
+| ✅ MARKDOWN   | markdownlint             | list_of_files |     2 |     0 |      0 |        0 | 0.7s         |
 | ✅ MARKDOWN   | markdown-table-formatter | list_of_files |     2 |     0 |      0 |        0 | 0.25s        |
-| ✅ PYTHON     | black                    | list_of_files |    87 |     1 |      0 |        0 | 1.57s        |
-| ✅ PYTHON     | isort                    | list_of_files |    87 |     2 |      0 |        0 | 0.28s        |
-| ✅ PYTHON     | mypy                     | list_of_files |    71 |       |      0 |        0 | 2.66s        |
-| ✅ PYTHON     | pylint                   | list_of_files |    71 |       |      0 |        0 | 7.03s        |
-| ✅ PYTHON     | ruff                     | list_of_files |    87 |     1 |      0 |        0 | 0.02s        |
-| ✅ REPOSITORY | gitleaks                 | project       |   n/a |       |      0 |        0 | 0.81s        |
-| ✅ REPOSITORY | trivy                    | project       |   n/a |       |      0 |        0 | 7.35s        |
-| ✅ SPELL      | lychee                   | list_of_files |    10 |       |      0 |        0 | 0.22s        |
-| ✅ YAML       | prettier                 | list_of_files |     8 |     0 |      0 |        0 | 0.43s        |
-| ✅ YAML       | yamllint                 | list_of_files |     8 |       |      0 |        0 | 0.45s        |
+| ✅ PYTHON     | black                    | list_of_files |    87 |     0 |      0 |        0 | 1.99s        |
+| ✅ PYTHON     | isort                    | list_of_files |    87 |     1 |      0 |        0 | 0.34s        |
+| ✅ PYTHON     | mypy                     | list_of_files |    71 |       |      0 |        0 | 2.93s        |
+| ✅ PYTHON     | pylint                   | list_of_files |    71 |       |      0 |        0 | 7.37s        |
+| ✅ PYTHON     | ruff                     | list_of_files |    87 |     0 |      0 |        0 | 0.03s        |
+| ✅ REPOSITORY | gitleaks                 | project       |   n/a |       |      0 |        0 | 0.61s        |
+| ✅ REPOSITORY | trivy                    | project       |   n/a |       |      0 |        0 | 10.07s       |
+| ✅ SPELL      | lychee                   | list_of_files |    10 |       |      0 |        0 | 0.34s        |
+| ✅ YAML       | prettier                 | list_of_files |     8 |     0 |      0 |        0 | 0.53s        |
+| ✅ YAML       | yamllint                 | list_of_files |     8 |       |      0 |        0 | 0.38s        |
 +---------------+--------------------------+---------------+-------+-------+--------+----------+--------------+
 
-[Updated Sources Reporter] copied 2 fixed source files in folder /github/workspace/megalinter-reports/updated_sources.
+[Updated Sources Reporter] copied 1 fixed source files in folder /github/workspace/megalinter-reports/updated_sources.
 [MARKDOWN_SUMMARY Reporter] Generated MARKDOWN_SUMMARY report: /github/workspace/megalinter-reports/megalinter-report.md
-[MARKDOWN_SUMMARY Reporter] Also appended to GITHUB_STEP_SUMMARY: /github/file_commands/step_summary_c902f51d-7b9c-4bbc-a523-9a05a5a19faa
+[MARKDOWN_SUMMARY Reporter] Also appended to GITHUB_STEP_SUMMARY: /github/file_commands/step_summary_f4a2f297-8951-4515-8761-ecaf2a833f8e
 [32m✅ Successfully linted all files without errors[0m
