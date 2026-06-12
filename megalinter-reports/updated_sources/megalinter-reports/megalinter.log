@@ -699,7 +699,3 @@ Processing linters on [4] parallel cores… (can be decreased with variable PARA
 | ✅ YAML       | yamllint                 | list_of_files |     8 |       |      0 |        0 | 0.45s        |
 +---------------+--------------------------+---------------+-------+-------+--------+----------+--------------+
 
-[Updated Sources Reporter] copied 2 fixed source files in folder /github/workspace/megalinter-reports/updated_sources.
-[MARKDOWN_SUMMARY Reporter] Generated MARKDOWN_SUMMARY report: /github/workspace/megalinter-reports/megalinter-report.md
-[MARKDOWN_SUMMARY Reporter] Also appended to GITHUB_STEP_SUMMARY: /github/file_commands/step_summary_c902f51d-7b9c-4bbc-a523-9a05a5a19faa
-[32m✅ Successfully linted all files without errors[0m
