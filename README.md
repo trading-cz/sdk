@@ -136,12 +136,12 @@ pass on every PR.
 ## Cross-service testing
 
 Smoke, regression, and integration tests live in the centralized test harness:
-**[trading-cz/testing](https://github.com/trading-cz/testing)**.
+**`trading-cz/testing`**.
 
 - PRs trigger the 3-tier pipeline: smoke → regression → integration
 - Trigger: `/test` comment or `run-tests` label on the PR
 
-See the [testing README](https://github.com/trading-cz/testing) for local setup.
+See the testing repo README for local setup.
 
 ## Development
 

@@ -13,9 +13,6 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  HAS_ALPACA_KEY: ${{ secrets.ALPACA_API_KEY != '' }}
-
 jobs:
   context:
     if: (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test')) || (github.event_name == 'pull_request' && github.event.label.name == 'run-tests')
@@ -40,9 +37,25 @@ jobs:
       alpaca_api_key: ${{ secrets.ALPACA_API_KEY }}
       alpaca_secret_key: ${{ secrets.ALPACA_SECRET_KEY }}
 
+  check-secrets:
+    needs: regression
+    runs-on: ubuntu-latest
+    outputs:
+      has_alpaca: ${{ steps.check.outputs.has_alpaca }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.ALPACA_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "has_alpaca=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_alpaca=false" >> "$GITHUB_OUTPUT"
+          fi
+
   integration:
-    needs: [context, regression]
-    if: ${{ env.HAS_ALPACA_KEY == 'true' }}
+    needs: [context, regression, check-secrets]
+    if: ${{ needs.check-secrets.outputs.has_alpaca == 'true' }}
     uses: trading-cz/testing/.github/workflows/test-integration.yml@main
     with:
       app_repo: ${{ needs.context.outputs.repo }}
