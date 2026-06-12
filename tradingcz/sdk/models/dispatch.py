@@ -25,6 +25,7 @@ _MODEL: dict[str, type[BaseModel]] = {
     EventType.SERVICE_REQUEST: ServiceRequest,
     EventType.SERVICE_LIFECYCLE: ServiceLifecycle,
     EventType.TRADING_SIGNAL: ExecutionRequestEvent,
+    EventType.EXECUTION_REQUEST: ExecutionRequestEvent,
     EventType.BAR: Bar,
     EventType.QUOTE: Quote,
     EventType.TRADE: Trade,
