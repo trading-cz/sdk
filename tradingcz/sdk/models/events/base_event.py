@@ -15,7 +15,9 @@ class BaseEvent(BaseModel):
 
     model_config = ConfigDict(frozen=True, use_enum_values=True)
 
-    id: UUID = Field(default_factory=uuid4, description="Unique identifier for the event")
+    id: UUID = Field(
+        default_factory=uuid4, description="Unique identifier for the event"
+    )
     received_at: datetime | None = Field(
         default_factory=lambda: datetime.now(UTC),  # pylint: disable=no-member
         description="Timestamp when the order request event was received",
