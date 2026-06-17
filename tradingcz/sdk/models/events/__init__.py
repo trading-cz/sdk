@@ -1,7 +1,7 @@
 """Events module containing event models for the trading executor SDK."""
 
 from tradingcz.sdk.models.events.base_event import BaseEvent
-from tradingcz.sdk.models.events.control import (
+from tradingcz.sdk.models.events.data_request_event import (
     DataError,
     DataReady,
     DataRequest,

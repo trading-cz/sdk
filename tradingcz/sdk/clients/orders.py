@@ -27,7 +27,7 @@ class OrderSummary(BaseModel):
 class OrderList(BaseModel):
     """Response to a get_orders request."""
 
-    request_id: str
+    event_id: str
     orders: list[OrderSummary]
 
 

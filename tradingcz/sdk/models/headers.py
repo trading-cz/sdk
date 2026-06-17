@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.models.enums.event import EventType
 
@@ -21,6 +21,8 @@ from tradingcz.sdk.models.enums.event import EventType
 # Header — Kafka header field names
 # ═════════════════════════════════════════════════════════════════════════════
 
+# TODO: vycistit
+# TODO2: Field(..., description="")
 
 class Header(StrEnum):
     """Canonical Kafka header field names."""
@@ -34,7 +36,7 @@ class Header(StrEnum):
     SEQUENCE = "sequence"
 
     # Event topic only
-    REQUEST_ID = "request_id"
+    EVENT_ID = "event_id"
     BROKER = "broker"
     SOURCE = "source"
 
@@ -52,7 +54,7 @@ class EventHeaders(BaseModel):
         headers = EventHeaders(
             event_type=EventType.DATA_REQUEST,
             source_app="ingestion",
-            request_id="abc-123",
+            event_id="abc-123",
         )
         await channel.send(payload, key=key, headers=headers.to_kafka())
 
@@ -63,15 +65,9 @@ class EventHeaders(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-
-    event_type: EventType
-    """Message type — always required."""
-
-    source_app: str = ""
-    """Service identifier (e.g. ``"ingestion"``, ``"executor"``)."""
-
-    request_id: str = ""
-    """Correlation ID for request/response matching."""
+    event_id: str = Field(..., description="")
+    event_type: EventType = Field(..., description="")
+    source_app: str = Field(..., description="")
 
     def to_kafka(self) -> dict[str, str]:
         """Serialize to Kafka wire format (``dict[str, str]``).
@@ -106,9 +102,7 @@ class DataHeaders(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-
     event_type: EventType
-    """Message type — always required."""
 
     source_app: str = ""
     """Service identifier."""
@@ -125,7 +119,7 @@ class DataHeaders(BaseModel):
     symbol: str = ""
     """Ticker symbol (e.g. ``"AAPL"``)."""
 
-    request_id: str = ""
+    event_id: str = ""
     """Correlation ID (set when this data is a response to a request)."""
 
     def to_kafka(self) -> dict[str, str]:
@@ -243,13 +237,6 @@ def build_event_key(event_type: EventType, source_app: str, *extra: str) -> str:
     """
     return ":".join([str(event_type), source_app, *extra])
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Backward-compatible alias — prefer the explicit functions above
-# ═════════════════════════════════════════════════════════════════════════════
-
-# TODO: remove after all callers migrated to make_event_headers / make_data_headers
-make_headers = make_event_headers
 
 
 __all__ = [

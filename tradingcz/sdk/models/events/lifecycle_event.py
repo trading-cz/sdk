@@ -17,12 +17,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class ServiceLifecycle(BaseModel):
-    service_id: str
-    """Unique service identifier (e.g. ``"my-strategy"``)."""
-
-    event: Literal["up", "heartbeat", "down"]
-    """Lifecycle event type."""
-
+class LifecycleEvent(BaseModel):
+    # service_id: str -> bude v header
+    # TODO enum
+    type: Literal["up", "heartbeat", "down"]
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    """UTC timestamp when the event was emitted."""

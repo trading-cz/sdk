@@ -16,8 +16,8 @@ Usage::
         channel=events_channel,
         request_serializer=JsonCodec(DataRequest),
         response_deserializer=data_response_deserializer,
-        request_id_of=lambda r: r.request_id,
-        response_id_of=lambda r: r.request_id,
+        event_id_of=lambda r: r.event_id,
+        response_id_of=lambda r: r.event_id,
         timeout=30.0,
     ) as client:
         response = await client.request(my_data_request)
@@ -53,7 +53,7 @@ class RequestReplyClient[Req, Resp]:
         *,
         request_serializer: Serializer[Req],
         response_deserializer: Deserializer[Resp],
-        request_id_of: Callable[[Req], str],
+        event_id_of: Callable[[Req], str],
         response_id_of: Callable[[Resp], str],
         key_fn: Callable[[Req], str] | None = None,
         headers_fn: Callable[[Req], dict[str, str]] | None = None,
@@ -66,7 +66,7 @@ class RequestReplyClient[Req, Resp]:
                      receiving responses (typically the events topic).
             request_serializer: Converts ``Req`` to bytes.
             response_deserializer: Parses bytes into ``Resp``.
-            request_id_of: Extract the correlation ID from a request.
+            event_id_of: Extract the correlation ID from a request.
             response_id_of: Extract the correlation ID from a response.
             key_fn: Optional Kafka message key from request.
             headers_fn: Optional Kafka headers from request.
@@ -75,9 +75,9 @@ class RequestReplyClient[Req, Resp]:
         self._channel = channel
         self._request_serializer = request_serializer
         self._response_deserializer = response_deserializer
-        self._request_id_of = request_id_of
+        self._event_id_of = event_id_of
         self._response_id_of = response_id_of
-        self._key_fn: Callable[[Req], str] = key_fn or request_id_of
+        self._key_fn: Callable[[Req], str] = key_fn or event_id_of
         self._headers_fn = headers_fn
         self._timeout = timeout
         self._pending: dict[str, asyncio.Future[Resp]] = {}
@@ -137,7 +137,7 @@ class RequestReplyClient[Req, Resp]:
             TimeoutError: If no response arrives within *timeout* seconds.
         """
         payload = self._request_serializer.serialize(req)
-        req_id = self._request_id_of(req)
+        req_id = self._event_id_of(req)
         msg_key = self._key_fn(req)
         headers = self._headers_fn(req) if self._headers_fn else None
         await self._channel.send(payload, key=msg_key, headers=headers)

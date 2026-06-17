@@ -67,7 +67,7 @@ class TopicRegistry:
         )
 
         # Historical stock data: single partition, shared across all
-        # historical requests (request_id used for filtering).
+        # historical requests (event_id used for filtering).
         self.historical_data = TopicConfig(
             name=f"{env}-stock-market-historical-data",
             partitions=1,

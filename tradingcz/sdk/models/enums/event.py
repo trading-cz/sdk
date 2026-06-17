@@ -28,8 +28,6 @@ class EventType(StrEnum):
     """Unified event type — used for both Kafka ``message_type`` headers
     and ``event_type`` payload fields.
 
-    Canonical values driving deserialization routing and event dispatch.
-
     Usage::
 
         # Kafka wire header
@@ -44,7 +42,7 @@ class EventType(StrEnum):
     DATA_REQUEST = "data_request"
     DATA_READY = "data_ready"
     DATA_ERROR = "data_error"
-    SERVICE_REQUEST = "service_request"
+    SERVICE_REQUEST = "service_request" # executor
     SERVICE_LIFECYCLE = "service_lifecycle"
 
     # ── Service responses (event topic) ──────────────────────────────────
@@ -57,6 +55,7 @@ class EventType(StrEnum):
     TRADING_SIGNAL = "trading_signal"
 
     # ── Market data (data topics) ────────────────────────────────────────
+    # TODO wrong enum - move somewhere else
     BAR = "bar"
     QUOTE = "quote"
     TRADE = "trade"
@@ -89,3 +88,10 @@ type OrderRequest = (
     | StopOrderRequest
     | TrailingStopOrderRequest
 )
+
+class DataRequestType(StrEnum):
+    HISTORICAL = "historical"
+    STREAMING = "streaming"
+
+class DataAssetRequestType(StrEnum):
+  # TODO

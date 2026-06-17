@@ -163,9 +163,9 @@ class ServiceApp:
         Example::
 
             await self.publish(
-                DataReady(request_id="...", ...),
+                DataReady(event_id="...", ...),
                 message_type=EventType.DATA_READY,
-                key=request_id,
+                key=event_id,
             )
         """
         if self._faf is None:

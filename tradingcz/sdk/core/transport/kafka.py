@@ -32,7 +32,7 @@ class KafkaChannel:
     fan-out semantics.
 
     All messages carry headers (``dict[str, str]``).  Headers are the
-    primary mechanism for metadata (message_type, source_app, request_id,
+    primary mechanism for metadata (message_type, source_app, event_id,
     schema_version, sequence, etc.).
     """
 

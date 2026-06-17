@@ -24,7 +24,7 @@ class Position(BaseModel):
 class PositionList(BaseModel):
     """Response to a get_positions request."""
 
-    request_id: str
+    event_id: str
     positions: list[Position]
 
 

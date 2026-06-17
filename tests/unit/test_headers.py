@@ -58,12 +58,12 @@ class TestMakeEventHeaders:
         h = make_event_headers(
             event_type=EventType.DATA_REQUEST,
             source_app="ingestion",
-            request_id="abc-123",
+            event_id="abc-123",
             broker="alpaca",
         )
         assert h[Header.EVENT_TYPE] == "data_request"
         assert h[Header.SOURCE_APP] == "ingestion"
-        assert h[Header.REQUEST_ID] == "abc-123"
+        assert h[Header.EVENT_ID] == "abc-123"
         assert h[Header.BROKER] == "alpaca"
 
     def test_extra_kwargs(self) -> None:
@@ -126,10 +126,10 @@ class TestParseMessage:
     def test_parse_data_request(self) -> None:
         from tradingcz.sdk.models.events import DataRequest
 
-        payload = b'{"request_id":"abc","symbols":["AAPL"]}'
+        payload = b'{"event_id":"abc","symbols":["AAPL"]}'
         result = parse_message(EventType.DATA_REQUEST, payload)
         assert isinstance(result, DataRequest)
-        assert result.request_id == "abc"
+        assert result.event_id == "abc"
 
     def test_parse_unknown_type_raises(self) -> None:
         try:
@@ -158,24 +158,24 @@ class TestEventHeadersModel:
         h = EventHeaders(
             event_type=EventType.DATA_REQUEST,
             source_app="ingestion",
-            request_id="abc-123",
+            event_id="abc-123",
         )
         d = h.to_kafka()
         assert d["event_type"] == "data_request"
         assert d["source_app"] == "ingestion"
-        assert d["request_id"] == "abc-123"
+        assert d["event_id"] == "abc-123"
         assert "sequence" not in d
 
     def test_from_kafka_roundtrip(self) -> None:
         original = EventHeaders(
             event_type=EventType.DATA_READY,
             source_app="ingestion",
-            request_id="req-1",
+            event_id="req-1",
         )
         parsed = EventHeaders.from_kafka(original.to_kafka())
         assert parsed.event_type == EventType.DATA_READY
         assert parsed.source_app == "ingestion"
-        assert parsed.request_id == "req-1"
+        assert parsed.event_id == "req-1"
 
     def test_from_kafka_preserves_unknown(self) -> None:
         parsed = EventHeaders.from_kafka(

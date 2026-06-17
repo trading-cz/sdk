@@ -62,8 +62,8 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
 class RequestReply:
     """Send a typed request, await a correlated typed response.
 
-    Correlation is by ``request_id`` — both request and response models
-    must have a ``request_id: str`` field (convention, not Protocol).
+    Correlation is by ``event_id`` — both request and response models
+    must have a ``event_id: str`` field (convention, not Protocol).
 
     Uses ``make_headers()`` for consistent header construction.
     Flushes after each request to guarantee delivery before awaiting
@@ -141,7 +141,7 @@ class RequestReply:
         """Send *req*, await a correlated *Resp*.
 
         Args:
-            req: The request model (must have ``request_id: str``).
+            req: The request model (must have ``event_id: str``).
             response_type: Expected response Pydantic model class.
             request_type: :class:`EventType` enum value for the header
                 (auto-inferred from the request class name if None).
@@ -152,11 +152,11 @@ class RequestReply:
 
         Raises:
             TimeoutError: No correlated response within *timeout*.
-            ValueError: If *req* has no ``request_id`` attribute.
+            ValueError: If *req* has no ``event_id`` attribute.
         """
-        request_id: str = getattr(req, "request_id", "")
-        if not request_id:
-            raise ValueError(f"Request model {type(req).__name__} has no request_id")
+        event_id: str = getattr(req, "event_id", "")
+        if not event_id:
+            raise ValueError(f"Request model {type(req).__name__} has no event_id")
 
         _ = response_type  # used only for type-checker generic binding
         mt = request_type or _infer_message_type(req)
@@ -166,15 +166,15 @@ class RequestReply:
         headers = EventHeaders(
             event_type=mt,
             source_app=self._service_id,
-            request_id=request_id,
+            event_id=event_id,
         ).to_kafka()
-        key = str(KafkaKey.for_event(mt, self._service_id, request_id))
+        key = str(KafkaKey.for_event(mt, self._service_id, event_id))
         # Send + flush — request delivery must be guaranteed before awaiting response
         await self._channel.send(payload, key=key, headers=headers)
         await self._channel.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
-        self._pending[request_id] = future  # type: ignore[assignment]
+        self._pending[event_id] = future  # type: ignore[assignment]
 
         try:
             # Use asyncio.wait (not wait_for) so that CancelledError
@@ -184,18 +184,18 @@ class RequestReply:
             done, _ = await asyncio.wait([future], timeout=timeout)
             if not done:
                 raise TimeoutError(
-                    f"Request {request_id!r} timed out after {timeout:.1f}s"
+                    f"Request {event_id!r} timed out after {timeout:.1f}s"
                 )
             return future.result()
         finally:
-            self._pending.pop(request_id, None)
+            self._pending.pop(event_id, None)
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     async def _listen(self) -> None:
-        """Background task: consume channel, dispatch responses by request_id."""
+        """Background task: consume channel, dispatch responses by event_id."""
         logger.debug("RequestReply listener started on %s", self._channel.name)
         try:
             async for msg in self._channel.receive():
@@ -211,7 +211,7 @@ class RequestReply:
                     self._skipped += 1
                     continue
 
-                resp_id: str = getattr(parsed, Header.REQUEST_ID, "")
+                resp_id: str = getattr(parsed, Header.EVENT_ID, "")
                 if not resp_id:
                     continue
 

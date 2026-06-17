@@ -238,7 +238,7 @@ class BaseDataClient:
 
         try:
             async for msg in channel.receive():
-                if msg.headers.get(Header.REQUEST_ID) != req.request_id:
+                if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 if self._dedup.is_duplicate(
                     msg.headers.get(

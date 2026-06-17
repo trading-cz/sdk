@@ -23,7 +23,7 @@ from tradingcz.sdk.models.market.trade import Trade
 # All members share ``symbol: str`` and ``timestamp: datetime``.
 MarketItem = Trade | Bar | Quote | StreamQuote | Snapshot | OptionSnapshot
 
-
+# TODO SMAZAT
 def market_item_message_type(item: MarketItem) -> EventType:
     """Infer the ``EventType`` from a market data item's class name.
 

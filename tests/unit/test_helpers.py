@@ -18,12 +18,12 @@ from tradingcz.sdk.models.headers import Header
 
 
 class Ping(BaseModel):
-    request_id: str
+    event_id: str
     message: str
 
 
 class Pong(BaseModel):
-    request_id: str
+    event_id: str
     reply: str
 
 
@@ -70,7 +70,7 @@ class TestInferEventType:
 
     def test_unknown_class_raises(self) -> None:
         class MyCustomEvent(BaseModel):
-            request_id: str = ""
+            event_id: str = ""
 
         with pytest.raises(ValueError, match="Cannot infer EventType"):
             _infer_message_type(MyCustomEvent())
@@ -83,7 +83,7 @@ class TestFireAndForget:
     @pytest.mark.asyncio
     async def test_send_builds_headers(self, mock_channel: AsyncMock) -> None:
         faf = FireAndForget(mock_channel, "test-service")
-        ping = Ping(request_id="r1", message="hello")
+        ping = Ping(event_id="r1", message="hello")
 
         await faf.send(ping, message_type=EventType.DATA_REQUEST, key="my-key")
 
@@ -98,7 +98,7 @@ class TestFireAndForget:
     @pytest.mark.asyncio
     async def test_send_increments_sequence(self, mock_channel: AsyncMock) -> None:
         faf = FireAndForget(mock_channel, "test")
-        ping = Ping(request_id="r1", message="a")
+        ping = Ping(event_id="r1", message="a")
 
         await faf.send(ping, message_type=EventType.DATA_REQUEST)
         await faf.send(ping, message_type=EventType.DATA_REQUEST)
@@ -109,7 +109,7 @@ class TestFireAndForget:
     @pytest.mark.asyncio
     async def test_extra_headers_merged(self, mock_channel: AsyncMock) -> None:
         faf = FireAndForget(mock_channel, "test")
-        ping = Ping(request_id="r1", message="hello")
+        ping = Ping(event_id="r1", message="hello")
 
         await faf.send(
             ping,
@@ -124,7 +124,7 @@ class TestFireAndForget:
     @pytest.mark.asyncio
     async def test_payload_is_json_bytes(self, mock_channel: AsyncMock) -> None:
         faf = FireAndForget(mock_channel, "test")
-        ping = Ping(request_id="r1", message="hello")
+        ping = Ping(event_id="r1", message="hello")
 
         await faf.send(ping, message_type=EventType.DATA_REQUEST)
 
@@ -134,7 +134,7 @@ class TestFireAndForget:
         import json
 
         parsed = json.loads(payload)
-        assert parsed["request_id"] == "r1"
+        assert parsed["event_id"] == "r1"
         assert parsed["message"] == "hello"
 
 
@@ -147,13 +147,13 @@ class TestRequestReply:
         rr = RequestReply(mock_channel, "test-service")
         await rr.start()
 
-        ping = Ping(request_id="req-1", message="hello")
+        ping = Ping(event_id="req-1", message="hello")
 
         async def _simulate_response() -> None:
             await asyncio.sleep(0.05)
             future = list(rr._pending.values())[0] if rr._pending else None
             if future and not future.done():
-                future.set_result(Pong(request_id="req-1", reply="world"))
+                future.set_result(Pong(event_id="req-1", reply="world"))
 
         asyncio.create_task(_simulate_response())
 
@@ -162,7 +162,7 @@ class TestRequestReply:
         )
 
         assert isinstance(resp, Pong)
-        assert resp.request_id == "req-1"
+        assert resp.event_id == "req-1"
         assert resp.reply == "world"
         mock_channel.send.assert_awaited_once()
         mock_channel.flush.assert_awaited_once()
@@ -176,13 +176,13 @@ class TestRequestReply:
         )
         await rr.start()
 
-        ping = Ping(request_id="req-h", message="test")
+        ping = Ping(event_id="req-h", message="test")
 
         async def _respond() -> None:
             await asyncio.sleep(0.05)
             for f in rr._pending.values():
                 if not f.done():
-                    f.set_result(Pong(request_id="req-h", reply="ok"))
+                    f.set_result(Pong(event_id="req-h", reply="ok"))
 
         asyncio.create_task(_respond())
 
@@ -193,13 +193,13 @@ class TestRequestReply:
         headers = mock_channel.send.await_args.kwargs["headers"]
         assert headers[Header.EVENT_TYPE] == "data_request"
         assert headers[Header.SOURCE_APP] == "test-service"
-        assert headers[Header.REQUEST_ID] == "req-h"
+        assert headers[Header.EVENT_ID] == "req-h"
         assert Header.SEQUENCE not in headers  # event topic, no sequence
 
         await rr.close()
 
     @pytest.mark.asyncio
-    async def test_request_without_request_id_raises(
+    async def test_request_without_event_id_raises(
         self, mock_channel: AsyncMock
     ) -> None:
         rr = RequestReply(mock_channel, "test")
@@ -207,7 +207,7 @@ class TestRequestReply:
         class BadRequest(BaseModel):
             pass
 
-        with pytest.raises(ValueError, match="request_id"):
+        with pytest.raises(ValueError, match="event_id"):
             await rr.request(BadRequest(), response_type=Pong, timeout=1.0)
 
     @pytest.mark.asyncio
@@ -215,7 +215,7 @@ class TestRequestReply:
         rr = RequestReply(mock_channel, "test")
         await rr.start()
 
-        ping = Ping(request_id="req-timeout", message="test")
+        ping = Ping(event_id="req-timeout", message="test")
 
         with pytest.raises(asyncio.TimeoutError):
             await rr.request(

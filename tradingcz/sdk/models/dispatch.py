@@ -13,7 +13,7 @@ from tradingcz.sdk.models.events import (
     ServiceRequest,
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
-from tradingcz.sdk.models.health import ServiceLifecycle
+from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.market import Bar, Quote, Snapshot, StreamQuote, Trade
 
 # ── EventType → Pydantic model mapping ──────────────────────────────────────
@@ -23,7 +23,7 @@ _MODEL: dict[str, type[BaseModel]] = {
     EventType.DATA_READY: DataReady,
     EventType.DATA_ERROR: DataError,
     EventType.SERVICE_REQUEST: ServiceRequest,
-    EventType.SERVICE_LIFECYCLE: ServiceLifecycle,
+    EventType.SERVICE_LIFECYCLE: LifecycleEvent,
     EventType.TRADING_SIGNAL: ExecutionRequestEvent,
     EventType.EXECUTION_REQUEST: ExecutionRequestEvent,
     EventType.BAR: Bar,
@@ -34,7 +34,7 @@ _MODEL: dict[str, type[BaseModel]] = {
 }
 
 
-def model_for(event_type: str | EventType) -> type[BaseModel]:
+def model_for(event_type: EventType) -> type[BaseModel]:
     """Return the Pydantic model class for an EventType value.
 
     Raises ``ValueError`` if unknown.

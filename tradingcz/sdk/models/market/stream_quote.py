@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from tradingcz.sdk.models.market.quote import Quote
 
-
+# TODO: move to ingestion ??
 class StreamQuote(BaseModel):
     """A streaming quote from a broker.
 
@@ -18,18 +18,9 @@ class StreamQuote(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
-
     symbol: str
-    """Ticker symbol."""
-
     timestamp: datetime
-    """Exchange timestamp (tz-aware UTC)."""
-
     quote: Quote
-    """The underlying bid/ask quote."""
-
     broker: str = "alpaca"
-    """Broker that provided this quote."""
-
 
 __all__ = ["StreamQuote"]

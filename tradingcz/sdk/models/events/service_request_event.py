@@ -1,18 +1,22 @@
-"""Request  Event Model"""
-
-from typing import Literal
-
-from pydantic import Field
-
-from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.models.events.base_event import BaseEvent
+from pydantic import BaseModel, Field
+from uuid import UUID, uuid4
 
 
-class ServiceRequestEvent(BaseEvent):
-    """Service request order event model for any other request events
-    except execution request events (request actual positions, cash, etc.)"""
+# TODO: nedodelano, nutno predelat, nepouzivat
+class ServiceRequestEvent(BaseModel):
+    """General-purpose request to the executor/risk service.
+    """
 
-    event_type: Literal[EventType.SERVICE_REQUEST] = Field(
-        ...,
-        description="Type of the event: execution_request or trading_signal",
-    )
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the order")
+    service: str  # "get_positions", "get_balance"..
+    symbol: str | None = None
+    order_id: str | None = None
+    order_status: str | None = None
+
+
+# 1 -> jak to je v DB
+# 2 -> jak to je na brokeru
+
+
+# ucet -> $$$
+# pozice - open, executed
