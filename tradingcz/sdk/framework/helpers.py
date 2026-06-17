@@ -37,7 +37,7 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
         self,
         message: BaseModel,
         *,
-        message_type: EventType,
+        event_type: EventType,
         key: str = "",
         extra_headers: dict[str, str] | None = None,
     ) -> None:
@@ -45,13 +45,13 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
 
         Args:
             message: Pydantic model to serialize.
-            message_type: :class:`EventType` enum value for the header.
+            event_type: :class:`EventType` enum value for the header.
             key: Kafka message key (empty = no partitioning).
             extra_headers: Additional headers merged into standard set.
         """
         self._seq += 1
         headers = EventHeaders(
-            event_type=message_type,
+            event_type=event_type,
             source_app=self._service_id,
             **(extra_headers or {}),
         ).to_kafka()

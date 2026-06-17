@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from tradingcz.sdk.framework.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
-
+# TODO: Petr
 class OrderSummary(BaseModel):
     """Summary of a single order."""
 

@@ -31,17 +31,11 @@ class AlpacaSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ALPACA_", extra="ignore")
 
     api_key: str = Field("", description="Alpaca API key ID (env: ALPACA_API_KEY)")
-    secret_key: str = Field(
-        "", description="Alpaca API secret key (env: ALPACA_SECRET_KEY)"
-    )
-    data_api_url: str = Field(
-        "",
-        description="Override Data API base URL (env: ALPACA_DATA_API_URL). "
+    secret_key: str = Field("", description="Alpaca API secret key (env: ALPACA_SECRET_KEY)")
+    data_api_url: str = Field("", description="Override Data API base URL (env: ALPACA_DATA_API_URL). "
         "Leave empty for production. Set to http://localhost:8081 for simulator.",
     )
-    feed: Literal["sip", "iex"] = Field(
-        "iex", description="Data feed tier: sip (paid) or iex (free)"
-    )
+    feed: Literal["sip", "iex"] = Field("iex", description="Data feed tier: sip (paid) or iex (free)")
 
 
 class KafkaSettings(BaseSettings):
@@ -66,32 +60,13 @@ class KafkaSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
 
-    bootstrap_servers: str = Field(
-        ..., description="Kafka broker addresses (env: KAFKA_BOOTSTRAP_SERVERS)"
-    )
-    consumer_group: str = Field(
-        ..., description="Consumer group id (env: KAFKA_CONSUMER_GROUP)"
-    )
-    consumer_poll_timeout: float = Field(
-        1.0,
-        description="Seconds between consumer poll attempts (env: KAFKA_CONSUMER_POLL_TIMEOUT)",
-    )
-    default_num_partitions: int = Field(
-        5,
-        description="Default partition count for auto-created topics (env: KAFKA_DEFAULT_NUM_PARTITIONS)",
-    )
-    default_replication_factor: int = Field(
-        1,
-        description="Default replication factor for auto-created topics (env: KAFKA_DEFAULT_REPLICATION_FACTOR)",
-    )
-    default_retention_ms: int = Field(
-        432000000,
-        description="Default retention in ms for auto-created topics, 5 days (env: KAFKA_DEFAULT_RETENTION_MS)",
-    )
-    default_cleanup_policy: str = Field(
-        "delete",
-        description="Default cleanup policy for auto-created topics (env: KAFKA_DEFAULT_CLEANUP_POLICY)",
-    )
+    bootstrap_servers: str = Field(..., description="Kafka broker addresses (env: KAFKA_BOOTSTRAP_SERVERS)")
+    consumer_group: str = Field(..., description="Consumer group id (env: KAFKA_CONSUMER_GROUP)")
+    consumer_poll_timeout: float = Field(1.0, description="Seconds between consumer poll attempts (env: KAFKA_CONSUMER_POLL_TIMEOUT)")
+    default_num_partitions: int = Field(5, description="Default partition count for auto-created topics (env: KAFKA_DEFAULT_NUM_PARTITIONS)")
+    default_replication_factor: int = Field(1, description="Default replication factor for auto-created topics (env: KAFKA_DEFAULT_REPLICATION_FACTOR)")
+    default_retention_ms: int = Field(432000000, description="Default retention in ms for auto-created topics, 5 days (env: KAFKA_DEFAULT_RETENTION_MS)")
+    default_cleanup_policy: str = Field("delete", description="Default cleanup policy for auto-created topics (env: KAFKA_DEFAULT_CLEANUP_POLICY)")
 
     # librdkafka pass-through — any key/value pair accepted by librdkafka config
     producer_overrides: dict[str, str] = Field(default_factory=dict)

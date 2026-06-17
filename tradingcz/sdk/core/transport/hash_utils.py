@@ -11,6 +11,8 @@ Usage::
     p = partition_for("AAPL", 5)  # → which partition AAPL maps to
 """
 
+# TODO: smazat?
+
 import struct
 
 _MURMUR2_SEED = 0x9747B28C

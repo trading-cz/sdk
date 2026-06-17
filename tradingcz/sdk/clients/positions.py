@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from tradingcz.sdk.framework.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
-
+# TODO: Petr
 class Position(BaseModel):
     """A single open position."""
 
@@ -47,9 +47,7 @@ class PositionClient:
         resp = await self._rr.request(req, response_type=PositionList, timeout=timeout)
         return resp.positions
 
-    async def get_position(
-        self, symbol: str, *, timeout: float = 30.0
-    ) -> Position | None:
+    async def get_position(self, symbol: str, *, timeout: float = 30.0) -> Position | None:
         """Return position for a single symbol, or None."""
         positions = await self.get_positions(timeout=timeout)
         for pos in positions:

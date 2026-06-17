@@ -14,24 +14,7 @@ class SignalPublisher:
     def __init__(self, faf: FireAndForget) -> None:
         self._faf = faf
 
-    async def publish(
-        self,
-        signal: ExecutionRequestEvent,
-        *,
-        tracking_id: str,
-    ) -> None:
-        """Publish a trading signal.
-
-        Sends to the event topic with:
-          - message_type = TRADING_SIGNAL
-          - key = signal.id (UUID string)
-          - headers: source_app, tracking_id, schema_version, sequence
-        """
-        await self._faf.send(
-            signal,
-            message_type=EventType.TRADING_SIGNAL,
-            key=str(signal.id),
-            extra_headers={
-                "tracking_id": tracking_id,
-            },
-        )
+    async def publish(self, signal: ExecutionRequestEvent, *, event_id: str, ) -> None:
+        """Publish a trading signal.  """
+        await self._faf.send(signal, event_type=EventType.TRADING_SIGNAL, key=str(signal.id),
+                             extra_headers={"event_id": event_id})

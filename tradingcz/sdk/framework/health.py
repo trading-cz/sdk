@@ -125,7 +125,7 @@ class HealthPublisher:
         try:
             await self._faf.send(
                 lifecycle,
-                message_type=EventType.SERVICE_LIFECYCLE,
+                event_type=EventType.SERVICE_LIFECYCLE,
                 key=key,
             )
             if event in ("up", "down"):

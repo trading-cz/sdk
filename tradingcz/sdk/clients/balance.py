@@ -8,7 +8,7 @@ from tradingcz.sdk.framework.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
 
-#TODO - Petr
+#TODO: Petr
 class Balance(BaseModel):
     """Account balance snapshot."""
 

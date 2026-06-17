@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from tradingcz.sdk import TradingApp
 from tradingcz.model.signal import TradingSignal
 
+
 async def main():
     async with TradingApp(service_id="my-strategy") as app:
         signal = TradingSignal(
@@ -30,7 +31,8 @@ async def main():
             valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
             atr_value=2.5,
         )
-        await app.signals.publish(signal, tracking_id="trk-001")
+        await app.signals.publish(signal, event_id="trk-001")
+
 
 asyncio.run(main())
 ```

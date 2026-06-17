@@ -85,7 +85,7 @@ class TestFireAndForget:
         faf = FireAndForget(mock_channel, "test-service")
         ping = Ping(event_id="r1", message="hello")
 
-        await faf.send(ping, message_type=EventType.DATA_REQUEST, key="my-key")
+        await faf.send(ping, event_type=EventType.DATA_REQUEST, key="my-key")
 
         mock_channel.send.assert_awaited_once()
         call_kwargs = mock_channel.send.await_args.kwargs
@@ -100,8 +100,8 @@ class TestFireAndForget:
         faf = FireAndForget(mock_channel, "test")
         ping = Ping(event_id="r1", message="a")
 
-        await faf.send(ping, message_type=EventType.DATA_REQUEST)
-        await faf.send(ping, message_type=EventType.DATA_REQUEST)
+        await faf.send(ping, event_type=EventType.DATA_REQUEST)
+        await faf.send(ping, event_type=EventType.DATA_REQUEST)
 
         assert mock_channel.send.await_count == 2
         # sequence counter is internal only — not exposed in event headers
@@ -113,7 +113,7 @@ class TestFireAndForget:
 
         await faf.send(
             ping,
-            message_type=EventType.DATA_REQUEST,
+            event_type=EventType.DATA_REQUEST,
             extra_headers={"tracking_id": "trk-1", "strategy_id": "strat-1"},
         )
 
@@ -126,7 +126,7 @@ class TestFireAndForget:
         faf = FireAndForget(mock_channel, "test")
         ping = Ping(event_id="r1", message="hello")
 
-        await faf.send(ping, message_type=EventType.DATA_REQUEST)
+        await faf.send(ping, event_type=EventType.DATA_REQUEST)
 
         # payload is the first positional argument to channel.send()
         payload = mock_channel.send.await_args.args[0]
