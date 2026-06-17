@@ -1,3 +1,9 @@
+"""TimeKeeper — market clock wrapper that fires asyncio events before close.
+
+A client that wraps a ``MarketClockProvider`` and periodically fires
+``asyncio.Event`` objects when the market approaches close.
+"""
+
 import asyncio
 import logging
 import time
@@ -23,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 class TimeKeeper:
+    """Track market time and fire warning events before market close."""
+
     def __init__(
         self,
         market_clock_provider: MarketClockProvider,
@@ -39,6 +47,7 @@ class TimeKeeper:
         self._task = asyncio.create_task(self.run_loop(), name="time-keeper-heartbeat")
 
     async def stop_timekeeping(self) -> None:
+        """Stop the heartbeat."""
         if self._task:
             self._task.cancel()
             try:
@@ -64,6 +73,7 @@ class TimeKeeper:
         return int(time_to_close.total_seconds())
 
     async def run_loop(self) -> None:
+        """Main loop — refreshes clock cache and fires warning events."""
         last_sync_time: float | None = None
         minutes_remaining: int = 0
         while True:
@@ -86,21 +96,11 @@ class TimeKeeper:
             now: datetime = await self._clock.get_current_market_time()
             next_close: datetime = await self._clock.get_next_market_close()
 
-            # Calculate total remaining minutes until the closing bell
             time_to_close: timedelta = next_close - now
-
             minutes_remaining_new = int(time_to_close.total_seconds() // 60)
 
             if minutes_remaining_new != minutes_remaining:
                 minutes_remaining = minutes_remaining_new
-
-            # logger.debug("Time until market close: %d minutes", minutes_remaining)
-
-            # time_to_open = await self._clock.get_next_market_open() - now
-            # minutes_to_open = int(time_to_open.total_seconds() // 60)
-            # logger.debug("Time until market open: %d minutes", minutes_to_open)
-
-            # Fire any events that match the current countdown mark
 
             if minutes_remaining in self._market_close_warning_events:
                 logger.debug(

@@ -3,11 +3,15 @@
 Core building blocks for all trading-cz services:
 - transport, messaging, serialization
 - models (market data, events, orders)
-- clients, framework, indicators, common utilities
+- trading clients, indicators, common utilities
 """
 
 from pathlib import Path
 from pkgutil import extend_path
+
+from tradingcz.sdk.trading import TradingApp, ServiceApp
+
+__all__ = ["TradingApp", "ServiceApp"]
 
 # Allow `tradingcz.sdk.*` portions from multiple distributions.
 __path__ = extend_path(__path__, __name__)

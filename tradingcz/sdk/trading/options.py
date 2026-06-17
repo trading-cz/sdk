@@ -14,7 +14,7 @@ from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
 
 if TYPE_CHECKING:
-    from tradingcz.sdk.clients.base import BaseDataClient
+    from tradingcz.sdk.trading._base import BaseDataClient
 
 
 class OptionsDataClient:

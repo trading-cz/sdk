@@ -16,7 +16,7 @@ Minimal setup — just provide a ``service_id``::
                     break
 
         # Publish a trading signal
-        await app.signals.publish(signal)
+        await app.signals.publish(signal, event_id="...")
 
 Feature flags::
 
@@ -28,7 +28,7 @@ Multi-broker::
     async with TradingApp(service_id="arbitrage") as app:
         alpaca_bars = await app.stock.bars(["AAPL"])
 
-
+Environment variables:
     KAFKA_BOOTSTRAP_SERVERS  — Kafka broker addresses (default: localhost:9092)
     KAFKA_CONSUMER_GROUP     — Consumer group id (default: <service_id>)
     SDK_ENV                  — Environment name (default: dev)
@@ -40,16 +40,15 @@ from __future__ import annotations
 
 import os
 
-from tradingcz.sdk.clients.balance import BalanceClient
-from tradingcz.sdk.clients.base import BaseDataClient
-from tradingcz.sdk.clients.data.corporate import CorporateActionsClient
-from tradingcz.sdk.clients.data.options import OptionsDataClient
-from tradingcz.sdk.clients.data.stock import StockDataClient
-from tradingcz.sdk.clients.orders import OrderClient
-from tradingcz.sdk.clients.positions import PositionClient
-from tradingcz.sdk.clients.signals import SignalPublisher
-from tradingcz.sdk.helpers import FireAndForget, RequestReply
-from tradingcz.sdk.service import ServiceApp
+from tradingcz.sdk.trading._base import BaseDataClient
+from tradingcz.sdk.trading.account import BalanceClient, OrderClient, PositionClient
+from tradingcz.sdk.trading.corporate import CorporateActionsClient
+from tradingcz.sdk.trading.options import OptionsDataClient
+from tradingcz.sdk.trading.signals import SignalPublisher
+from tradingcz.sdk.trading.stock import StockDataClient
+from tradingcz.sdk.transport.exchange import RequestReply
+from tradingcz.sdk.transport.publish import FireAndForget
+from tradingcz.sdk.trading.service import ServiceApp
 
 
 class _BrokerScope:
@@ -80,6 +79,7 @@ class _BrokerScope:
 
 class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
     """Batteries-included trading application for strategy/consumer role."""
+
     def __init__(
         self,
         *,
@@ -141,18 +141,22 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         return self
 
     def with_signals(self, enable: bool = True) -> TradingApp:
+        """Enable/disable the signal publisher."""
         self._enable_signals = enable
         return self
 
     def with_positions(self, enable: bool = True) -> TradingApp:
+        """Enable/disable the position client."""
         self._enable_positions = enable
         return self
 
     def with_balance(self, enable: bool = True) -> TradingApp:
+        """Enable/disable the balance client."""
         self._enable_balance = enable
         return self
 
     def with_orders(self, enable: bool = True) -> TradingApp:
+        """Enable/disable the order client."""
         self._enable_orders = enable
         return self
 
@@ -197,7 +201,7 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         assert self.transport is not None
         assert self.topics is not None
 
-        # Shared internal helpers — use source_app for consistent header identity
+        # Shared internal primitives
         self._rr = RequestReply(self.events_channel, self.source_app)
         self._faf = FireAndForget(self.events_channel, self.source_app)
         await self._rr.start()
@@ -211,34 +215,27 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
             broker=self._broker,
         )
 
-        # Stock data client
         if self._enable_stock:
             self.stock = StockDataClient(self._base)
 
-        # Options data client
         if self._enable_options:
             self.options = OptionsDataClient(self._base)
 
-        # Corporate actions client
         if self._enable_corporate:
             self.corporate_actions = CorporateActionsClient(self._base)
 
-        # Signal publisher
         if self._enable_signals:
             assert self._faf is not None
             self.signals = SignalPublisher(faf=self._faf)
 
-        # Position client
         if self._enable_positions:
             assert self._rr is not None
             self.positions = PositionClient(rr=self._rr)
 
-        # Balance client
         if self._enable_balance:
             assert self._rr is not None
             self.balance = BalanceClient(rr=self._rr)
 
-        # Order client
         if self._enable_orders:
             assert self._rr is not None
             self.orders = OrderClient(rr=self._rr)

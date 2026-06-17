@@ -18,7 +18,7 @@ from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
 if TYPE_CHECKING:
-    from tradingcz.sdk.clients.base import BaseDataClient, StreamHandle
+    from tradingcz.sdk.trading._base import BaseDataClient, StreamHandle
 
 
 class StockDataClient:

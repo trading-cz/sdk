@@ -1,7 +1,8 @@
-"""Base class for all data clients — shared transport/consumption logic.
+"""BaseDataClient — internal shared transport logic for all market data clients.
 
-Internal module.  Application code imports ``StockDataClient``,
-``OptionsDataClient``, etc. — never this module directly.
+Application code never references this module directly.  Use
+``StockDataClient``, ``OptionsDataClient``, or ``CorporateActionsClient``
+via ``TradingApp``.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from types import TracebackType
 from tradingcz.sdk.transport.topics import TopicRegistry
 from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.kafka import KafkaTransport
-from tradingcz.sdk.helpers import RequestReply
+from tradingcz.sdk.transport.exchange import RequestReply
 from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
 from tradingcz.sdk.models.headers import Header
@@ -253,7 +254,7 @@ class BaseDataClient:
                 except Exception:  # pylint: disable=broad-exception-caught
                     logger.debug(
                         "Skipping unparseable %s",
-                        data_type,
+                        data_kind,
                         exc_info=True,
                     )
                     continue

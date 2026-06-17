@@ -1,10 +1,9 @@
-"""Internal helpers for the SDK business layer.
+"""RequestReply — send a typed request on a KafkaChannel, await correlated response.
 
-These are NOT part of the public API.  They are used internally by
-DataClient, SignalPublisher, PositionClient, etc.
+Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
 
-- ``RequestReply``   — send a typed request, await correlated response
-- ``FireAndForget``  — send a typed message, don't wait
+Correlation is by ``event_id`` — both request and response models
+must have an ``event_id: str`` field (convention, not Protocol).
 """
 
 from __future__ import annotations
@@ -22,43 +21,6 @@ from tradingcz.sdk.models.headers import EventHeaders, Header, KafkaKey
 logger = logging.getLogger(__name__)
 
 
-class FireAndForget:  # pylint: disable=too-few-public-methods
-    """Send a typed message on a KafkaChannel.  No response expected.
-
-    Used internally by: SignalPublisher.
-    """
-
-    def __init__(self, channel: KafkaChannel, service_id: str) -> None:
-        self._channel = channel
-        self._service_id = service_id
-        self._seq = 0
-
-    async def send(
-        self,
-        message: BaseModel,
-        *,
-        event_type: EventType,
-        key: str = "",
-        extra_headers: dict[str, str] | None = None,
-    ) -> None:
-        """Serialize *message* to JSON and publish with standard headers.
-
-        Args:
-            message: Pydantic model to serialize.
-            event_type: :class:`EventType` enum value for the header.
-            key: Kafka message key (empty = no partitioning).
-            extra_headers: Additional headers merged into standard set.
-        """
-        self._seq += 1
-        headers = EventHeaders(
-            event_type=event_type,
-            source_app=self._service_id,
-            **(extra_headers or {}),
-        ).to_kafka()
-        payload = message.model_dump_json(exclude_none=True).encode()
-        await self._channel.send(payload, key=key, headers=headers)
-
-
 class RequestReply:
     """Send a typed request, await a correlated typed response.
 
@@ -69,7 +31,7 @@ class RequestReply:
     Flushes after each request to guarantee delivery before awaiting
     the response.
 
-    Used internally by: DataClient, PositionClient, BalanceClient, OrderClient.
+    Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
     """
 
     def __init__(
@@ -177,10 +139,6 @@ class RequestReply:
         self._pending[event_id] = future  # type: ignore[assignment]
 
         try:
-            # Use asyncio.wait (not wait_for) so that CancelledError
-            # from a future cancelled by close() propagates directly
-            # instead of being converted to TimeoutError by the
-            # asyncio.timeout() context manager (Python 3.12+).
             done, _ = await asyncio.wait([future], timeout=timeout)
             if not done:
                 raise TimeoutError(

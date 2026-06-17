@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from tradingcz.sdk.clients.base import BaseDataClient
+    from tradingcz.sdk.trading._base import BaseDataClient
 
 
 class CorporateActionsClient:

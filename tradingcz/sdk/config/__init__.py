@@ -1,6 +1,6 @@
 """Application configuration settings."""
 
-from tradingcz.sdk.configuration.config import (
+from tradingcz.sdk.config.config import (
     AlpacaSettings,
     KafkaSettings,
     LoggingSettings,

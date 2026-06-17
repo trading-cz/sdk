@@ -19,7 +19,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 from tradingcz.sdk.transport.kafka import KafkaChannel
-from tradingcz.sdk.helpers import FireAndForget
+from tradingcz.sdk.transport.publish import FireAndForget
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.headers import Header, KafkaKey
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent

@@ -3,4 +3,9 @@
 # Import metrics module to register all prometheus metrics
 import tradingcz.sdk.observability.metrics  # noqa: F401
 
-__all__ = []
+from tradingcz.sdk.observability.health import HealthMonitor, HealthPublisher
+
+__all__ = [
+    "HealthPublisher",
+    "HealthMonitor",
+]
