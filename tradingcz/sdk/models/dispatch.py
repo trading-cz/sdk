@@ -10,7 +10,7 @@ from tradingcz.sdk.models.events import (
     DataError,
     DataReady,
     DataRequest,
-    ServiceRequest,
+    ServiceRequestEvent,
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
@@ -22,7 +22,7 @@ _MODEL: dict[str, type[BaseModel]] = {
     EventType.DATA_REQUEST: DataRequest,
     EventType.DATA_READY: DataReady,
     EventType.DATA_ERROR: DataError,
-    EventType.SERVICE_REQUEST: ServiceRequest,
+    EventType.SERVICE_REQUEST: ServiceRequestEvent,
     EventType.SERVICE_LIFECYCLE: LifecycleEvent,
     EventType.TRADING_SIGNAL: ExecutionRequestEvent,
     EventType.EXECUTION_REQUEST: ExecutionRequestEvent,

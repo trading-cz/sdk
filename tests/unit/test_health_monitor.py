@@ -6,12 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tradingcz.sdk.framework.health import HealthMonitor
-from tradingcz.sdk.models.health import ServiceLifecycle
+from tradingcz.sdk.health import HealthMonitor
+from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 
 
 class TestHealthMonitor:
-    """Tests for HealthMonitor — liveness tracking via ServiceLifecycle events."""
+    """Tests for HealthMonitor — liveness tracking via LifecycleEvent events."""
 
     @pytest.fixture
     def channel(self) -> MagicMock:
@@ -79,7 +79,7 @@ class TestHealthMonitor:
         for sid, evt in [("strat-1", "up"), ("strat-1", "heartbeat")]:
             msg = MagicMock()
             msg.headers = {"event_type": "service_lifecycle"}
-            msg.payload = ServiceLifecycle(service_id=sid, event=evt).model_dump_json().encode()  # type: ignore[arg-type]
+            msg.payload = LifecycleEvent(service_id=sid, event=evt).model_dump_json().encode()  # type: ignore[arg-type]
             events.append(msg)
 
         # Simulate receive() yielding events then stopping
@@ -123,7 +123,7 @@ class TestHealthMonitor:
 
         msg = MagicMock()
         msg.headers = {"event_type": "service_lifecycle"}
-        msg.payload = ServiceLifecycle(service_id="strat-1", event="down").model_dump_json().encode()  # type: ignore[arg-type]
+        msg.payload = LifecycleEvent(service_id="strat-1", event="down").model_dump_json().encode()  # type: ignore[arg-type]
 
         async def _receive(
             *, group_suffix: str = "", idle_timeout: float = 0.0

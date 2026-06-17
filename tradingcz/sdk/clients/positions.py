@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from tradingcz.sdk.framework.helpers import RequestReply
+from tradingcz.sdk.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
 # TODO: Petr
@@ -41,10 +41,13 @@ class PositionClient:
 
     async def get_positions(self, *, timeout: float = 30.0) -> list[Position]:
         """Return all currently open positions."""
-        from tradingcz.sdk.models.events import ServiceRequest
+        from tradingcz.sdk.models.events import ServiceRequestEvent
 
-        req = ServiceRequest(service="get_positions")
-        resp = await self._rr.request(req, response_type=PositionList, timeout=timeout)
+        req = ServiceRequestEvent(service="get_positions")
+        resp = await self._rr.request(
+            req, response_type=PositionList, timeout=timeout,
+            request_type=EventType.SERVICE_REQUEST,
+        )
         return resp.positions
 
     async def get_position(self, symbol: str, *, timeout: float = 30.0) -> Position | None:

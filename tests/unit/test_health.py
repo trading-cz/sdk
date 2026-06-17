@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tradingcz.sdk.framework.health import HealthPublisher
-from tradingcz.sdk.models.health import ServiceLifecycle
+from tradingcz.sdk.health import HealthPublisher
+from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 
 
 @pytest.fixture
@@ -28,8 +28,8 @@ class TestHealthPublisher:
         # Should have sent "up" event
         mock_faf.send.assert_awaited_once()
         call_args = mock_faf.send.await_args
-        lifecycle: ServiceLifecycle = call_args.args[0]
-        assert isinstance(lifecycle, ServiceLifecycle)
+        lifecycle: LifecycleEvent = call_args.args[0]
+        assert isinstance(lifecycle, LifecycleEvent)
         assert lifecycle.service_id == "test-service"
         assert lifecycle.event == "up"
 

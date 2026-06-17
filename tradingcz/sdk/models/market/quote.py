@@ -8,18 +8,18 @@ Represents the best bid and ask prices (and sometimes sizes) at a point in time.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Quote(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    symbol: str
-    timestamp: datetime  # tz-aware UTC
-    bid_price: float
-    ask_price: float
-    bid_size: float | None = None
-    ask_size: float | None = None
-    bid_exchange: str | None = None
-    ask_exchange: str | None = None
-    conditions: list[str] | None = None
+    symbol: str = Field(..., description="Ticker symbol")
+    timestamp: datetime = Field(..., description="Quote timestamp, tz-aware UTC")
+    bid_price: float = Field(..., description="Best bid price")
+    ask_price: float = Field(..., description="Best ask price")
+    bid_size: float | None = Field(default=None, description="Bid size in shares")
+    ask_size: float | None = Field(default=None, description="Ask size in shares")
+    bid_exchange: str | None = Field(default=None, description="Bid exchange code")
+    ask_exchange: str | None = Field(default=None, description="Ask exchange code")
+    conditions: list[str] | None = Field(default=None, description="Quote conditions/modifiers")

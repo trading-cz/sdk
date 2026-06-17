@@ -1,6 +1,6 @@
 """SignalPublisher — publish trading signals (fire-and-forget)."""
 
-from tradingcz.sdk.framework.helpers import FireAndForget
+from tradingcz.sdk.helpers import FireAndForget
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
 

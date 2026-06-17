@@ -1,8 +1,7 @@
-"""OptionsDataClient — option snapshots, chain, and bars.
+"""OptionsDataClient — option snapshots and bars.
 
 One-time (returns ``dict``):
   - ``snapshots()`` — latest trade, quote, greeks, IV for given symbols
-  - ``chain()``     — all contracts for an underlying
 """
 
 # pylint: disable=protected-access
@@ -11,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
 
 if TYPE_CHECKING:
@@ -27,12 +27,6 @@ class OptionsDataClient:
 
         # Single snapshot
         snaps = await app.options.snapshots(["AAPL250620C00150000"])
-
-        # Full chain
-        chain = await app.options.chain("AAPL")
-        for symbol, snap in chain.items():
-            if snap.implied_volatility and snap.implied_volatility > 0.3:
-                print(f"High IV: {symbol} IV={snap.implied_volatility:.2%}")
     """
 
     def __init__(self, base: BaseDataClient) -> None:
@@ -51,26 +45,7 @@ class OptionsDataClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset="option",
-            data_type="snapshots",
-            model_type=OptionSnapshot,
-            timeout=timeout,
-        )
-
-    async def chain(
-        self,
-        underlying: str,
-        *,
-        timeout: float = 30.0,
-    ) -> dict[str, list[OptionSnapshot]]:
-        """Request all option contracts for an underlying.
-
-        Returns ``{contract_symbol: [OptionSnapshot]}`` for all active
-        contracts.
-        """
-        return await self._base._request_historical(
-            symbols=[underlying],
-            asset="option",
-            data_type="chain",
+            data_kind=MarketDataType.SNAPSHOTS,
             model_type=OptionSnapshot,
             timeout=timeout,
         )

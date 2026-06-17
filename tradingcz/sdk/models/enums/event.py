@@ -90,8 +90,63 @@ type OrderRequest = (
 )
 
 class DataRequestType(StrEnum):
-    HISTORICAL = "historical"
-    STREAMING = "streaming"
+    """``DataRequest.type`` and ``DataReady.type`` — the kind of data-plane operation.
 
-class DataAssetRequestType(StrEnum):
-  # TODO
+    Used on both sides of the request/reply pair:
+    - ``DataRequest.type`` — what the client is asking for
+    - ``DataReady.type``   — what the ingestion pod fulfilled
+
+    ``UNSUBSCRIBE`` only appears in ``DataRequest``, never in ``DataReady``.
+    """
+
+    HISTORIC = "historic"
+    STREAM = "stream"
+    UNSUBSCRIBE = "unsubscribe"
+
+
+class AssetType(StrEnum):
+    """Asset class for a data request."""
+
+    STOCK = "stock"
+    OPTION = "option"
+    CRYPTO = "crypto"
+
+
+class MarketDataType(StrEnum):
+    """``DataRequest.data_kind`` — kind of market-data records to fetch or stream.
+
+    Used for both historical and streaming requests;
+    ``DataRequest.type`` carries the historic/stream/unsubscribe
+    distinction separately.
+
+    Values:
+        BARS            — OHLCV candlestick aggregates
+        TRADES          — individual trade ticks
+        QUOTES          — level-1 bid/ask quotes
+        SNAPSHOTS       — combined trade + quote + greeks snapshot
+        LATEST_BARS     — most-recent bar per symbol (no time range)
+        LATEST_TRADES   — most-recent trade per symbol
+        LATEST_QUOTES   — most-recent quote per symbol
+    """
+
+    BARS = "bars"
+    TRADES = "trades"
+    QUOTES = "quotes"
+    SNAPSHOTS = "snapshots"
+    LATEST_BARS = "latest_bars"
+    LATEST_TRADES = "latest_trades"
+    LATEST_QUOTES = "latest_quotes"
+
+
+class Broker(StrEnum):
+    """Supported market-data / execution brokers."""
+
+    ALPACA = "alpaca"
+
+
+class LifecycleEventType(StrEnum):
+    """``LifecycleEvent.type`` — service health/lifecycle transitions."""
+
+    UP = "up"
+    HEARTBEAT = "heartbeat"
+    DOWN = "down"

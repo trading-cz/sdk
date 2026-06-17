@@ -10,7 +10,6 @@ Models:
     - ``DataRequest``  — request historical or streaming market data
     - ``DataReady``    — acknowledgement: data available on data_topic
     - ``DataError``    — error response to a DataRequest
-    - ``ServiceRequest`` — general-purpose request to executor/risk
 
 All models carry ``event_id`` for correlation in request/reply flows.
 """
@@ -20,25 +19,28 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from tradingcz.sdk.models.enums.event import DataRequestType
+from tradingcz.sdk.models.enums.event import (
+    AssetType,
+    Broker,
+    DataRequestType,
+    MarketDataType,
+)
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 
 
-# TODO:
 class DataRequest(BaseModel):
     """Request for historical or streaming market data.
     """
 
-    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the order")
-    type: DataRequestType
-    asset: str = "stock"  # "stock", "option", "crypto"
-    broker: str = "alpaca"
-    symbols: list[str]
-    historical_data_type: str = "bars"  # "bars" | "trades" | "quotes" | "snapshots"
-    stream_type: str = "trades"
-    timeframe: Timeframe = Timeframe.D1  # canonical format: "1d", "4h", etc.
-    start_time: datetime | None = None
-    end_time: datetime | None = None
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for data request")
+    type: DataRequestType = Field(..., description="Request type: historical or streaming")
+    asset: AssetType = Field(default=AssetType.STOCK, description="Asset class: stock, option, etc.")
+    broker: Broker | None = Field(default=Broker.ALPACA, description="Data provider broker")
+    symbols: list[str] = Field(..., description="List of ticker symbols to request")
+    data_type: MarketDataType = Field(default=MarketDataType.BARS, description="Data type: bars, quotes, trades")
+    timeframe: Timeframe = Field(default=Timeframe.D1, description="Candle timeframe (1d, 4h, etc.)")
+    start_time: datetime | None = Field(default=None, description="Start time for historical data")
+    end_time: datetime | None = Field(default=None, description="End time for historical data")
 
 
 class DataReady(BaseModel):
@@ -48,16 +50,16 @@ class DataReady(BaseModel):
     ``record_count`` is set only when ``type="historic"``.
     """
 
-    event_id: str
-    broker: str
-    data_topic: str
-    type: str = "historic"  # "historic" or "stream"
-    record_count: int | None = None
+    event_id: str = Field(..., description="Correlation ID from DataRequest")
+    broker: Broker = Field(..., description="Data provider broker")
+    data_topic: str = Field(..., description="Kafka topic where data is published")
+    type: DataRequestType = Field(default=DataRequestType.HISTORIC, description="Request type: historical or streaming")
+    record_count: int | None = Field(default=None, description="Number of records published (historic only)")
 
 
 class DataError(BaseModel):
     """Error response to a DataRequest."""
 
-    event_id: str
-    broker: str
-    error: str
+    event_id: str = Field(..., description="Correlation ID from DataRequest")
+    broker: Broker = Field(..., description="Data provider broker")
+    error: str = Field(..., description="Error message describing the failure")

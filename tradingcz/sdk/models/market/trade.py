@@ -5,16 +5,16 @@ Represents a single executed trade at a point in time.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Trade(BaseModel):  # pylint: disable=too-many-instance-attributes
     model_config = ConfigDict(frozen=True)
 
-    symbol: str
-    timestamp: datetime  # tz-aware UTC
-    price: float
-    size: float
-    exchange: str | None = None
-    trade_id: str | None = None
-    conditions: list[str] | None = None
+    symbol: str = Field(..., description="Ticker symbol")
+    timestamp: datetime = Field(..., description="Trade timestamp, tz-aware UTC")
+    price: float = Field(..., description="Trade execution price")
+    size: float = Field(..., description="Trade size in shares")
+    exchange: str | None = Field(default=None, description="Exchange code where trade occurred")
+    trade_id: str | None = Field(default=None, description="Unique trade identifier")
+    conditions: list[str] | None = Field(default=None, description="Trade conditions/modifiers")

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
 if TYPE_CHECKING:
@@ -66,7 +67,7 @@ class StockDataClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset="stock",
-            data_type="bars",
+            data_kind=MarketDataType.BARS,
             model_type=Bar,
             timeframe=timeframe,
             days=days,
@@ -90,7 +91,7 @@ class StockDataClient:
         return await self._base._stream(
             symbols=symbols,
             asset="stock",
-            stream_type="quotes",
+            data_kind=MarketDataType.QUOTES,
             model_type=StreamQuote,
             timeout=timeout,
         )
@@ -110,7 +111,7 @@ class StockDataClient:
         return await self._base._stream(
             symbols=symbols,
             asset="stock",
-            stream_type="trades",
+            data_kind=MarketDataType.TRADES,
             model_type=Trade,
             timeout=timeout,
         )

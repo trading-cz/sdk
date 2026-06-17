@@ -1,22 +1,15 @@
-from pydantic import BaseModel, Field
 from uuid import UUID, uuid4
 
+from pydantic import BaseModel, Field
 
-# TODO: nedodelano, nutno predelat, nepouzivat
+
 class ServiceRequestEvent(BaseModel):
     """General-purpose request to the executor/risk service.
+
+    Carries ``event_id`` for request/reply correlation.  The ``service``
+    field names the operation (e.g. ``"get_balance"``, ``"get_orders"``,
+    ``"get_positions"``).
     """
 
-    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the order")
-    service: str  # "get_positions", "get_balance"..
-    symbol: str | None = None
-    order_id: str | None = None
-    order_status: str | None = None
-
-
-# 1 -> jak to je v DB
-# 2 -> jak to je na brokeru
-
-
-# ucet -> $$$
-# pozice - open, executed
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the service request")
+    service: str = Field(..., description="Service operation name")

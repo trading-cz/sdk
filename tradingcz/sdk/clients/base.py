@@ -11,11 +11,11 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 
-from tradingcz.sdk.core.topics import TopicRegistry
-from tradingcz.sdk.core.transport.dedup import DedupFilter
-from tradingcz.sdk.core.transport.kafka import KafkaTransport
-from tradingcz.sdk.framework.helpers import RequestReply
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.transport.topics import TopicRegistry
+from tradingcz.sdk.transport.dedup import DedupFilter
+from tradingcz.sdk.transport.kafka import KafkaTransport
+from tradingcz.sdk.helpers import RequestReply
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
 from tradingcz.sdk.models.headers import Header
 
@@ -99,13 +99,13 @@ class _Unsubscribe:
         rr: RequestReply,
         broker: str,
         symbols: list[str],
-        stream_type: str,
+        data_kind: MarketDataType,
         asset: str,
     ) -> None:
         self._rr = rr
         self._broker = broker
         self._symbols = symbols
-        self._stream_type = stream_type
+        self._data_type = data_kind
         self._asset = asset
 
     async def __call__(self) -> None:
@@ -115,7 +115,7 @@ class _Unsubscribe:
             asset=self._asset,
             broker=self._broker,
             symbols=self._symbols,
-            stream_type=self._stream_type,
+            data_type=self._data_type,
         )
         # Fire-and-forget — no response expected for unsubscribe
         self._rr.register_type(EventType.DATA_READY, DataReady)
@@ -129,9 +129,9 @@ class _Unsubscribe:
             )
         except Exception:
             logger.debug(
-                "Unsubscribe request failed for %s (stream=%s)",
+                "Unsubscribe request failed for %s (data_kind=%s)",
                 self._symbols,
-                self._stream_type,
+                self._data_type,
                 exc_info=True,
             )
 
@@ -180,7 +180,7 @@ class BaseDataClient:
         self,
         symbols: list[str],
         asset: str,
-        data_type: str,
+        data_kind: MarketDataType,
         model_type: type[T],
         *,
         timeframe: str | None = None,
@@ -207,7 +207,7 @@ class BaseDataClient:
             asset=asset,
             broker=self._broker,
             symbols=symbols,
-            historical_data_type=data_type,
+            data_type=data_kind,
             timeframe=timeframe or "1d",
             start_time=start,
             end_time=end,
@@ -277,7 +277,7 @@ class BaseDataClient:
         self,
         symbols: list[str],
         asset: str,
-        stream_type: str,
+        data_kind: MarketDataType,
         model_type: type[T],
         *,
         timeout: float = 30.0,
@@ -293,7 +293,7 @@ class BaseDataClient:
             asset=asset,
             broker=self._broker,
             symbols=symbols,
-            stream_type=stream_type,
+            data_type=data_kind,
         )
 
         resp = await self._rr.request(
@@ -333,7 +333,7 @@ class BaseDataClient:
             rr=self._rr,
             broker=self._broker,
             symbols=symbols,
-            stream_type=stream_type,
+            data_kind=data_kind,
             asset=asset,
         )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from tradingcz.sdk.framework.helpers import RequestReply
+from tradingcz.sdk.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
 
@@ -40,11 +40,12 @@ class BalanceClient:
 
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""
-        from tradingcz.sdk.models.events import ServiceRequest
+        from tradingcz.sdk.models.events import ServiceRequestEvent
 
-        req = ServiceRequest(service="get_balance")
+        req = ServiceRequestEvent(service="get_balance")
         resp = await self._rr.request(
-            req, response_type=BalanceResponse, timeout=timeout
+            req, response_type=BalanceResponse, timeout=timeout,
+            request_type=EventType.SERVICE_REQUEST,
         )
         return resp.balance
 

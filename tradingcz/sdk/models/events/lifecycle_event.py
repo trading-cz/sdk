@@ -12,13 +12,19 @@ Event types:
 """
 
 from datetime import UTC, datetime
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from tradingcz.sdk.models.enums.event import LifecycleEventType
+
 
 class LifecycleEvent(BaseModel):
-    # service_id: str -> bude v header
-    # TODO enum
-    type: Literal["up", "heartbeat", "down"]
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    """Service health and lifecycle event.
+
+    Emitted by services to signal they are up, running (heartbeat),
+    or shutting down. Used by HealthMonitor to track service liveness.
+    """
+
+    service_id: str = Field(..., description="Unique identifier for the service instance")
+    event: LifecycleEventType = Field(..., description="Lifecycle event type (up, heartbeat, down)")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Event timestamp")

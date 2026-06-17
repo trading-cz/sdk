@@ -6,7 +6,7 @@ Used by strategies consuming live market data.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.models.market.quote import Quote
 
@@ -18,9 +18,9 @@ class StreamQuote(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
-    symbol: str
-    timestamp: datetime
-    quote: Quote
-    broker: str = "alpaca"
+    symbol: str = Field(..., description="Ticker symbol")
+    timestamp: datetime = Field(..., description="Stream timestamp, tz-aware UTC")
+    quote: Quote = Field(..., description="Market quote data")
+    broker: str = Field(default="alpaca", description="Broker providing the stream")
 
 __all__ = ["StreamQuote"]

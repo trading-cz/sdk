@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from tradingcz.sdk.framework.helpers import RequestReply
+from tradingcz.sdk.helpers import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 
 # TODO: Petr
@@ -50,14 +50,17 @@ class OrderClient:
         timeout: float = 30.0,
     ) -> list[OrderSummary]:
         """Return orders, optionally filtered."""
-        from tradingcz.sdk.models.events import ServiceRequest
+        from tradingcz.sdk.models.events import ServiceRequestEvent
 
-        req = ServiceRequest(
+        req = ServiceRequestEvent(
             service="get_orders",
             symbol=symbol,
             order_status=status,
         )
-        resp = await self._rr.request(req, response_type=OrderList, timeout=timeout)
+        resp = await self._rr.request(
+            req, response_type=OrderList, timeout=timeout,
+            request_type=EventType.SERVICE_REQUEST,
+        )
         return resp.orders
 
     async def get_order_status(

@@ -65,9 +65,9 @@ class EventHeaders(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-    event_id: str = Field(..., description="")
-    event_type: EventType = Field(..., description="")
-    source_app: str = Field(..., description="")
+    event_id: str = Field(..., description="Unique event identifier")
+    event_type: EventType = Field(..., description="Type of event")
+    source_app: str = Field(..., description="Source application that generated the event")
 
     def to_kafka(self) -> dict[str, str]:
         """Serialize to Kafka wire format (``dict[str, str]``).
@@ -102,25 +102,14 @@ class DataHeaders(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-    event_type: EventType
+    event_type: EventType = Field(..., description="Type of market data event")
 
-    source_app: str = ""
-    """Service identifier."""
-
-    sequence: int = 0
-    """Monotonic sequence number for deduplication."""
-
-    broker: str = ""
-    """Broker identifier (e.g. ``"alpaca"``)."""
-
-    source: str = ""
-    """Source label (defaults to *source_app* if not set)."""
-
-    symbol: str = ""
-    """Ticker symbol (e.g. ``"AAPL"``)."""
-
-    event_id: str = ""
-    """Correlation ID (set when this data is a response to a request)."""
+    source_app: str = Field(default="", description="Service identifier")
+    sequence: int = Field(default=0, description="Monotonic sequence number for deduplication")
+    broker: str = Field(default="", description="Broker identifier (e.g. alpaca)")
+    source: str = Field(default="", description="Source label (defaults to source_app if not set)")
+    symbol: str = Field(default="", description="Ticker symbol (e.g. AAPL)")
+    event_id: str = Field(default="", description="Correlation ID (set when data is a response to a request)")
 
     def to_kafka(self) -> dict[str, str]:
         """Serialize to Kafka wire format (``dict[str, str]``).
@@ -165,8 +154,7 @@ class KafkaKey(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    value: str
-    """The serialized key string."""
+    value: str = Field(..., description="The serialized key string")
 
     def __str__(self) -> str:
         """Serialize to Kafka wire format (plain string)."""
@@ -236,6 +224,10 @@ def build_event_key(event_type: EventType, source_app: str, *extra: str) -> str:
         Prefer :class:`KafkaKey.for_event` for type safety.
     """
     return ":".join([str(event_type), source_app, *extra])
+
+
+# Backward-compatible alias — ``make_headers`` historically built event headers.
+make_headers = make_event_headers
 
 
 

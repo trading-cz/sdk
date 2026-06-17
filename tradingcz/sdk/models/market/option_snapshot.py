@@ -5,7 +5,7 @@ implied volatility) in a single call.  More efficient than fetching
 trade, quote, and greeks separately.
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.models.market.quote import Quote
 from tradingcz.sdk.models.market.trade import Trade
@@ -21,12 +21,12 @@ class OptionSnapshot(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    symbol: str
-    latest_trade: Trade | None = None
-    latest_quote: Quote | None = None
-    implied_volatility: float | None = None
-    delta: float | None = None
-    gamma: float | None = None
-    theta: float | None = None
-    vega: float | None = None
-    rho: float | None = None
+    symbol: str = Field(..., description="Option contract symbol")
+    latest_trade: Trade | None = Field(default=None, description="Latest executed trade")
+    latest_quote: Quote | None = Field(default=None, description="Latest bid/ask quote")
+    implied_volatility: float | None = Field(default=None, description="Implied volatility percentage")
+    delta: float | None = Field(default=None, description="Delta greek - price sensitivity")
+    gamma: float | None = Field(default=None, description="Gamma greek - delta sensitivity")
+    theta: float | None = Field(default=None, description="Theta greek - time decay")
+    vega: float | None = Field(default=None, description="Vega greek - volatility sensitivity")
+    rho: float | None = Field(default=None, description="Rho greek - interest rate sensitivity")

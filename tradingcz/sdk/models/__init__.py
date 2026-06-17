@@ -11,7 +11,7 @@ from tradingcz.sdk.models.events import (
     DataError,
     DataReady,
     DataRequest,
-    ServiceRequest,
+    ServiceRequestEvent,
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
 from tradingcz.sdk.models.headers import (
@@ -24,7 +24,7 @@ from tradingcz.sdk.models.headers import (
     make_event_headers,
     make_headers,
 )
-from tradingcz.sdk.models.health import ServiceLifecycle
+from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.market import (
     Bar,
     Quote,
@@ -64,13 +64,13 @@ __all__ = [
     "StreamQuote",
     # Market helpers
     "market_item_message_type",
-    # Health
-    "ServiceLifecycle",
+    # Health/Lifecycle
+    "LifecycleEvent",
     # Events
     "DataRequest",
     "DataReady",
     "DataError",
-    "ServiceRequest",
+    "ServiceRequestEvent",
     # Orders & Signals
     "ExecutionRequestEvent",
     "OrderRequest",
