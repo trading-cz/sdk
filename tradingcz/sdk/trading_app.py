@@ -38,8 +38,6 @@ Environment variables:
 
 from __future__ import annotations
 
-import os
-
 from tradingcz.sdk.account.balance import BalanceClient
 from tradingcz.sdk.account.orders import OrderClient
 from tradingcz.sdk.account.positions import PositionClient
@@ -86,18 +84,12 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         self,
         *,
         service_id: str,
-        env: str | None = None,
-        bootstrap_servers: str | None = None,
-        broker: str | None = None,
-        health_interval: float = 300.0,
+        env: str,
+        health_interval: float,
+        broker: str = "alpaca",
     ) -> None:
-        super().__init__(
-            service_id=service_id,
-            env=env,
-            bootstrap_servers=bootstrap_servers,
-            health_interval=health_interval,
-        )
-        self._broker = broker or os.environ.get("SDK_BROKER", "alpaca")
+        super().__init__(service_id=service_id, env=env, health_interval=health_interval)
+        self._broker = broker
 
         self._enable_stock = True
         self._enable_options = True

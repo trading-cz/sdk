@@ -16,7 +16,7 @@ class KafkaSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
 
-    bootstrap_servers: str = Field(..., description="Kafka broker addresses (env: KAFKA_BOOTSTRAP_SERVERS)")
+    bootstrap_servers: str = Field("localhost:9092", description="Kafka broker addresses (env: KAFKA_BOOTSTRAP_SERVERS)")
     consumer_group: str = Field(..., description="Consumer group id (env: KAFKA_CONSUMER_GROUP)")
     consumer_poll_timeout: float = Field(1.0, description="Seconds between consumer poll attempts (env: KAFKA_CONSUMER_POLL_TIMEOUT)")
     default_num_partitions: int = Field(5, description="Default partition count for auto-created topics (env: KAFKA_DEFAULT_NUM_PARTITIONS)")

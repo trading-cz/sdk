@@ -44,10 +44,7 @@ def setup_logging(
     """
 
     logging.Formatter.converter = time.gmtime
-    formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    )
-
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
 
