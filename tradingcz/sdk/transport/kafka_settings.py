@@ -35,13 +35,28 @@ class KafkaSettings(BaseSettings):
     def producer_config(self) -> dict[str, str]:
         """Build the full producer config (base + overrides).
 
-        Base defaults include linger.ms=5 for micro-batching.
+        Base defaults:
+        - linger.ms=5 for micro-batching
+        - compression.type=snappy to reduce network payload (critical for
+          high-frequency market data streams; halves message size)
+        - queue.buffering.max.messages=500000 to handle bursts
+        - queue.buffering.max.kbytes=524288 (512 MB) — prevents OOM on
+          small VMs while still allowing large bursts
+        - message.send.max.retries=10 — caps retries so the queue can
+          drain instead of accumulating indefinitely during broker slowdowns.
+          librdkafka default is MAX_INT (infinite), which fills the queue
+          when the broker is slow → BufferError: Local: Queue full.
+
         Override via ``KAFKA_PRODUCER_OVERRIDES`` env var
-        (e.g. ``{"compression.type": "snappy", "batch.size": "65536"}``).
+        (e.g. ``{"compression.type": "lz4", "batch.size": "131072"}``).
         """
         base: dict[str, str] = {
             "bootstrap.servers": self.bootstrap_servers,
             "linger.ms": "5",
+            "compression.type": "snappy",
+            "queue.buffering.max.messages": "500000",
+            "queue.buffering.max.kbytes": "524288",
+            "message.send.max.retries": "10",
         }
         return {**base, **self.producer_overrides}
 
