@@ -336,12 +336,7 @@ class RequestReplyClient[Req, Resp]:
         try:
             done, _ = await asyncio.wait([future], timeout=self._timeout)
             if not done:
-                logger.error(
-                    "Request timed out after %.1fs: req_id=%s channel=%s",
-                    self._timeout,
-                    req_id,
-                    self._channel.name,
-                )
+                logger.error( "Request timed out after %.1fs: req_id=%s channel=%s", self._timeout, req_id, self._channel.name, )
                 raise TimeoutError(
                     f"Request {req_id!r} timed out after {self._timeout:.1f}s"
                 )
@@ -370,11 +365,7 @@ class RequestReplyClient[Req, Resp]:
                     # (e.g. requests from other services on the same topic)
                     continue
                 except Exception:
-                    logger.warning(
-                        "Unexpected error deserializing message on %s",
-                        self._channel.name,
-                        exc_info=True,
-                    )
+                    logger.warning( "Unexpected error deserializing message on %s", self._channel.name, exc_info=True, )
                     continue
 
                 resp_id = self._response_id_of(resp)
@@ -395,5 +386,6 @@ class RequestReplyClient[Req, Resp]:
                     future.set_exception(
                         RuntimeError("RequestReplyClient listener crashed")
                     )
+
 
 

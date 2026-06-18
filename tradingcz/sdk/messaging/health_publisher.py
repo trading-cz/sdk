@@ -69,9 +69,7 @@ class HealthPublisher:
         self._heartbeat_task = None
 
         await self._emit(LifecycleEventType.DOWN)
-        logger.info(
-            "HealthPublisher stopped for %s (down event sent)", self._service_id
-        )
+        logger.info( "HealthPublisher stopped for %s (down event sent)", self._service_id )
 
     # ------------------------------------------------------------------
     # Internal
@@ -106,3 +104,4 @@ class HealthPublisher:
 
 
 __all__ = ["HealthPublisher"]
+

@@ -40,10 +40,7 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
         self,
         types: dict[str, type[BaseModel]],
     ) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        logger.info(
-            "RecoveryReader: replaying %s (idle_timeout=%.1fs)",
-            self._channel.name, self._idle_timeout,
-        )
+        logger.info( "RecoveryReader: replaying %s (idle_timeout=%.1fs)", self._channel.name, self._idle_timeout, )
         count = 0
         async for raw in self._channel.receive(idle_timeout=self._idle_timeout):
             msg_type = raw.headers.get(Header.EVENT_TYPE, "")
@@ -53,14 +50,9 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
             try:
                 model = model_cls.model_validate_json(raw.payload)
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.info(
-                    "RecoveryReader: skip bad payload for %s on %s (offset=%d)",
-                    msg_type, self._channel.name, raw.offset,
-                )
+                logger.info( "RecoveryReader: skip bad payload for %s on %s (offset=%d)", msg_type, self._channel.name, raw.offset, )
                 continue
             count += 1
             yield msg_type, model, raw
-        logger.info(
-            "RecoveryReader: replay done — %d messages yielded on %s",
-            count, self._channel.name,
-        )
+        logger.info( "RecoveryReader: replay done — %d messages yielded on %s", count, self._channel.name, )
+

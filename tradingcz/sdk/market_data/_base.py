@@ -16,7 +16,8 @@ from tradingcz.sdk.transport.topics import TopicRegistry
 from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.transport import KafkaTransport
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import EventType, MarketDataType, DataRequestType
+from tradingcz.sdk.models.enums.event import Broker, EventType, MarketDataType, DataRequestType, AssetType
+from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
 from tradingcz.sdk.models.headers import Header
 
@@ -98,10 +99,10 @@ class _Unsubscribe:
     def __init__(
         self,
         rr: RequestReply,
-        broker: str,
+        broker: Broker,
         symbols: list[str],
         data_kind: MarketDataType,
-        asset: str,
+        asset: AssetType,
     ) -> None:
         self._rr = rr
         self._broker = broker
@@ -129,12 +130,7 @@ class _Unsubscribe:
                 timeout=5.0,
             )
         except Exception:
-            logger.debug(
-                "Unsubscribe request failed for %s (data_kind=%s)",
-                self._symbols,
-                self._data_type,
-                exc_info=True,
-            )
+            logger.debug( "Unsubscribe request failed for %s (data_kind=%s)", self._symbols, self._data_type, exc_info=True, )
 
 
 # ------------------------------------------------------------------
@@ -180,11 +176,11 @@ class BaseDataClient:
     ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         symbols: list[str],
-        asset: str,
+        asset: AssetType,
         data_kind: MarketDataType,
         model_type: type[T],
         *,
-        timeframe: str | None = None,
+        timeframe: Timeframe | None = None,
         days: int | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -209,7 +205,7 @@ class BaseDataClient:
             broker=self._broker,
             symbols=symbols,
             data_type=data_kind,
-            timeframe=timeframe or "1d",
+            timeframe=timeframe or Timeframe.D1,
             start_time=start,
             end_time=end,
         )
@@ -226,11 +222,7 @@ class BaseDataClient:
         if resp.type != DataRequestType.HISTORIC:
             raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
 
-        logger.info(
-            "DataReady(historic): topic=%s record_count=%s",
-            resp.data_topic,
-            resp.record_count,
-        )
+        logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
         channel = await self._transport.channel(resp.data_topic)
         results: dict[str, list[T]] = {}
@@ -271,7 +263,7 @@ class BaseDataClient:
     ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         symbols: list[str],
-        asset: str,
+        asset: AssetType,
         data_kind: MarketDataType,
         model_type: type[T],
         *,
@@ -334,3 +326,4 @@ class BaseDataClient:
 
 
 __all__ = ["BaseDataClient", "StreamHandle"]
+

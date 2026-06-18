@@ -15,9 +15,10 @@ Usage::
     payload = serializer.serialize(bar)     # bytes
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from tradingcz.sdk.serialization.protocol import Codec, Serializer
+from tradingcz.sdk.exceptions import SerializationError
 
 
 class JsonSerializer[T: BaseModel](Serializer[T]):
@@ -52,8 +53,15 @@ class JsonCodec[T: BaseModel](Codec[T]):
         return self._serializer.serialize(value)
 
     def deserialize(self, payload: bytes) -> T:
-        """Deserialize UTF-8 JSON bytes into a model instance."""
-        return self._model.model_validate_json(payload)  # type: ignore[no-any-return]
+        """Deserialize UTF-8 JSON bytes into a model instance.
+
+        Raises:
+            SerializationError: If payload is not valid JSON or doesn't match the model.
+        """
+        try:
+            return self._model.model_validate_json(payload)  # type: ignore[no-any-return]
+        except ValidationError as exc:
+            raise SerializationError(f"Failed to deserialize {self._model.__name__}: {exc}") from exc
 
     def content_type(self) -> str:
         return "application/json"

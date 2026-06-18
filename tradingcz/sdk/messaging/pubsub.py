@@ -127,13 +127,7 @@ class TypedConsumer[T]:
             try:
                 yield self._deserializer.deserialize(msg.payload)
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug(
-                    "Skipping message on %s — not a valid %s (offset=%d key=%r)",
-                    self._channel.name,
-                    type(self._deserializer).__name__,
-                    msg.offset,
-                    msg.key,
-                )
+                logger.debug( "Skipping message on %s — not a valid %s (offset=%d key=%r)", self._channel.name, type(self._deserializer).__name__, msg.offset, msg.key, )
 
     async def consume_with_metadata(self) -> AsyncIterator[tuple[T, KafkaMessage]]:
         """Yield typed values WITH raw KafkaMessage metadata.
@@ -148,13 +142,7 @@ class TypedConsumer[T]:
             try:
                 yield self._deserializer.deserialize(msg.payload), msg
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug(
-                    "Skipping message on %s — not a valid %s (offset=%d key=%r)",
-                    self._channel.name,
-                    type(self._deserializer).__name__,
-                    msg.offset,
-                    msg.key,
-                )
+                logger.debug( "Skipping message on %s — not a valid %s (offset=%d key=%r)", self._channel.name, type(self._deserializer).__name__, msg.offset, msg.key, )
 
 
 class TypedParser:
@@ -180,12 +168,7 @@ class TypedParser:
         async for msg in self._channel.receive():
             msg_type = msg.headers.get(Header.EVENT_TYPE, "")
             if not msg_type:
-                logger.debug(
-                    "Skipping message on %s — no message_type header (offset=%d key=%r)",
-                    self._channel.name,
-                    msg.offset,
-                    msg.key,
-                )
+                logger.debug( "Skipping message on %s — no message_type header (offset=%d key=%r)", self._channel.name, msg.offset, msg.key, )
                 continue
             model_type = self._types.get(msg_type)
             if model_type is None:
@@ -193,14 +176,7 @@ class TypedParser:
             try:
                 parsed = model_type.model_validate_json(msg.payload)
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug(
-                    "Skipping message on %s — %s failed validation for %s (offset=%d key=%r)",
-                    self._channel.name,
-                    model_type.__name__,
-                    msg_type,
-                    msg.offset,
-                    msg.key,
-                )
+                logger.debug( "Skipping message on %s — %s failed validation for %s (offset=%d key=%r)", self._channel.name, model_type.__name__, msg_type, msg.offset, msg.key, )
                 continue
             yield msg_type, parsed, msg
 
@@ -298,3 +274,4 @@ __all__ = [
     "make_market_headers",
     "stream_producer",
 ]
+

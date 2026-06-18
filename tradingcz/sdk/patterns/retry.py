@@ -46,13 +46,7 @@ class Retry:
                 last_exc = exc
                 self._attempts += 1
                 if attempt < self.max_retries:
-                    logger.warning(
-                        "Retry %d/%d: %s — retrying in %.1fs",
-                        attempt + 1,
-                        self.max_retries + 1,
-                        exc,
-                        self.delay,
-                    )
+                    logger.warning( "Retry %d/%d: %s — retrying in %.1fs", attempt + 1, self.max_retries + 1, exc, self.delay, )
                     await asyncio.sleep(self.delay)
 
         raise last_exc  # type: ignore[misc]
@@ -61,3 +55,4 @@ class Retry:
     def attempts(self) -> int:
         """Total retry attempts made across all ``call()`` invocations."""
         return self._attempts
+

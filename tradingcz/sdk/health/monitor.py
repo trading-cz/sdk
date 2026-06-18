@@ -113,11 +113,7 @@ class HealthMonitor:
                     is_new = sid not in self._seen
                     self._seen[sid] = time.monotonic()
                     if is_new:
-                        logger.info(
-                            "HealthMonitor: %s is now alive (event=%s)",
-                            sid,
-                            event.event,
-                        )
+                        logger.info( "HealthMonitor: %s is now alive (event=%s)", sid, event.event, )
         except asyncio.CancelledError:
             pass
 
@@ -132,11 +128,7 @@ class HealthMonitor:
                 for service_id, last_seen in list(self._seen.items()):
                     if now - last_seen > self._ttl:
                         del self._seen[service_id]
-                        logger.warning(
-                            "HealthMonitor: %s timed out (last seen %.0fs ago)",
-                            service_id,
-                            now - last_seen,
-                        )
+                        logger.warning( "HealthMonitor: %s timed out (last seen %.0fs ago)", service_id, now - last_seen, )
                         await self._notify(service_id)
         except asyncio.CancelledError:
             pass
@@ -148,11 +140,8 @@ class HealthMonitor:
         try:
             await self._on_down(service_id)
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.warning(
-                "HealthMonitor: on_down callback failed for %s",
-                service_id,
-                exc_info=True,
-            )
+            logger.warning( "HealthMonitor: on_down callback failed for %s", service_id, exc_info=True, )
 
 
 __all__ = ["HealthMonitor"]
+

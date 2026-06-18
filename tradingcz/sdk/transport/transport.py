@@ -128,10 +128,7 @@ class KafkaTransport:
                 logger.info("Created topic '%s'", topic)
             except Exception as exc:
                 if "TOPIC_ALREADY_EXISTS" in str(exc):
-                    logger.info(
-                        "Topic '%s' already exists (race — created by another client)",
-                        topic,
-                    )
+                    logger.info( "Topic '%s' already exists (race — created by another client)", topic, )
                 else:
                     logger.exception("Failed to create topic '%s'", topic)
                     raise
@@ -154,3 +151,4 @@ class KafkaTransport:
 
 
 __all__ = ["KafkaTransport"]
+

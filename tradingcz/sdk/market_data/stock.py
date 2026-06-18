@@ -13,6 +13,7 @@ Streaming (returns :class:`StreamHandle`):
 from __future__ import annotations
 
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
+from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
 from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle

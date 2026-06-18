@@ -20,7 +20,7 @@ class SignalPublisher:
             signal,
             event_type=EventType.TRADING_SIGNAL,
             event_id=event_id,
-            key=str(signal.id),
+            key=str(signal.event_id),
         )
 
 

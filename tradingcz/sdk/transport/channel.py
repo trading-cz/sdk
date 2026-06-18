@@ -151,10 +151,7 @@ class KafkaChannel:
                     continue
                 idle_accum = 0.0  # reset on message
                 if msg.error():
-                    logger.error(
-                        "Kafka consumer error on %s: %s",
-                        self._topic,
-                        msg.error(),
+                    logger.error( "Kafka consumer error on %s: %s", self._topic, msg.error(),
                     )
                     continue
 
@@ -188,3 +185,4 @@ class KafkaChannel:
 
 
 __all__ = ["KafkaChannel"]
+
