@@ -129,50 +129,10 @@ class DataHeaders(BaseModel):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# KafkaKey — typed message key
+# KafkaKey — re-exported from keys.py for backward compatibility
 # ═════════════════════════════════════════════════════════════════════════════
 
-
-class KafkaKey(BaseModel):
-    """Kafka message key with factory constructors and serialization.
-
-    Keys are used for partition routing (Murmur2 hash).  Keep them
-    simple for even distribution — complex keys hurt performance.
-
-    Usage::
-
-        # Event key: "data_request:ingestion:abc-123"
-        key = KafkaKey.for_event(EventType.DATA_REQUEST, "ingestion", "abc-123")
-        await channel.send(payload, key=str(key), headers=...)
-
-        # Symbol key: "AAPL"
-        key = KafkaKey.for_symbol("AAPL")
-
-        # Custom key
-        key = KafkaKey(value="custom-routing-key")
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    value: str = Field(..., description="The serialized key string")
-
-    def __str__(self) -> str:
-        """Serialize to Kafka wire format (plain string)."""
-        return self.value
-
-    @classmethod
-    def for_event(cls, event_type: EventType, source_app: str, *extra: str) -> KafkaKey:
-        """Build a composite event key: ``event_type:source_app[:extra...]``
-
-        Human-readable only — routing is driven by headers, not keys.
-        """
-        return cls(value=":".join([str(event_type), source_app, *extra]))
-
-    @classmethod
-    def for_symbol(cls, symbol: str) -> KafkaKey:
-        """Build a symbol-based routing key for per-symbol partitioning."""
-        return cls(value=symbol)
-
+from tradingcz.sdk.models.keys import KafkaKey, build_event_key  # noqa: E402, F401
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Legacy header builders — prefer the Pydantic models above
@@ -217,15 +177,6 @@ def make_data_headers(
     }
 
 
-def build_event_key(event_type: EventType, source_app: str, *extra: str) -> str:
-    """Composite Kafka key: ``event_type:source_app[:extra...]``
-
-    .. deprecated::
-        Prefer :class:`KafkaKey.for_event` for type safety.
-    """
-    return ":".join([str(event_type), source_app, *extra])
-
-
 # Backward-compatible alias — ``make_headers`` historically built event headers.
 make_headers = make_event_headers
 
@@ -235,8 +186,6 @@ __all__ = [
     "Header",
     "EventHeaders",
     "DataHeaders",
-    "KafkaKey",
-    "build_event_key",
     "make_data_headers",
     "make_event_headers",
     "make_headers",  # backward-compat

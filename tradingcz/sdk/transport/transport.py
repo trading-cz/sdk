@@ -10,6 +10,7 @@ import logging
 from confluent_kafka import Producer as SyncProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from tradingcz.sdk.lang.lazy import Lazy
 from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
@@ -20,21 +21,15 @@ class KafkaTransport:
     """Kafka-backed transport — one shared ``Producer``, cached channels.
 
     Topics are created on first use via Admin API if they don't already exist.
-    Per-topic configuration overrides are accepted by ``channel()``.
     """
+
+    _producer: SyncProducer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))  # type: ignore[assignment]
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
-        self._producer: SyncProducer | None = None
         self._admin = AdminClient({"bootstrap.servers": settings.bootstrap_servers})
         self._channels: dict[str, KafkaChannel] = {}
         self._topics_created: set[str] = set()
-
-    def _get_producer(self) -> SyncProducer:
-        """Lazy-init the shared synchronous Producer."""
-        if self._producer is None:
-            self._producer = SyncProducer(self._settings.producer_config())
-        return self._producer
 
     async def channel(
         self,
@@ -70,7 +65,7 @@ class KafkaTransport:
                 retention_ms=retention_ms,
                 cleanup_policy=cleanup_policy,
             )
-            producer = self._get_producer()
+            producer = self._producer
             self._channels[name] = KafkaChannel(name, producer, self._settings)
         return self._channels[name]
 
