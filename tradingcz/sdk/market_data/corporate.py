@@ -36,7 +36,7 @@ class CorporateActionsClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset="stock",
-            data_kind=MarketDataType.DIVIDENDS,
+            data_type=MarketDataType.DIVIDENDS,
             model_type=Dividend,
             days=days,
             timeout=timeout,
@@ -53,7 +53,7 @@ class CorporateActionsClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset="stock",
-            data_kind=MarketDataType.SPLITS,
+            data_type=MarketDataType.SPLITS,
             model_type=StockSplit,
             days=days,
             timeout=timeout,

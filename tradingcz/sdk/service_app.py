@@ -66,9 +66,7 @@ class ServiceApp:
     ) -> None:
         self.service_id = service_id
         self._env = env or os.environ.get("SDK_ENV", "dev")
-        self._health_interval = float(
-            os.environ.get("SDK_HEALTH_INTERVAL", str(health_interval))
-        )
+        self._health_interval = float(os.environ.get("SDK_HEALTH_INTERVAL", str(health_interval)))
 
         self._kafka = KafkaSettings(
             bootstrap_servers=bootstrap_servers

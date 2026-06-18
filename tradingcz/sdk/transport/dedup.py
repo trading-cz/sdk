@@ -1,26 +1,6 @@
 """Deduplication filter — skip duplicate messages by (source, sequence).
 
-Kafka guarantees at-least-once delivery.  After a consumer restart or
-offset reset, messages may be re-delivered.  This filter tracks seen
-``(source_app, sequence)`` pairs and skips already-processed messages.
-
-Memory is bounded by *max_size* (default 100k).  When the limit is
-reached, the oldest entry is evicted (LRU).
-
-Usage::
-
-    from tradingcz.sdk.transport.dedup import DedupFilter
-    from tradingcz.sdk.models.headers import Header
-
-    dedup = DedupFilter(max_size=50_000)
-
-    async for msg in channel.receive():
-        if dedup.is_duplicate(
-            msg.headers.get(Header.SOURCE_APP, ""),
-            msg.headers.get(Header.SEQUENCE, "0"),
-        ):
-            continue
-        process(msg)
+Tracks seen (source_app, sequence) pairs. Memory bounded by max_size (LRU eviction).
 """
 
 from collections import OrderedDict
@@ -29,11 +9,8 @@ from collections import OrderedDict
 class DedupFilter:
     """Track seen (source_app, sequence) pairs to skip duplicates.
 
-    Sequence numbers are expected to be **globally monotonic per
-    (source_app, topic)** — not per symbol or message type.
-
-    Memory is bounded by *max_size* (default 100k).  When the limit is
-    reached, the oldest entry is evicted (LRU).
+    Sequence numbers are globally monotonic per (source_app, topic).
+    Max 100k entries, LRU eviction on overflow.
     """
 
     def __init__(self, max_size: int = 100_000) -> None:
@@ -43,10 +20,7 @@ class DedupFilter:
         self._total = 0
 
     def is_duplicate(self, source_app: str, sequence: str) -> bool:
-        """Return True if this (source_app, sequence) was already seen.
-
-        Side effect: records the pair as seen if it wasn't already.
-        """
+        """Return True if (source_app, sequence) already seen. Records pair as side effect."""
         self._total += 1
         key = (source_app, sequence)
         if key in self._seen:
@@ -54,23 +28,23 @@ class DedupFilter:
             return True
         self._seen[key] = None
         if len(self._seen) > self._max:
-            self._seen.popitem(last=False)  # evict oldest (LRU)
+            self._seen.popitem(last=False)
         return False
 
     def clear(self) -> None:
-        """Reset all tracking state."""
+        """Reset tracking state."""
         self._seen.clear()
         self._hits = 0
         self._total = 0
 
     @property
     def skipped_count(self) -> int:
-        """Number of duplicates skipped so far."""
+        """Duplicates skipped."""
         return self._hits
 
     @property
     def total_count(self) -> int:
-        """Total number of messages checked."""
+        """Total messages checked."""
         return self._total
 
 

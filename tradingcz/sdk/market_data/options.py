@@ -13,8 +13,7 @@ from typing import TYPE_CHECKING
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
 
-if TYPE_CHECKING:
-    from tradingcz.sdk.market_data._base import BaseDataClient
+from tradingcz.sdk.market_data._base import BaseDataClient
 
 
 class OptionsDataClient:
@@ -40,7 +39,7 @@ class OptionsDataClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.OPTION,
-            data_kind=MarketDataType.SNAPSHOTS,
+            data_type=MarketDataType.SNAPSHOTS,
             model_type=OptionSnapshot,
             timeout=timeout,
         )

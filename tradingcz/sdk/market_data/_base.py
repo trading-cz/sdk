@@ -54,16 +54,12 @@ class StreamHandle[T](AsyncIterator[T]):
     pushing data for these symbols.
     """
 
-    def __init__(
-        self,
-        iterator: AsyncIterator[T],
-        unsubscribe: _Unsubscribe | None = None,
-    ) -> None:
+    def __init__(self, iterator: AsyncIterator[T], unsubscribe: _Unsubscribe | None = None, ) -> None:
         self._iterator = iterator
         self._unsubscribe = unsubscribe
         self._exited = False
 
-    def __aiter__(self) -> "StreamHandle[T]":
+    def __aiter__(self) -> StreamHandle[T]:
         return self
 
     async def __anext__(self) -> T:
@@ -73,7 +69,7 @@ class StreamHandle[T](AsyncIterator[T]):
             self._exited = True
             raise
 
-    async def __aenter__(self) -> "StreamHandle[T]":
+    async def __aenter__(self) -> StreamHandle[T]:
         return self
 
     async def __aexit__(
@@ -169,6 +165,16 @@ class BaseDataClient:
         rr.register_type(EventType.DATA_READY, DataReady)
         rr.register_type(EventType.DATA_ERROR, DataError)
 
+    # -- Shared response validation ------------------------------------
+
+    @staticmethod
+    def _validate_response(resp: DataReady, expected_type: DataRequestType) -> None:
+        """Validate DataReady response — raise on DataError or wrong type."""
+        if resp.event_type == EventType.DATA_ERROR:
+            raise RuntimeError(f"DataError from ingestion: {resp.error}")
+        if resp.type != expected_type:
+            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
+
     # -- Historical (request → consume → return dict) ------------------
 
     async def _request_historical[
@@ -177,7 +183,7 @@ class BaseDataClient:
         self,
         symbols: list[str],
         asset: AssetType,
-        data_kind: MarketDataType,
+        data_type: MarketDataType,
         model_type: type[T],
         *,
         timeframe: Timeframe | None = None,
@@ -204,7 +210,7 @@ class BaseDataClient:
             asset=asset,
             broker=self._broker,
             symbols=symbols,
-            data_type=data_kind,
+            data_type=data_type,
             timeframe=timeframe or Timeframe.D1,
             start_time=start,
             end_time=end,
@@ -217,10 +223,7 @@ class BaseDataClient:
             timeout=timeout,
         )
 
-        if resp.event_type == EventType.DATA_ERROR:
-            raise RuntimeError(f"DataError from ingestion: {resp.error}")
-        if resp.type != DataRequestType.HISTORIC:
-            raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
+        self._validate_response(resp, DataRequestType.HISTORIC)
 
         logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
@@ -234,15 +237,12 @@ class BaseDataClient:
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
-                if seq and self._dedup.is_duplicate(
-                    msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
-                    seq,
-                ):
+                if seq and self._dedup.is_duplicate(msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),seq):
                     continue
                 try:
                     item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
                 except Exception:  # pylint: disable=broad-exception-caught
-                    logger.debug("Skipping unparseable %s", data_kind, exc_info=True)
+                    logger.debug("Skipping unparseable %s", data_type, exc_info=True)
                     continue
                 results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
                 count += 1
@@ -264,7 +264,7 @@ class BaseDataClient:
         self,
         symbols: list[str],
         asset: AssetType,
-        data_kind: MarketDataType,
+        data_type: MarketDataType,
         model_type: type[T],
         *,
         timeout: float = 30.0,
@@ -280,7 +280,7 @@ class BaseDataClient:
             asset=asset,
             broker=self._broker,
             symbols=symbols,
-            data_type=data_kind,
+            data_type=data_type,
         )
 
         resp = await self._rr.request(
@@ -290,10 +290,7 @@ class BaseDataClient:
             timeout=timeout,
         )
 
-        if resp.event_type == EventType.DATA_ERROR:
-            raise RuntimeError(f"DataError from ingestion (stream): {resp.error}")
-        if resp.type != DataRequestType.STREAM:
-            raise RuntimeError(f"Expected stream DataReady, got type={resp.type}")
+        self._validate_response(resp, DataRequestType.STREAM)
 
         channel = await self._transport.channel(resp.data_topic)
 
@@ -318,7 +315,7 @@ class BaseDataClient:
             rr=self._rr,
             broker=self._broker,
             symbols=symbols,
-            data_kind=data_kind,
+            data_kind=data_type,
             asset=asset,
         )
 

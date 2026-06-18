@@ -8,23 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class KafkaSettings(BaseSettings):
-    """Kafka transport configuration.
+    """Kafka transport — env-driven config with librdkafka escape hatches.
 
-    Semantic settings (named fields):
-        KAFKA_BOOTSTRAP_SERVERS        — broker addresses (REQUIRED, no default)
-        KAFKA_CONSUMER_GROUP           — consumer group id (REQUIRED, no default)
-        KAFKA_CONSUMER_POLL_TIMEOUT    — seconds between consumer poll attempts (default: 1.0)
-        KAFKA_DEFAULT_NUM_PARTITIONS   — partitions for auto-created topics (default: 5)
-        KAFKA_DEFAULT_REPLICATION_FACTOR — replication for auto-created topics (default: 1)
-        KAFKA_DEFAULT_RETENTION_MS     — retention in ms for auto-created topics (default: 5 days)
-        KAFKA_DEFAULT_CLEANUP_POLICY   — cleanup policy for auto-created topics (default: delete)
-
-    librdkafka escape hatches (JSON strings, merged over built-in defaults):
-        KAFKA_PRODUCER_OVERRIDES       — e.g. '{"linger.ms": "50", "compression.type": "snappy"}'
-        KAFKA_CONSUMER_OVERRIDES       — e.g. '{"fetch.min.bytes": "1000", "auto.offset.reset": "earliest"}'
-
-    The override dicts let you tune any librdkafka parameter from a Kubernetes
-    ConfigMap/deployment YAML without touching Python code.
+    Key env vars: KAFKA_BOOTSTRAP_SERVERS, KAFKA_CONSUMER_GROUP (required).
+    Override any librdkafka param via KAFKA_PRODUCER_OVERRIDES / KAFKA_CONSUMER_OVERRIDES (JSON).
     """
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")

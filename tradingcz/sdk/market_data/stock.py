@@ -58,7 +58,7 @@ class StockDataClient:
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_kind=MarketDataType.BARS,
+            data_type=MarketDataType.BARS,
             model_type=Bar,
             timeframe=timeframe,
             days=days,
@@ -77,7 +77,7 @@ class StockDataClient:
         return await self._base._stream(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_kind=MarketDataType.QUOTES,
+            data_type=MarketDataType.QUOTES,
             model_type=StreamQuote,
             timeout=timeout,
         )
@@ -92,7 +92,7 @@ class StockDataClient:
         return await self._base._stream(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_kind=MarketDataType.TRADES,
+            data_type=MarketDataType.TRADES,
             model_type=Trade,
             timeout=timeout,
         )

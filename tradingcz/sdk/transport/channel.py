@@ -151,8 +151,7 @@ class KafkaChannel:
                     continue
                 idle_accum = 0.0  # reset on message
                 if msg.error():
-                    logger.error( "Kafka consumer error on %s: %s", self._topic, msg.error(),
-                    )
+                    logger.error( "Kafka consumer error on %s: %s", self._topic, msg.error())
                     continue
 
                 # Decode key
@@ -163,9 +162,7 @@ class KafkaChannel:
                 headers: dict[str, str] = {}
                 for h_key, h_val in raw_headers:
                     try:
-                        headers[h_key] = (
-                            h_val.decode() if isinstance(h_val, bytes) else str(h_val)
-                        )
+                        headers[h_key] = (h_val.decode() if isinstance(h_val, bytes) else str(h_val))
                     except (UnicodeDecodeError, AttributeError):
                         headers[h_key] = repr(h_val)
 
