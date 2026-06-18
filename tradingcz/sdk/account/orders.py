@@ -8,28 +8,76 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.order import (
+    OrderClass,
+    OrderSide,
+    OrderStatus,
+    TimeInForce,
+)
 from tradingcz.sdk.models.events import ServiceRequestEvent
 
 logger = logging.getLogger(__name__)
 
 
 class OrderSummary(BaseModel):
-    """Summary of a single order."""
+    """Full broker order response — shared across executor, simple-strategy, etc.
 
-    model_config = ConfigDict(frozen=True)
+    Used both for query results (via OrderClient → OrderList) and as the
+    individual order confirmation published by the executor after execution.
+    """
 
-    order_id: str
+    model_config = ConfigDict(frozen=True, extra="ignore", use_enum_values=True)
+
+    # ── Identity ──────────────────────────────────────────────────────
+    id: UUID = Field(..., validation_alias=AliasChoices("client_order_id"))
+    broker_order_id: UUID | None = Field(validation_alias=AliasChoices("id"), default=None)
+
+    # ── Basic order fields ────────────────────────────────────────────
+    order_status: OrderStatus | None = Field(validation_alias=AliasChoices("status"), default=None)
     symbol: str
-    side: str
-    qty: float
-    status: str
-    filled_qty: float = 0.0
+    qty: Decimal | None = None
+    notional: Decimal | None = None
+    side: OrderSide | None = None
+    time_in_force: TimeInForce | None = None
+    order_class: OrderClass | None = None
+    limit_price: Decimal | None = None
+    stop_price: Decimal | None = None
+
+    # ── Fill info ─────────────────────────────────────────────────────
+    filled_qty: Decimal | None = None
+    filled_avg_price: Decimal | None = None
+
+    # ── Timestamps ────────────────────────────────────────────────────
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    submitted_at: datetime | None = None
+    filled_at: datetime | None = None
+    expired_at: datetime | None = None
+    expires_at: datetime | None = None
+    canceled_at: datetime | None = None
+    failed_at: datetime | None = None
+
+    # ── Trailing stop ─────────────────────────────────────────────────
+    trail_percent: Decimal | None = None
+    trail_price: Decimal | None = None
+    hwm: Decimal | None = None
+
+    # ── Nested legs (bracket/OTO/OCO) ─────────────────────────────────
+    legs: list["OrderSummary"] | None = None
+
+
+class OrderResponse(BaseModel):
+    """Single order confirmation — published by executor after execution."""
+
+    event_id: str
+    order: OrderSummary
 
 
 class OrderList(BaseModel):
@@ -83,4 +131,4 @@ class OrderClient:
         return None
 
 
-__all__ = ["OrderSummary", "OrderList", "OrderClient"]
+__all__ = ["OrderSummary", "OrderResponse", "OrderList", "OrderClient"]
