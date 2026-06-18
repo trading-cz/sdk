@@ -19,10 +19,6 @@ from tradingcz.sdk.models.headers import (
     EventHeaders,
     Header,
     KafkaKey,
-    build_event_key,
-    make_data_headers,
-    make_event_headers,
-    make_headers,
 )
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.market import (
@@ -50,10 +46,6 @@ __all__ = [
     "EventHeaders",
     "DataHeaders",
     "KafkaKey",
-    "build_event_key",
-    "make_data_headers",
-    "make_event_headers",
-    "make_headers",
     "model_for",
     "parse_message",
     # Domain Models

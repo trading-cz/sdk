@@ -1,12 +1,9 @@
 """Kafka wire format — header field names and builders.
 
 - ``Header`` — canonical header key enum
-- ``EventHeaders`` — Pydantic model for event-topic headers (no sequence)
+- ``EventHeaders`` — Pydantic model for event-topic headers
 - ``DataHeaders`` — Pydantic model for data-topic headers (with sequence for dedup)
-- ``KafkaKey`` — Pydantic model for Kafka message keys
-- ``make_event_headers()`` — legacy builder (prefer ``EventHeaders`` model)
-- ``make_data_headers()`` — legacy builder (prefer ``DataHeaders`` model)
-- ``build_event_key()`` — legacy builder (prefer ``KafkaKey.for_event()``)
+- ``KafkaKey`` — re-exported from keys.py
 """
 
 from __future__ import annotations
@@ -70,10 +67,6 @@ class EventHeaders(BaseModel):
     source_app: str = Field(..., description="Source application that generated the event")
 
     def to_kafka(self) -> dict[str, str]:
-        """Serialize to Kafka wire format (``dict[str, str]``).
-
-        All fields (including extra kwargs) are serialized to string keys.
-        """
         d = self.model_dump(exclude_none=True)
         return {k: str(v) for k, v in d.items()}
 
@@ -132,53 +125,7 @@ class DataHeaders(BaseModel):
 # KafkaKey — re-exported from keys.py for backward compatibility
 # ═════════════════════════════════════════════════════════════════════════════
 
-from tradingcz.sdk.models.keys import KafkaKey, build_event_key  # noqa: E402, F401
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Legacy header builders — prefer the Pydantic models above
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-def make_event_headers(
-    *,
-    event_type: EventType,
-    source_app: str = "",
-    **extra: str,
-) -> dict[str, str]:
-    """Build headers for event-topic messages — no ``sequence`` field.
-
-    .. deprecated::
-        Prefer :class:`EventHeaders` model for type safety and validation.
-    """
-    return {
-        Header.EVENT_TYPE: str(event_type),
-        Header.SOURCE_APP: source_app,
-        **extra,
-    }
-
-
-def make_data_headers(
-    *,
-    event_type: EventType,
-    source_app: str = "",
-    sequence: int = 0,
-    **extra: str,
-) -> dict[str, str]:
-    """Build headers for data-topic messages — includes ``sequence`` for dedup.
-
-    .. deprecated::
-        Prefer :class:`DataHeaders` model for type safety and validation.
-    """
-    return {
-        Header.EVENT_TYPE: str(event_type),
-        Header.SOURCE_APP: source_app,
-        Header.SEQUENCE: str(sequence),
-        **extra,
-    }
-
-
-# Backward-compatible alias — ``make_headers`` historically built event headers.
-make_headers = make_event_headers
+from tradingcz.sdk.models.keys import KafkaKey  # noqa: E402, F401
 
 
 
@@ -186,7 +133,5 @@ __all__ = [
     "Header",
     "EventHeaders",
     "DataHeaders",
-    "make_data_headers",
-    "make_event_headers",
-    "make_headers",  # backward-compat
+    "KafkaKey",
 ]
