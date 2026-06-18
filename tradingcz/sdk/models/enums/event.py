@@ -136,6 +136,8 @@ class MarketDataType(StrEnum):
     LATEST_BARS = "latest_bars"
     LATEST_TRADES = "latest_trades"
     LATEST_QUOTES = "latest_quotes"
+    DIVIDENDS = "dividends"
+    SPLITS = "splits"
 
 
 class Broker(StrEnum):

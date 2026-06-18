@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
 from tradingcz.sdk.models.headers import KafkaKey
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 
@@ -32,12 +32,7 @@ class HealthPublisher:
         await health.close()    # emits "down"
     """
 
-    def __init__(
-        self,
-        faf: FireAndForget,
-        service_id: str,
-        interval: float = 300.0,
-    ) -> None:
+    def __init__(self, faf: FireAndForget, service_id: str, interval: float = 300.0) -> None:
         self._faf = faf
         self._service_id = service_id
         self._interval = max(interval, 1.0)
@@ -53,14 +48,10 @@ class HealthPublisher:
         if self._running:
             return
 
-        await self._emit("up")
+        await self._emit(LifecycleEventType.UP)
         self._running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-        logger.info(
-            "HealthPublisher started for %s (interval=%ss)",
-            self._service_id,
-            self._interval,
-        )
+        logger.info("HealthPublisher started for %s (interval=%ss)", self._service_id, self._interval)
 
     async def close(self) -> None:
         """Stop heartbeat and send ``down`` event."""
@@ -77,7 +68,7 @@ class HealthPublisher:
                 pass
         self._heartbeat_task = None
 
-        await self._emit("down")
+        await self._emit(LifecycleEventType.DOWN)
         logger.info(
             "HealthPublisher stopped for %s (down event sent)", self._service_id
         )
@@ -93,45 +84,25 @@ class HealthPublisher:
                 await asyncio.sleep(self._interval)
                 if not self._running:
                     break
-                await self._emit("heartbeat")
+                await self._emit(LifecycleEventType.HEARTBEAT)
         except asyncio.CancelledError:
             logger.debug("Heartbeat loop cancelled for %s", self._service_id)
 
-    async def _emit(self, event: str) -> None:
+    async def _emit(self, event: LifecycleEventType) -> None:
         """Send a LifecycleEvent event via fire-and-forget."""
         lifecycle = LifecycleEvent(
             service_id=self._service_id,
-            event=event,  # type: ignore[arg-type]
+            event=event,
         )
-        key = str(
-            KafkaKey.for_event(EventType.SERVICE_LIFECYCLE, self._service_id, event)
-        )
+        key = str(KafkaKey.for_event(EventType.SERVICE_LIFECYCLE, self._service_id, event))
         try:
-            await self._faf.send(
-                lifecycle,
-                event_type=EventType.SERVICE_LIFECYCLE,
-                event_id=str(key),
-                key=key,
-            )
-            if event in ("up", "down"):
-                logger.info(
-                    "ServiceLifecycle sent: service=%s event=%s",
-                    self._service_id,
-                    event,
-                )
+            await self._faf.send_event(lifecycle, event_type=EventType.SERVICE_LIFECYCLE, event_id=str(key), key=key)
+            if event in (LifecycleEventType.UP, LifecycleEventType.DOWN):
+                logger.info("ServiceLifecycle sent: service=%s event=%s", self._service_id, event,)
             else:
-                logger.debug(
-                    "ServiceLifecycle sent: service=%s event=%s",
-                    self._service_id,
-                    event,
-                )
+                logger.debug("ServiceLifecycle sent: service=%s event=%s", self._service_id, event)
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.warning(
-                "Failed to emit %s lifecycle event for %s",
-                event,
-                self._service_id,
-                exc_info=True,
-            )
+            logger.warning("Failed to emit %s lifecycle event for %s", event, self._service_id, exc_info=True)
 
 
 __all__ = ["HealthPublisher"]

@@ -171,7 +171,7 @@ class ServiceApp:
         """
         if self._faf is None:
             raise RuntimeError("Call start() before publish()")
-        await self._faf.send(
+        await self._faf.send_event(
             message, event_type=message_type, event_id=event_id, key=key
         )
 

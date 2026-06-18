@@ -36,12 +36,7 @@ class Registry[K, V]:
     def __init__(self) -> None:
         self._items: dict[K, tuple[V, Callable[..., Any]]] = {}
 
-    def register(
-        self,
-        key: K,
-        *,
-        factory: Callable[..., Any] | None = None,
-    ) -> Callable[[type], type]:
+    def register(self, key: K, *, factory: Callable[..., Any] | None = None) -> Callable[[type], type]:
         """Decorator: register the decorated class under *key*.
 
         Args:

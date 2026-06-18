@@ -16,7 +16,7 @@ class SignalPublisher:
 
     async def publish(self, signal: ExecutionRequestEvent, *, event_id: str) -> None:
         """Publish a trading signal."""
-        await self._faf.send(
+        await self._faf.send_event(
             signal,
             event_type=EventType.TRADING_SIGNAL,
             event_id=event_id,

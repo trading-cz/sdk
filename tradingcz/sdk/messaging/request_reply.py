@@ -56,9 +56,7 @@ class RequestReply:
         self._channel = channel
         self._service_id = service_id
         self._seq = 0
-        self._types: dict[str, type[BaseModel]] = (
-            dict(message_types) if message_types else {}
-        )
+        self._types: dict[str, type[BaseModel]] = (dict(message_types) if message_types else {})
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._skipped = 0
@@ -67,9 +65,7 @@ class RequestReply:
     # Type registry
     # ------------------------------------------------------------------
 
-    def register_type(
-        self, message_type: str | EventType, model: type[BaseModel]
-    ) -> None:
+    def register_type(self, message_type: str | EventType, model: type[BaseModel]) -> None:
         """Register a message_type → model mapping for response deserialization.
 
         Accepts both :class:`EventType` enum values and plain strings

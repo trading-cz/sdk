@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from tradingcz.sdk.models.enums.event import EventType
 
 from tradingcz.sdk.models.market.bar import Bar
+from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
 from tradingcz.sdk.models.market.option_snapshot import OptionSnapshot
 from tradingcz.sdk.models.market.quote import Quote
 from tradingcz.sdk.models.market.snapshot import Snapshot
@@ -49,10 +50,12 @@ def market_item_message_type(item: MarketItem) -> EventType:
 
 __all__ = [
     "Bar",
+    "Dividend",
     "MarketItem",
     "market_item_message_type",
     "OptionSnapshot",
     "Quote",
+    "StockSplit",
     "Trade",
     "Snapshot",
     "StreamQuote",

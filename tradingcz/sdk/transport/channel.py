@@ -49,12 +49,7 @@ class KafkaChannel:
     # Send
     # ------------------------------------------------------------------
 
-    async def send(
-        self,
-        payload: bytes,
-        *,
-        key: str = "",
-        headers: dict[str, str] | None = None,
+    async def send(self, payload: bytes, *, key: str = "", headers: dict[str, str] | None = None,
     ) -> None:
         """Queue a message for asynchronous delivery.  Does NOT flush.
 
