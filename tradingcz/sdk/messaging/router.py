@@ -1,24 +1,4 @@
-"""EventRouter — single Kafka consumer with typed handler dispatch.
-
-One ``EventRouter`` per ``KafkaChannel``.  All handlers share the same
-underlying Kafka consumer connection; there is no duplicate consumer.
-
-Usage::
-
-    router = EventRouter(events_channel)
-
-    router.on(
-        EventType.DATA_REQUEST, DataRequest,
-        handler=lambda req, raw: service.on_request(req),
-        filter_fn=lambda req, _: req.broker == "alpaca",
-        spawn_task=True,  # historical fetch is slow
-    )
-
-    monitor = HealthMonitor(router, ttl=600)
-    monitor.on_down(service.on_subscriber_down)
-
-    await router.run()  # runs until cancelled
-"""
+"""EventRouter — single Kafka consumer, typed handler dispatch by event_type."""
 
 import asyncio
 import logging

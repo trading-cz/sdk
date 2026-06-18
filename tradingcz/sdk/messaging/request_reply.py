@@ -1,15 +1,4 @@
-"""Request-reply messaging — typed request/response over KafkaChannel.
-
-Two complementary classes:
-
-- ``RequestReply`` — send typed request, await correlated response by event_id.
-  Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
-- ``RequestReplyClient`` — generic async request-reply client with pluggable
-  serializers/deserializers and ID extraction.
-
-Correlation is by ID — both request and response must have an identifiable
-field (convention: ``event_id: str``).
-"""
+"""RequestReply + RequestReplyClient — typed request/response over KafkaChannel, correlated by event_id."""
 
 from __future__ import annotations
 

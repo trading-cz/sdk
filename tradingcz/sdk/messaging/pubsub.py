@@ -1,19 +1,4 @@
-"""Typed producer, consumer, and parser — typed wrappers over KafkaChannel.
-
-Wraps a byte-level ``KafkaChannel`` with a ``Codec[T]`` to provide
-type-safe ``send(T)`` and ``consume() → AsyncIterator[T]``.
-
-Usage::
-
-    channel = await transport.channel("dev-event")
-    producer = TypedProducer(
-        channel=channel,
-        serializer=JsonCodec(TradingSignal),
-        source_app="my-strategy",
-        key_fn=lambda s: s.symbol,
-    )
-    await producer.send(signal)
-"""
+"""Typed publish/subscribe — TypedProducer, TypedConsumer, TypedParser over KafkaChannel."""
 
 import logging
 import os
