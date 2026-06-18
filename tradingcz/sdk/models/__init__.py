@@ -1,4 +1,3 @@
-from tradingcz.sdk.models.dispatch import model_for, parse_message
 from tradingcz.sdk.models.enums import (
     Adjustment,
     OrderSide,
@@ -20,6 +19,7 @@ from tradingcz.sdk.models.headers import (
     Header,
     KafkaKey,
 )
+from tradingcz.sdk.models.keys import custom_key, event_key, symbol_key
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.market import (
     Bar,
@@ -45,9 +45,9 @@ __all__ = [
     "EventType",
     "EventHeaders",
     "DataHeaders",
-    "KafkaKey",
-    "model_for",
-    "parse_message",
+    "event_key",
+    "symbol_key",
+    "custom_key",
     # Domain Models
     "Bar",
     "Quote",

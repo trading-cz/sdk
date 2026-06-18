@@ -126,7 +126,7 @@ class RequestReply:
             TimeoutError: No correlated response within *timeout*.
             ValueError: If *req* has no ``event_id`` attribute.
         """
-        event_id: str = getattr(req, "event_id", "")
+        event_id: str = req.event_id
         if not event_id:
             raise ValueError(f"Request model {type(req).__name__} has no event_id")
 
@@ -140,7 +140,7 @@ class RequestReply:
             source_app=self._service_id,
             event_id=event_id,
         ).to_kafka()
-        key = str(KafkaKey.for_event(mt, self._service_id, event_id))
+        key = event_key(mt, self._service_id, event_id)
         # Send + flush — request delivery must be guaranteed before awaiting response
         await self._channel.send(payload, key=key, headers=headers)
         await self._channel.flush()
@@ -179,7 +179,7 @@ class RequestReply:
                     self._skipped += 1
                     continue
 
-                resp_id: str = getattr(parsed, Header.EVENT_ID, "")
+                resp_id: str = parsed.event_id
                 if not resp_id:
                     continue
 

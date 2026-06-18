@@ -78,7 +78,7 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
             event_id=event_id,
         ).to_kafka()
         if not key:
-            key = str(KafkaKey.for_event(event_type, self._service_id, event_id))
+            key = event_key(event_type, self._service_id, event_id)
         payload = self._serializer.serialize(message)
         await self._channel.send(payload, key=key, headers=headers)
 
