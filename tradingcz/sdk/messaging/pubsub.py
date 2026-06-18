@@ -135,13 +135,25 @@ class TypedParser:
 
     Dispatches to the correct Pydantic model for multi-type shared topics.
     Messages with an unrecognized ``message_type`` header are silently skipped.
+
+    Args:
+        channel: Kafka channel to consume from.
+        types: Mapping of ``message_type`` header values → Pydantic model classes.
+        on_error: Optional async callback invoked for every message that
+            cannot be dispatched (missing header, unknown type, or parse
+            failure).  Receives the raw ``KafkaMessage``.
     """
 
     def __init__(
-        self, channel: KafkaChannel, types: dict[str, type[BaseModel]]
+        self,
+        channel: KafkaChannel,
+        types: dict[str, type[BaseModel]],
+        *,
+        on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
     ) -> None:
         self._channel = channel
         self._types = types
+        self._on_error = on_error
 
     async def parse(self) -> AsyncIterator[tuple[str, object, KafkaMessage]]:
         """Yield (message_type, parsed_model, raw_message) tuples.
@@ -149,21 +161,40 @@ class TypedParser:
         Messages whose ``message_type`` header is not registered in *types*
         are skipped.  Messages whose payload fails validation against the
         registered model are logged and skipped.
+
+        When *on_error* is set, every undispatchable message is passed to
+        it before being skipped.
         """
         async for msg in self._channel.receive():
             msg_type = msg.headers.get(Header.EVENT_TYPE, "")
             if not msg_type:
                 logger.debug( "Skipping message on %s — no message_type header (offset=%d key=%r)", self._channel.name, msg.offset, msg.key, )
+                await self._notify_error(msg)
                 continue
             model_type = self._types.get(msg_type)
             if model_type is None:
+                await self._notify_error(msg)
                 continue
             try:
                 parsed = model_type.model_validate_json(msg.payload)
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.debug( "Skipping message on %s — %s failed validation for %s (offset=%d key=%r)", self._channel.name, model_type.__name__, msg_type, msg.offset, msg.key, )
+                await self._notify_error(msg)
                 continue
             yield msg_type, parsed, msg
+
+    async def _notify_error(self, msg: KafkaMessage) -> None:
+        """Invoke on_error callback if configured."""
+        if self._on_error is not None:
+            try:
+                await self._on_error(msg)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug(
+                    "on_error callback raised for %s (offset=%d)",
+                    self._channel.name,
+                    msg.offset,
+                    exc_info=True,
+                )
 
 
 # ═════════════════════════════════════════════════════════════════════════════

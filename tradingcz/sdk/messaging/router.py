@@ -35,10 +35,29 @@ class EventRouter:
     Registration is done via :meth:`on` (chainable) before calling
     :meth:`run`.  Calling ``on`` after ``run`` has started has no effect
     on the running loop (not thread-safe).
+
+    Args:
+        channel: Kafka channel to consume from.
+        auto_commit: When ``True`` (default), the router commits each
+            message's offset after the handler completes successfully.
+            When ``False``, the handler is responsible for calling
+            ``await raw.commit()`` explicitly.
+        on_error: Optional async callback invoked for every message
+            that cannot be dispatched (missing/unknown event_type header
+            or Pydantic validation failure).  Receives the raw
+            ``KafkaMessage``.
     """
 
-    def __init__(self, channel: KafkaChannel) -> None:
+    def __init__(
+        self,
+        channel: KafkaChannel,
+        *,
+        auto_commit: bool = True,
+        on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
+    ) -> None:
         self._channel = channel
+        self._auto_commit = auto_commit
+        self._on_error = on_error
         self._handlers: list[_Registration] = []
 
     def on[T: BaseModel](
@@ -95,7 +114,7 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        parser = TypedParser(self._channel, types)
+        parser = TypedParser(self._channel, types, on_error=self._on_error)
 
         async for msg_type, model, raw in parser.parse():
             for reg in self._handlers:
@@ -105,8 +124,45 @@ class EventRouter:
                     continue
                 if reg.spawn_task:
                     asyncio.create_task(
-                        reg.handler(model, raw),  # type: ignore[arg-type]
+                        self._dispatch(reg, model, raw),
                         name=f"router-{msg_type}",
                     )
                 else:
-                    await reg.handler(model, raw)  # type: ignore[arg-type]
+                    await self._dispatch(reg, model, raw)
+
+    async def _dispatch(
+        self,
+        reg: _Registration[BaseModel],
+        model: BaseModel,
+        raw: KafkaMessage,
+    ) -> None:
+        """Invoke a handler and optionally commit the offset.
+
+        On handler exception the offset is never committed (message
+        will be re-delivered on restart — at-least-once semantics).
+        When ``auto_commit`` is enabled the offset is committed after
+        a successful handler invocation.  Double-commit (handler also
+        calls ``raw.commit()``) is harmless — Kafka treats it as
+        idempotent.
+        """
+        try:
+            await reg.handler(model, raw)  # type: ignore[arg-type]
+        except Exception:
+            logger.exception(
+                "Handler %s failed for %s (offset=%d)",
+                reg.handler.__name__,
+                reg.msg_type,
+                raw.offset,
+            )
+            return  # never commit on failure
+
+        if self._auto_commit:
+            try:
+                await raw.commit()
+            except RuntimeError:
+                # Commit not available (e.g. mocked KafkaMessage in tests)
+                logger.debug(
+                    "Commit unavailable for %s (offset=%d) — skipping",
+                    reg.msg_type,
+                    raw.offset,
+                )

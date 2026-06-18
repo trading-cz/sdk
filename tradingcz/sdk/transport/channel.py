@@ -166,7 +166,7 @@ class KafkaChannel:
                     except (UnicodeDecodeError, AttributeError):
                         headers[h_key] = repr(h_val)
 
-                yield KafkaMessage(
+                kafka_msg = KafkaMessage(
                     payload=msg.value() if msg.value() is not None else b"",
                     key=key,
                     headers=headers,
@@ -174,6 +174,14 @@ class KafkaChannel:
                     partition=msg.partition() if msg.partition() is not None else -1,
                     topic=msg.topic() if msg.topic() is not None else self._topic,
                 )
+
+                # Attach commit capability — captures consumer + confluent-kafka
+                # message in a closure.  object.__setattr__ bypasses frozen=True.
+                async def _commit() -> None:
+                    await consumer.commit(message=msg)
+
+                object.__setattr__(kafka_msg, "_commit_fn", _commit)
+                yield kafka_msg
         finally:
             await consumer.close()
 
