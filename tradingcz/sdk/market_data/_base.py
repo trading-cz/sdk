@@ -19,7 +19,7 @@ from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import Broker, EventType, MarketDataType, DataRequestType, AssetType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
-from tradingcz.sdk.models.headers import Header
+from tradingcz.sdk.transport.headers import Header
 
 logger = logging.getLogger(__name__)
 

@@ -8,12 +8,14 @@ One-time (returns ``dict``):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
 
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
 
 from tradingcz.sdk.market_data._base import BaseDataClient
+
+logger = logging.getLogger(__name__)
 
 
 class OptionsDataClient:
@@ -36,6 +38,7 @@ class OptionsDataClient:
 
         Returns ``{symbol: [OptionSnapshot]}``.
         """
+        logger.info("OptionsDataClient: snapshots symbols=%d", len(symbols))
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.OPTION,

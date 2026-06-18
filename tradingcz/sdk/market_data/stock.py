@@ -12,11 +12,14 @@ Streaming (returns :class:`StreamHandle`):
 
 from __future__ import annotations
 
+import logging
+
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
-from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
 from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
+
+logger = logging.getLogger(__name__)
 
 
 class StockDataClient:
@@ -55,6 +58,7 @@ class StockDataClient:
 
         Returns ``{symbol: [Bar sorted by timestamp]}``.
         """
+        logger.info("StockDataClient: bars symbols=%d days=%d timeframe=%s", len(symbols), days, timeframe)
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
@@ -73,6 +77,7 @@ class StockDataClient:
         Returns a :class:`StreamHandle` that yields :class:`StreamQuote`
         objects indefinitely.  Use ``async for`` to iterate, or wrap
         in ``async with`` for guaranteed unsubscribe on exit.
+        logger.info("StockDataClient: stream_quotes symbols=%d", len(symbols))
         """
         return await self._base._stream(
             symbols=symbols,
@@ -88,6 +93,7 @@ class StockDataClient:
         Returns a :class:`StreamHandle` that yields :class:`Trade`
         objects indefinitely.  Use ``async for`` to iterate, or wrap
         in ``async with`` for guaranteed unsubscribe on exit.
+        logger.info("StockDataClient: stream_trades symbols=%d", len(symbols))
         """
         return await self._base._stream(
             symbols=symbols,

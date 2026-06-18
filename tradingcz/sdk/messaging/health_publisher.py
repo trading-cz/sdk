@@ -10,7 +10,7 @@ import logging
 
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
-from tradingcz.sdk.models.keys import event_key
+from tradingcz.sdk.transport.keys import KafkaKey
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class HealthPublisher:
             service_id=self._service_id,
             event=event,
         )
-        key = event_key(EventType.SERVICE_LIFECYCLE, self._service_id, event)
+        key = KafkaKey.for_event(EventType.SERVICE_LIFECYCLE, self._service_id, event)
         try:
             await self._faf.send_event(lifecycle, event_type=EventType.SERVICE_LIFECYCLE, event_id=str(key), key=key)
             if event in (LifecycleEventType.UP, LifecycleEventType.DOWN):

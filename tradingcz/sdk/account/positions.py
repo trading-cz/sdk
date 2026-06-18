@@ -6,12 +6,10 @@ and awaits PositionList response.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.event import AssetType, EventType
 from tradingcz.sdk.models.events import ServiceRequestEvent
 
 
@@ -23,7 +21,7 @@ class Position(BaseModel):
     symbol: str
     qty: float
     avg_entry_price: float
-    asset_type: Literal["stock", "option"] = "stock"
+    asset_type: AssetType = AssetType.STOCK
 
 
 class PositionList(BaseModel):

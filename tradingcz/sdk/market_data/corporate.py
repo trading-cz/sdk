@@ -8,7 +8,7 @@ One-time (returns ``dict``):
 from __future__ import annotations
 
 from tradingcz.sdk.market_data._base import BaseDataClient
-from tradingcz.sdk.models.enums.event import MarketDataType
+from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
 
 
@@ -35,7 +35,7 @@ class CorporateActionsClient:
         # pylint: disable=protected-access
         return await self._base._request_historical(
             symbols=symbols,
-            asset="stock",
+            asset=AssetType.STOCK,
             data_type=MarketDataType.DIVIDENDS,
             model_type=Dividend,
             days=days,
@@ -52,7 +52,7 @@ class CorporateActionsClient:
         # pylint: disable=protected-access
         return await self._base._request_historical(
             symbols=symbols,
-            asset="stock",
+            asset=AssetType.STOCK,
             data_type=MarketDataType.SPLITS,
             model_type=StockSplit,
             days=days,

@@ -3,7 +3,12 @@
 Tracks seen (source_app, sequence) pairs. Memory bounded by max_size (LRU eviction).
 """
 
+from __future__ import annotations
+
+import logging
 from collections import OrderedDict
+
+logger = logging.getLogger(__name__)
 
 
 class DedupFilter:
@@ -25,6 +30,11 @@ class DedupFilter:
         key = (source_app, sequence)
         if key in self._seen:
             self._hits += 1
+            if self._hits % 1000 == 1:  # log every 1000th duplicate
+                logger.debug(
+                    "DedupFilter: skipped=%d total=%d (latest: source=%s seq=%s)",
+                    self._hits, self._total, source_app, sequence,
+                )
             return True
         self._seen[key] = None
         if len(self._seen) > self._max:

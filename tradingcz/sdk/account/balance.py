@@ -6,11 +6,15 @@ and awaits BalanceResponse.
 
 from __future__ import annotations
 
+import logging
+
 from pydantic import BaseModel, ConfigDict
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.events import ServiceRequestEvent
+
+logger = logging.getLogger(__name__)
 
 
 class Balance(BaseModel):
@@ -44,6 +48,7 @@ class BalanceClient:
 
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""
+        logger.debug("BalanceClient: get_balance")
         req = ServiceRequestEvent(service="get_balance")
         resp = await self._rr.request(
             req,

@@ -1,17 +1,30 @@
 """Logging setup and configuration for trading-cz SDK."""
 
+from __future__ import annotations
+
 import json
 import logging
 import sys
-import time
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
+
+
+class _UTCFormatter(logging.Formatter):
+    """Formatter that uses UTC timestamps without mutating global state."""
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=UTC)
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.isoformat(sep=" ", timespec="milliseconds")
 
 
 class LokiJSONFormatter(logging.Formatter):
     """Formats logs for Loki with standardized keys for LogQL."""
 
     def format(self, record: logging.LogRecord) -> str:
-        log_data = {
+        log_data: dict[str, Any] = {
             "timestamp": self.formatTime(record),
             "level": record.levelname,
             "logger": record.name,
@@ -20,31 +33,40 @@ class LokiJSONFormatter(logging.Formatter):
             "func": record.funcName,
         }
         if record.exc_info:
-            # Aggregating error types over time.
             log_data["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(log_data)
 
 
-_INTERNAL_PREFIXES = ["tradingcz", "__main__"]
+_DEFAULT_APP_PREFIXES: tuple[str, ...] = ("tradingcz", "__main__")
 
 
 def setup_logging(
     app_level: str = "INFO",
     external_loggers: dict[str, str] | None = None,
-    log_to_file: bool = False,
+    log_file: str | None = None,
+    *,
+    app_prefixes: Sequence[str] = _DEFAULT_APP_PREFIXES,
+    capture_uncaught: bool = False,
 ) -> None:
-    """
-    Configure logging with a dynamic allowlist.
+    """Configure logging for the application.
 
     Args:
-        app_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        external_loggers: Optional dict of external logger names and their desired log level
-                         (e.g.,: {"kafka": "WARNING", "alpaca": "DEBUG"}
+        app_level: Logging level for application loggers (DEBUG, INFO, …).
+        external_loggers: ``{name: level}`` for third-party loggers
+            (e.g. ``{"kafka": "WARNING", "alpaca": "DEBUG"}``).
+        log_file: When set, also write DEBUG-level logs to this file
+            (convenience for local development).
+        app_prefixes: Logger name prefixes treated as application loggers.
+            Defaults to ``("tradingcz", "__main__")``.
+        capture_uncaught: When ``True``, install ``sys.excepthook`` so
+            unhandled exceptions are logged before the process exits.
+            Off by default — enable only when you cannot wrap ``main()``
+            in a try/except.
     """
-
-    logging.Formatter.converter = time.gmtime
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    formatter = _UTCFormatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
 
@@ -53,32 +75,36 @@ def setup_logging(
             level = getattr(logging, level_str.upper(), logging.WARNING)
             logging.getLogger(name).setLevel(level)
 
-    for prefix in _INTERNAL_PREFIXES:
-        logging.getLogger(prefix).setLevel(getattr(logging, app_level.upper()))
+    app_level_value = getattr(logging, app_level.upper(), logging.INFO)
+    for prefix in app_prefixes:
+        logging.getLogger(prefix).setLevel(app_level_value)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(formatter)
     root_logger.addHandler(stdout_handler)
 
     logging.captureWarnings(True)
-    sys.excepthook = handle_exception
 
-    ############## LOCAL FILE LOGGING FOR DEVELOPMENT ##############
+    if capture_uncaught:
+        sys.excepthook = _handle_exception
 
-    if log_to_file:
-        file_handler = logging.FileHandler("local_dev.log", mode="a")
+    # ── Optional file logging (local dev) ────────────────────────────
+    if log_file is not None:
+        file_handler = logging.FileHandler(log_file, mode="a")
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.DEBUG)
         root_logger.addHandler(file_handler)
         logging.getLogger("py.warnings").addHandler(file_handler)
-    ############## LOCAL FILE LOGGING FOR DEVELOPMENT ##############
 
 
-def handle_exception(
+def _handle_exception(
     exc_type: type[BaseException], exc_value: BaseException, exc_traceback: Any
 ) -> None:
-    """Handle uncaught exceptions."""
+    """Log uncaught exceptions before the interpreter exits."""
     logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
+__all__ = ["LokiJSONFormatter", "setup_logging"]
 
 
 __all__ = ["LokiJSONFormatter", "setup_logging"]

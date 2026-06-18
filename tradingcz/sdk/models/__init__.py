@@ -13,13 +13,6 @@ from tradingcz.sdk.models.events import (
     ServiceRequestEvent,
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
-from tradingcz.sdk.models.headers import (
-    DataHeaders,
-    EventHeaders,
-    Header,
-    KafkaKey,
-)
-from tradingcz.sdk.models.keys import custom_key, event_key, symbol_key
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.market import (
     Bar,
@@ -41,13 +34,7 @@ __all__ = [
     "OrderSide",
     "OrderType",
     # Wire format
-    "Header",
     "EventType",
-    "EventHeaders",
-    "DataHeaders",
-    "event_key",
-    "symbol_key",
-    "custom_key",
     # Domain Models
     "Bar",
     "Quote",

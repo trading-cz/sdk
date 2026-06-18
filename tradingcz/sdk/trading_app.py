@@ -38,6 +38,8 @@ Environment variables:
 
 from __future__ import annotations
 
+import logging
+
 from tradingcz.sdk.account.balance import BalanceClient
 from tradingcz.sdk.account.orders import OrderClient
 from tradingcz.sdk.account.positions import PositionClient
@@ -49,6 +51,8 @@ from tradingcz.sdk.market_data.stock import StockDataClient
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.service_app import ServiceApp
+
+logger = logging.getLogger(__name__)
 
 
 class _BrokerScope:
@@ -171,9 +175,8 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
         Each ``with_broker()`` call creates a fresh ``BaseDataClient``
         so deduplication and transport state are isolated per broker.
         """
-        assert self._rr is not None
-        assert self.transport is not None
-        assert self.topics is not None
+        if self._rr is None or self.transport is None or self.topics is None:
+            raise RuntimeError("Call start() before with_broker()")
         base = BaseDataClient(
             rr=self._rr,
             transport=self.transport,
@@ -190,10 +193,10 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
     async def start(self) -> None:
         """Initialize transport + client APIs."""
         await super().start()
+        logger.info("TradingApp starting: id=%s broker=%s", self.service_id, self._broker)
 
-        assert self.events_channel is not None
-        assert self.transport is not None
-        assert self.topics is not None
+        if self.events_channel is None or self.transport is None or self.topics is None:
+            raise RuntimeError("ServiceApp.start() did not initialize transport")
 
         # Shared internal primitives
         self._rr = RequestReply(self.events_channel, self.source_app)
@@ -211,31 +214,57 @@ class TradingApp(ServiceApp):  # pylint: disable=too-many-instance-attributes
 
         if self._enable_stock:
             self.stock = StockDataClient(self._base)
+            logger.info("TradingApp: stock client enabled")
 
         if self._enable_options:
             self.options = OptionsDataClient(self._base)
+            logger.info("TradingApp: options client enabled")
 
         if self._enable_corporate:
+            logger.info("TradingApp: corporate actions client enabled")
             self.corporate_actions = CorporateActionsClient(self._base)
 
         if self._enable_signals:
-            assert self._faf is not None
+            if self._faf is None:
+                raise RuntimeError("FireAndForget not initialized")
+            logger.info("TradingApp: signal publisher enabled")
             self.signals = SignalPublisher(faf=self._faf)
 
         if self._enable_positions:
-            assert self._rr is not None
+            if self._rr is None:
+                raise RuntimeError("RequestReply not initialized")
+            logger.info("TradingApp: position client enabled")
             self.positions = PositionClient(rr=self._rr)
 
         if self._enable_balance:
-            assert self._rr is not None
+            if self._rr is None:
+                raise RuntimeError("RequestReply not initialized")
+            logger.info("TradingApp: balance client enabled")
             self.balance = BalanceClient(rr=self._rr)
 
         if self._enable_orders:
-            assert self._rr is not None
+            if self._rr is None:
+                raise RuntimeError("RequestReply not initialized")
+            logger.info("TradingApp: order client enabled")
             self.orders = OrderClient(rr=self._rr)
+
+        enabled = [
+            name for name, flag in (
+                ("stock", self._enable_stock),
+                ("options", self._enable_options),
+                ("corporate_actions", self._enable_corporate),
+                ("signals", self._enable_signals),
+                ("positions", self._enable_positions),
+                ("balance", self._enable_balance),
+                ("orders", self._enable_orders),
+            ) if flag
+        ]
+        logger.info("TradingApp ready: id=%s broker=%s clients=[%s]",
+                     self.service_id, self._broker, ", ".join(enabled))
 
     async def close(self) -> None:
         """Stop clients, then delegate to ServiceApp for health + transport."""
+        logger.info("TradingApp closing: id=%s", self.service_id)
         if self._rr is not None:
             await self._rr.close()
         await super().close()

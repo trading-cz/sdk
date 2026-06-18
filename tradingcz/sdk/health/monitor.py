@@ -1,6 +1,11 @@
-"""HealthMonitor — consume lifecycle events from other services.
+"""HealthMonitor — track liveness of other services via shared EventRouter.
 
 Tracks liveness of other services.  Calls ``on_down`` on timeout.
+
+Registers on a shared :class:`~tradingcz.sdk.messaging.router.EventRouter`
+for ``SERVICE_LIFECYCLE`` events instead of opening its own Kafka consumer.
+This means the monitor and all other event handlers share exactly one
+consumer on the events topic — no duplicate consumer groups.
 """
 
 from __future__ import annotations
@@ -10,10 +15,10 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.messaging.router import EventRouter
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.models.headers import Header
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
+from tradingcz.sdk.transport.message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 
@@ -21,35 +26,44 @@ logger = logging.getLogger(__name__)
 class HealthMonitor:
     """Tracks liveness of other services.  Calls ``on_down`` on timeout.
 
-    Consumes ``LifecycleEvent`` events from the shared event channel.
+    Registers on a shared ``EventRouter`` for ``SERVICE_LIFECYCLE`` events
+    instead of opening its own Kafka consumer.  The periodic sweep for
+    TTL expiry runs as a background task.
+
     Two triggers fire the callback:
       - Explicit ``"down"`` event (graceful shutdown)
       - No heartbeat for > *ttl* seconds (crash / partition)
 
     Usage::
 
-        monitor = HealthMonitor(events_channel, ttl=600)
+        router = EventRouter(channel)
+        monitor = HealthMonitor(router, ttl=600)
         monitor.on_down(lambda sid: print(f"Service down: {sid}"))
         await monitor.start()
-        ...
+        await router.run()   # EventRouter dispatches lifecycle events to monitor
         await monitor.stop()
     """
 
     def __init__(
         self,
-        channel: KafkaChannel,
+        router: EventRouter,
         *,
         ttl: float = 600.0,
         sweep_interval: float = 60.0,
     ) -> None:
-        self._channel = channel
         self._ttl = max(ttl, 1.0)
         self._sweep_interval = max(sweep_interval, 1.0)
         self._seen: dict[str, float] = {}  # service_id → time.monotonic()
         self._on_down: Callable[[str], Awaitable[None]] | None = None
         self._running = False
-        self._consume_task: asyncio.Task[None] | None = None
         self._sweep_task: asyncio.Task[None] | None = None
+
+        # Register on the shared EventRouter — no separate Kafka consumer.
+        router.on(
+            EventType.SERVICE_LIFECYCLE,
+            LifecycleEvent,
+            handler=self._on_event,
+        )
 
     # ------------------------------------------------------------------
     # Configuration
@@ -64,58 +78,49 @@ class HealthMonitor:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Start consuming lifecycle events and the periodic sweep."""
+        """Start the periodic TTL sweep."""
         if self._running:
             return
         self._running = True
-        self._consume_task = asyncio.create_task(self._consume())
         self._sweep_task = asyncio.create_task(self._sweep())
 
     async def stop(self) -> None:
-        """Cancel background tasks."""
+        """Cancel the sweep task.  Event dispatch stops when EventRouter.run() exits."""
         if not self._running:
             return
         self._running = False
-        for task in (self._consume_task, self._sweep_task):
-            if task and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-        self._consume_task = None
+        if self._sweep_task and not self._sweep_task.done():
+            self._sweep_task.cancel()
+            try:
+                await self._sweep_task
+            except asyncio.CancelledError:
+                pass
         self._sweep_task = None
+        self._seen.clear()
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
-    async def _consume(self) -> None:
-        """Read LifecycleEvent events from the event channel."""
-        try:
-            async for msg in self._channel.receive(group_suffix="health"):
-                if not self._running:
-                    break
-                if msg.headers.get(Header.EVENT_TYPE) != EventType.SERVICE_LIFECYCLE:
-                    continue
-                try:
-                    event = LifecycleEvent.model_validate_json(msg.payload)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    continue
-                sid = event.service_id
-                if event.event == "down":
-                    was_tracked = sid in self._seen
-                    self._seen.pop(sid, None)
-                    if was_tracked:
-                        logger.info("HealthMonitor: %s reported down", sid)
-                    await self._notify(sid)
-                else:  # up or heartbeat
-                    is_new = sid not in self._seen
-                    self._seen[sid] = time.monotonic()
-                    if is_new:
-                        logger.info( "HealthMonitor: %s is now alive (event=%s)", sid, event.event, )
-        except asyncio.CancelledError:
-            pass
+    async def _on_event(self, event: LifecycleEvent, _raw: KafkaMessage) -> None:
+        """Called by EventRouter for each SERVICE_LIFECYCLE event."""
+        if not self._running:
+            return
+        sid = event.service_id
+        if event.event == "down":
+            was_tracked = sid in self._seen
+            self._seen.pop(sid, None)
+            if was_tracked:
+                logger.info("HealthMonitor: %s reported down", sid)
+            await self._notify(sid)
+        else:  # up or heartbeat
+            is_new = sid not in self._seen
+            self._seen[sid] = time.monotonic()
+            if is_new:
+                logger.info(
+                    "HealthMonitor: %s is now alive (event=%s)",
+                    sid, event.event,
+                )
 
     async def _sweep(self) -> None:
         """Periodically check for services past TTL."""
@@ -128,7 +133,10 @@ class HealthMonitor:
                 for service_id, last_seen in list(self._seen.items()):
                     if now - last_seen > self._ttl:
                         del self._seen[service_id]
-                        logger.warning( "HealthMonitor: %s timed out (last seen %.0fs ago)", service_id, now - last_seen, )
+                        logger.warning(
+                            "HealthMonitor: %s timed out (last seen %.0fs ago)",
+                            service_id, now - last_seen,
+                        )
                         await self._notify(service_id)
         except asyncio.CancelledError:
             pass
@@ -140,7 +148,10 @@ class HealthMonitor:
         try:
             await self._on_down(service_id)
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.warning( "HealthMonitor: on_down callback failed for %s", service_id, exc_info=True, )
+            logger.warning(
+                "HealthMonitor: on_down callback failed for %s",
+                service_id, exc_info=True,
+            )
 
 
 __all__ = ["HealthMonitor"]

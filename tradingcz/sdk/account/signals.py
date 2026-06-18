@@ -1,8 +1,14 @@
 """SignalPublisher — publish trading signals (fire-and-forget)."""
 
+from __future__ import annotations
+
+import logging
+
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
+
+logger = logging.getLogger(__name__)
 
 
 class SignalPublisher:
@@ -16,6 +22,10 @@ class SignalPublisher:
 
     async def publish(self, signal: ExecutionRequestEvent, *, event_id: str) -> None:
         """Publish a trading signal."""
+        logger.info(
+            "Signal published: strategy=%s orders=%d event_id=%s",
+            signal.strategy_type, len(signal.orders), event_id,
+        )
         await self._faf.send_event(
             signal,
             event_type=EventType.TRADING_SIGNAL,

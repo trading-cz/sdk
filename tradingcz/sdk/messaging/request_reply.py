@@ -13,7 +13,8 @@ from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.serialization.protocol import Deserializer, Serializer
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.models.headers import EventHeaders, Header, KafkaKey
+from tradingcz.sdk.transport.headers import EventHeaders, Header
+from tradingcz.sdk.transport.keys import KafkaKey
 
 logger = logging.getLogger(__name__)
 

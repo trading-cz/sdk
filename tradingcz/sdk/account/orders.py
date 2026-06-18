@@ -6,6 +6,7 @@ and awaits OrderList response.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
@@ -13,6 +14,8 @@ from pydantic import BaseModel, ConfigDict
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.events import ServiceRequestEvent
+
+logger = logging.getLogger(__name__)
 
 
 class OrderSummary(BaseModel):
@@ -55,6 +58,7 @@ class OrderClient:
         timeout: float = 30.0,
     ) -> list[OrderSummary]:
         """Return orders, optionally filtered."""
+        logger.debug("OrderClient: get_orders status=%s symbol=%s", status, symbol)
         req = ServiceRequestEvent(
             service="get_orders",
             symbol=symbol,

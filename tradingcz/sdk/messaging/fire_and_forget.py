@@ -16,7 +16,8 @@ from pydantic import BaseModel
 from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.models.headers import EventHeaders, KafkaKey
+from tradingcz.sdk.transport.headers import EventHeaders
+from tradingcz.sdk.transport.keys import KafkaKey
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
             event_id=event_id,
         ).to_kafka()
         if not key:
-            key = event_key(event_type, self._service_id, event_id)
+            key = KafkaKey.for_event(event_type, self._service_id, event_id)
         payload = self._serializer.serialize(message)
         await self._channel.send(payload, key=key, headers=headers)
 
