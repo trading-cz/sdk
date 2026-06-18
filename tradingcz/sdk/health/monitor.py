@@ -16,7 +16,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 from tradingcz.sdk.messaging.router import EventRouter
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.transport.message import KafkaMessage
 
@@ -107,7 +107,7 @@ class HealthMonitor:
         if not self._running:
             return
         sid = event.service_id
-        if event.event == "down":
+        if event.event == LifecycleEventType.DOWN:
             was_tracked = sid in self._seen
             self._seen.pop(sid, None)
             if was_tracked:

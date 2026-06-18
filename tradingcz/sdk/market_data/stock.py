@@ -1,11 +1,12 @@
-"""StockDataClient — historical bars + streaming quotes/trades.
+"""StockDataClient — historical bars + latest quotes + streaming.
 
 One-time (returns ``dict``):
-  - ``bars()``     — OHLCV aggregates for a time range
+  - ``bars()``          — OHLCV aggregates for a time range
+  - ``latest_quotes()`` — most recent bid/ask per symbol (poll-friendly)
 
 Streaming (returns :class:`StreamHandle`):
-  - ``stream_quotes()``   — live bid/ask quotes, yields indefinitely
-  - ``stream_trades()``   — live trade ticks, yields indefinitely
+  - ``stream_quotes()`` — live bid/ask quotes, yields indefinitely
+  - ``stream_trades()`` — live trade ticks, yields indefinitely
 """
 
 # pylint: disable=protected-access
@@ -16,7 +17,7 @@ import logging
 
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
-from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
+from tradingcz.sdk.models.market import Bar, Quote, StreamQuote, Trade
 
 from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
 
@@ -69,6 +70,29 @@ class StockDataClient:
             days=days,
             timeout=timeout,
         )
+
+    # -- Latest (poll-friendly, no streaming) ---------------------------
+
+    async def latest_quotes(self, symbols: list[str], *, timeout: float = 5.0) -> dict[str, Quote]:
+        """Request the most recent quote for each symbol.
+
+        Returns ``{symbol: Quote}`` — exactly one quote per symbol
+        (the latest available).  Use for polling-based price checks
+        where streaming every tick is unnecessary overhead.
+
+        Uses ``MarketDataType.LATEST_QUOTES`` — ingestion returns the
+        most recent bid/ask without opening a persistent stream.
+        """
+        logger.info("StockDataClient: latest_quotes symbols=%d", len(symbols))
+        result = await self._base._request_historical(
+            symbols=symbols,
+            asset=AssetType.STOCK,
+            data_type=MarketDataType.LATEST_QUOTES,
+            model_type=Quote,
+            timeout=timeout,
+        )
+        # _request_historical returns dict[symbol, list[T]] — flatten to one per symbol
+        return {sym: quotes[-1] for sym, quotes in result.items() if quotes}
 
     # -- Streaming -----------------------------------------------------
 

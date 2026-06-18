@@ -152,7 +152,7 @@ class BaseDataClient:
         transport: KafkaTransport,
         topics: TopicRegistry,
         service_id: str,
-        broker: str = "alpaca",
+        broker: str = Broker.ALPACA,
         *,
         dedup_max_size: int = 100_000,
     ) -> None:
