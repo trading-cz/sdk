@@ -1,9 +1,12 @@
-"""Observability and metrics collection."""
+"""Observability and health monitoring — re-exports for backward compatibility.
 
-# Import metrics module to register all prometheus metrics
-import tradingcz.sdk.observability.metrics  # noqa: F401
+These are re-exported from their canonical new locations:
+  - ``HealthPublisher`` → ``tradingcz.sdk.messaging.health_publisher``
+  - ``HealthMonitor`` → ``tradingcz.sdk.health.monitor``
+"""
 
-from tradingcz.sdk.observability.health import HealthMonitor, HealthPublisher
+from tradingcz.sdk.messaging.health_publisher import HealthPublisher
+from tradingcz.sdk.health.monitor import HealthMonitor
 
 __all__ = [
     "HealthPublisher",

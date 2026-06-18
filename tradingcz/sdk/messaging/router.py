@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.messaging.consumer import TypedParser
-from tradingcz.sdk.transport.kafka import KafkaChannel
+from tradingcz.sdk.messaging.typed import TypedParser
+from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.transport.message import KafkaMessage
 from tradingcz.sdk.models.enums.event import EventType
 

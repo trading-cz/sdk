@@ -46,7 +46,7 @@ from collections.abc import AsyncIterator
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.transport.kafka import KafkaChannel
+from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.transport.message import KafkaMessage
 from tradingcz.sdk.models.headers import Header
 

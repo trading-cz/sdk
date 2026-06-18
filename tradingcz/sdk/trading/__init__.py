@@ -1,22 +1,22 @@
-"""tradingcz.sdk.trading — market data and account clients for strategies.
+"""tradingcz.sdk.trading — re-exports for backward compatibility.
 
-The primary entry point for strategy developers::
-
-    from tradingcz.sdk.trading import TradingApp
-
-    async with TradingApp(service_id="my-strategy") as app:
-        bars = await app.stock.bars(["AAPL"], days=30)
-        await app.signals.publish(signal, event_id="...")
+Prefer importing from the canonical new locations:
+  - ``TradingApp`` → ``tradingcz.sdk`` (root)
+  - ``ServiceApp`` → ``tradingcz.sdk`` (root)
+  - Data clients → ``tradingcz.sdk.market_data``
+  - Account clients → ``tradingcz.sdk.account``
 """
 
-from tradingcz.sdk.trading.service import ServiceApp
-from tradingcz.sdk.trading.app import TradingApp
-from tradingcz.sdk.trading.account import BalanceClient, OrderClient, PositionClient
-from tradingcz.sdk.trading.corporate import CorporateActionsClient
-from tradingcz.sdk.trading.options import OptionsDataClient
-from tradingcz.sdk.trading.signals import SignalPublisher
-from tradingcz.sdk.trading.stock import StockDataClient
-from tradingcz.sdk.trading.time_keeper import MarketClockProvider, TimeKeeper
+from tradingcz.sdk.service_app import ServiceApp
+from tradingcz.sdk.trading_app import TradingApp
+from tradingcz.sdk.account.balance import BalanceClient
+from tradingcz.sdk.account.orders import OrderClient
+from tradingcz.sdk.account.positions import PositionClient
+from tradingcz.sdk.market_data.corporate import CorporateActionsClient
+from tradingcz.sdk.market_data.options import OptionsDataClient
+from tradingcz.sdk.account.signals import SignalPublisher
+from tradingcz.sdk.market_data.stock import StockDataClient
+from tradingcz.sdk.market_data.clock import MarketClockProvider, TimeKeeper
 
 __all__ = [
     "TradingApp",
@@ -29,7 +29,6 @@ __all__ = [
     "BalanceClient",
     "OrderClient",
     "PositionClient",
-    # signal publishing
     "SignalPublisher",
     # market clock
     "TimeKeeper",
