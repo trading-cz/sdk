@@ -18,9 +18,6 @@ class MarketOrderRequest(BaseModel):
     time_in_force: TimeInForce = Field(
         ..., description="Lifecycle of the order: day,  gtc, etc."
     )
-    group_id: str | None = Field(
-        default=None, index=True, description="Not sure what's this for. In case?"
-    )
     order_class: OrderClass | None = Field(default=OrderClass.SIMPLE)
 
     @model_validator(mode="after")

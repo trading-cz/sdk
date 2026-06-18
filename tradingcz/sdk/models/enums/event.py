@@ -28,8 +28,6 @@ class EventType(StrEnum):
     """Unified event type — used for both Kafka ``message_type`` headers
     and ``event_type`` payload fields.
 
-    Canonical values driving deserialization routing and event dispatch.
-
     Usage::
 
         # Kafka wire header
@@ -44,7 +42,7 @@ class EventType(StrEnum):
     DATA_REQUEST = "data_request"
     DATA_READY = "data_ready"
     DATA_ERROR = "data_error"
-    SERVICE_REQUEST = "service_request"
+    SERVICE_REQUEST = "service_request" # executor
     SERVICE_LIFECYCLE = "service_lifecycle"
 
     # ── Service responses (event topic) ──────────────────────────────────
@@ -57,6 +55,7 @@ class EventType(StrEnum):
     TRADING_SIGNAL = "trading_signal"
 
     # ── Market data (data topics) ────────────────────────────────────────
+    # TODO wrong enum - move somewhere else
     BAR = "bar"
     QUOTE = "quote"
     TRADE = "trade"
@@ -89,3 +88,67 @@ type OrderRequest = (
     | StopOrderRequest
     | TrailingStopOrderRequest
 )
+
+class DataRequestType(StrEnum):
+    """``DataRequest.type`` and ``DataReady.type`` — the kind of data-plane operation.
+
+    Used on both sides of the request/reply pair:
+    - ``DataRequest.type`` — what the client is asking for
+    - ``DataReady.type``   — what the ingestion pod fulfilled
+
+    ``UNSUBSCRIBE`` only appears in ``DataRequest``, never in ``DataReady``.
+    """
+
+    HISTORIC = "historic"
+    STREAM = "stream"
+    UNSUBSCRIBE = "unsubscribe"
+
+
+class AssetType(StrEnum):
+    """Asset class for a data request."""
+
+    STOCK = "stock"
+    OPTION = "option"
+    CRYPTO = "crypto"
+
+
+class MarketDataType(StrEnum):
+    """``DataRequest.data_kind`` — kind of market-data records to fetch or stream.
+
+    Used for both historical and streaming requests;
+    ``DataRequest.type`` carries the historic/stream/unsubscribe
+    distinction separately.
+
+    Values:
+        BARS            — OHLCV candlestick aggregates
+        TRADES          — individual trade ticks
+        QUOTES          — level-1 bid/ask quotes
+        SNAPSHOTS       — combined trade + quote + greeks snapshot
+        LATEST_BARS     — most-recent bar per symbol (no time range)
+        LATEST_TRADES   — most-recent trade per symbol
+        LATEST_QUOTES   — most-recent quote per symbol
+    """
+
+    BARS = "bars"
+    TRADES = "trades"
+    QUOTES = "quotes"
+    SNAPSHOTS = "snapshots"
+    LATEST_BARS = "latest_bars"
+    LATEST_TRADES = "latest_trades"
+    LATEST_QUOTES = "latest_quotes"
+    DIVIDENDS = "dividends"
+    SPLITS = "splits"
+
+
+class Broker(StrEnum):
+    """Supported market-data / execution brokers."""
+
+    ALPACA = "alpaca"
+
+
+class LifecycleEventType(StrEnum):
+    """``LifecycleEvent.type`` — service health/lifecycle transitions."""
+
+    UP = "up"
+    HEARTBEAT = "heartbeat"
+    DOWN = "down"
