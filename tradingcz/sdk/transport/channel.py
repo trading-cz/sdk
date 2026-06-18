@@ -9,11 +9,15 @@ One ``KafkaChannel`` per topic, one shared ``Producer`` per ``KafkaTransport``.
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from confluent_kafka.aio import AIOConsumer
 
 from tradingcz.sdk.transport.message import KafkaMessage
 from tradingcz.sdk.transport.settings import KafkaSettings
+
+if TYPE_CHECKING:
+    from confluent_kafka import Producer as ConfluentProducer
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +37,7 @@ class KafkaChannel:
     def __init__(
         self,
         topic: str,
-        producer: "confluent_kafka.Producer",  # type: ignore[name-defined]
+        producer: ConfluentProducer,
         settings: KafkaSettings,
     ) -> None:
         self._topic = topic
@@ -100,21 +104,13 @@ class KafkaChannel:
         loop = asyncio.get_running_loop()
         remaining = await loop.run_in_executor(None, _flush)
         if remaining > 0:
-            raise RuntimeError(
-                f"Failed to deliver messages to {self._topic}: "
-                f"{remaining} message(s) still pending after flush"
-            )
+            raise RuntimeError(f"Failed to deliver messages to {self._topic}: {remaining} message(s) still pending after flush")
 
     # ------------------------------------------------------------------
     # Receive
     # ------------------------------------------------------------------
 
-    async def receive(
-        self,
-        *,
-        group_suffix: str = "",
-        idle_timeout: float = 0.0,
-    ) -> AsyncIterator[KafkaMessage]:
+    async def receive(self, *, group_suffix: str = "", idle_timeout: float = 0.0) -> AsyncIterator[KafkaMessage]:
         """Subscribe and yield ``KafkaMessage`` objects.
 
         Creates a dedicated ``AIOConsumer`` per call for fan-out semantics.

@@ -1,6 +1,6 @@
 """Typed messaging layer on top of transport."""
 
-from tradingcz.sdk.messaging.typed import (
+from tradingcz.sdk.messaging.pubsub import (
     TypedConsumer,
     TypedParser,
     TypedProducer,

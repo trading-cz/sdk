@@ -61,14 +61,8 @@ class TopicRegistry:
 
         # Live stock streaming: 5 partitions, keyed by symbol for
         # independent consumption by multiple strategies.
-        self.market_data = TopicConfig(
-            name=f"{env}-stock-market-stream-data",
-            partitions=5,
-        )
+        self.market_data = TopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
 
         # Historical stock data: single partition, shared across all
         # historical requests (event_id used for filtering).
-        self.historical_data = TopicConfig(
-            name=f"{env}-stock-market-historical-data",
-            partitions=1,
-        )
+        self.historical_data = TopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)

@@ -241,22 +241,16 @@ class BaseDataClient:
             async for msg in channel.receive():
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
-                if self._dedup.is_duplicate(
-                    msg.headers.get(
-                        Header.SOURCE,
-                        msg.headers.get(Header.SOURCE_APP, ""),
-                    ),
-                    msg.headers.get(Header.SEQUENCE, "0"),
+                seq = msg.headers.get(Header.SEQUENCE, "")
+                if seq and self._dedup.is_duplicate(
+                    msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                    seq,
                 ):
                     continue
                 try:
                     item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
                 except Exception:  # pylint: disable=broad-exception-caught
-                    logger.debug(
-                        "Skipping unparseable %s",
-                        data_kind,
-                        exc_info=True,
-                    )
+                    logger.debug("Skipping unparseable %s", data_kind, exc_info=True)
                     continue
                 results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
                 count += 1
@@ -314,12 +308,10 @@ class BaseDataClient:
         async def _consume() -> AsyncIterator[T]:
             try:
                 async for msg in channel.receive():
-                    if self._dedup.is_duplicate(
-                        msg.headers.get(
-                            Header.SOURCE,
-                            msg.headers.get(Header.SOURCE_APP, ""),
-                        ),
-                        msg.headers.get(Header.SEQUENCE, "0"),
+                    seq = msg.headers.get(Header.SEQUENCE, "")
+                    if seq and self._dedup.is_duplicate(
+                        msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                        seq,
                     ):
                         continue
                     try:

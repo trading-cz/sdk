@@ -1,16 +1,4 @@
-"""Generic retry wrapper — call any async operation with retries on failure.
-
-Simple two-parameter design::
-
-    from tradingcz.sdk.resilience import Retry
-
-    retry = Retry(max_retries=3, delay=2.0)
-    bars = await retry.call(lambda: client.bars(["AAPL"]))
-    positions = await retry.call(lambda: client.get_positions())
-
-Works with any async callable — data, positions, balance, orders, signals.
-No coupling to Kafka, transport, or any specific client.
-"""
+"""Async retry wrapper — call any async operation with retries on failure."""
 
 from __future__ import annotations
 
@@ -22,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class Retry:
-    """Call any async operation with retries on transient failure.
+    """Call an async operation with retries on transient failure.
 
     Args:
         max_retries: Maximum retry attempts (total calls = max_retries + 1).
-        delay: Seconds to wait between retries.
+        delay: Seconds between retries.
 
     Example::
 
@@ -46,18 +34,8 @@ class Retry:
     async def call[T](self, operation: Callable[[], Awaitable[T]]) -> T:
         """Execute *operation*, retrying on any ``Exception``.
 
-        Only ``Exception`` subclasses trigger a retry — ``BaseException``
-        subclasses (``KeyboardInterrupt``, ``SystemExit``, ``asyncio.CancelledError``)
-        propagate immediately without retrying.
-
-        Args:
-            operation: An async callable (e.g. ``lambda: client.do_work()``).
-
-        Returns:
-            The return value of *operation* on success.
-
-        Raises:
-            The last exception raised by *operation* if all attempts are exhausted.
+        ``BaseException`` subclasses (CancelledError, KeyboardInterrupt)
+        propagate immediately.
         """
         last_exc: Exception | None = None
 

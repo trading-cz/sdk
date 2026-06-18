@@ -17,7 +17,6 @@ Usage::
 
 import logging
 import os
-import re
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
@@ -34,58 +33,16 @@ from tradingcz.sdk.models.market import MarketItem, market_item_message_type
 logger = logging.getLogger(__name__)
 
 
-def _default_headers_fn[T](source_app: str) -> Callable[[T], dict[str, str]]:
-    """Return a headers_fn that auto-infers EventType from the value's class name.
-
-    Converts CamelCase class name to snake_case and looks up the
-    corresponding :class:`EventType` enum member (e.g. ``TradingSignal``
-    → ``EventType.TRADING_SIGNAL`` → ``\"trading_signal\"``).
-
-    If the class name doesn't match any known EventType, the caller
-    should supply an explicit ``headers_fn`` instead.
-    """
-
-    def _fn(value: T) -> dict[str, str]:
-        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(value).__name__).lower()
-        try:
-            mt = EventType(snake)
-        except ValueError:
-            raise ValueError(
-                f"Cannot infer EventType from class {type(value).__name__!r}: "
-                f"'{snake}' is not a known message_type. "
-                f"Supply an explicit 'headers_fn' to TypedProducer."
-            ) from None
-        return DataHeaders(
-            event_type=mt,
-            source_app=source_app,
-        ).to_kafka()
-
-    return _fn
-
-
 class TypedProducer[T]:
     """Publish typed values via a KafkaChannel.
 
-    Generic in the message type ``T``.  Uses a ``Serializer[T]`` to
-    convert values to bytes.  Optional ``key_fn`` for Kafka partition
-    routing.
-
-    Headers are always included — by default, ``message_type`` is
-    auto-inferred from the value's class name (e.g. ``TradingSignal``
-    → ``"trading_signal"``).  Override via ``headers_fn``.
+    Generic in ``T``.  Uses ``Serializer[T]`` + required ``headers_fn``.
 
     Lifecycle::
 
-        # Long-lived producer (e.g. streaming):
         producer = stream_producer(channel, source_app="ingestion")
-        for item in items:
-            await producer.send(item)
-        await producer.flush()  # guarantee delivery before shutdown
-
-        # Scoped producer (auto-flush on exit):
-        async with stream_producer(channel, source_app="ingestion") as producer:
-            for item in items:
-                await producer.send(item)
+        await producer.send(item)
+        await producer.flush()  # guarantee delivery
     """
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -93,16 +50,13 @@ class TypedProducer[T]:
         channel: KafkaChannel,
         serializer: Serializer[T],
         *,
-        source_app: str = "",
+        headers_fn: Callable[[T], dict[str, str]],
         key_fn: Callable[[T], str] | None = None,
-        headers_fn: Callable[[T], dict[str, str]] | None = None,
     ) -> None:
         self._channel = channel
         self._serializer = serializer
         self._key_fn: Callable[[T], str] = key_fn or (lambda _: "")
-        self._headers_fn: Callable[[T], dict[str, str]] = (
-            headers_fn or _default_headers_fn(source_app)
-        )
+        self._headers_fn = headers_fn
 
     @property
     def channel(self) -> KafkaChannel:
