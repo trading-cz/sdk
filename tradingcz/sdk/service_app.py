@@ -152,27 +152,27 @@ class ServiceApp:
         message: BaseModel,
         *,
         message_type: EventType,
+        event_id: str = "",
         key: str = "",
-        **headers: str,
     ) -> None:
         """Publish a typed message on the events channel (fire-and-forget).
 
         Convenience wrapper around ``FireAndForget`` — one-line send
-        with standard headers.  The ``message_type`` is required;
-        additional kwargs become header fields.
+        with standard headers.  The ``message_type`` and ``event_id``
+        are required.
 
         Example::
 
             await self.publish(
                 DataReady(event_id="...", ...),
                 message_type=EventType.DATA_READY,
-                key=event_id,
+                event_id="abc-123",
             )
         """
         if self._faf is None:
             raise RuntimeError("Call start() before publish()")
         await self._faf.send(
-            message, event_type=message_type, key=key, extra_headers=headers or None
+            message, event_type=message_type, event_id=event_id, key=key
         )
 
     # ------------------------------------------------------------------

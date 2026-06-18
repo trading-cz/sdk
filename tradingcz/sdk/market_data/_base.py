@@ -16,7 +16,7 @@ from tradingcz.sdk.transport.topics import TopicRegistry
 from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.transport import KafkaTransport
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType, DataRequestType
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
 from tradingcz.sdk.models.headers import Header
 
@@ -112,7 +112,7 @@ class _Unsubscribe:
     async def __call__(self) -> None:
         """Send unsubscribe DataRequest (fire-and-forget)."""
         req = DataRequest(
-            type="unsubscribe",
+            type=DataRequestType.UNSUBSCRIBE,
             asset=self._asset,
             broker=self._broker,
             symbols=self._symbols,
@@ -204,7 +204,7 @@ class BaseDataClient:
             end = end_time
 
         req = DataRequest(
-            type="historic",
+            type=DataRequestType.HISTORIC,
             asset=asset,
             broker=self._broker,
             symbols=symbols,
@@ -221,9 +221,9 @@ class BaseDataClient:
             timeout=timeout,
         )
 
-        if isinstance(resp, DataError):
+        if resp.event_type == EventType.DATA_ERROR:
             raise RuntimeError(f"DataError from ingestion: {resp.error}")
-        if resp.type != "historic":
+        if resp.type != DataRequestType.HISTORIC:
             raise RuntimeError(f"Expected historic DataReady, got type={resp.type}")
 
         logger.info(
@@ -290,7 +290,7 @@ class BaseDataClient:
         guaranteed unsubscribe).
         """
         req = DataRequest(
-            type="stream",
+            type=DataRequestType.STREAM,
             asset=asset,
             broker=self._broker,
             symbols=symbols,
@@ -304,9 +304,9 @@ class BaseDataClient:
             timeout=timeout,
         )
 
-        if isinstance(resp, DataError):
+        if resp.event_type == EventType.DATA_ERROR:
             raise RuntimeError(f"DataError from ingestion (stream): {resp.error}")
-        if resp.type != "stream":
+        if resp.type != DataRequestType.STREAM:
             raise RuntimeError(f"Expected stream DataReady, got type={resp.type}")
 
         channel = await self._transport.channel(resp.data_topic)

@@ -32,12 +32,7 @@ class OptionsDataClient:
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
-    async def snapshots(
-        self,
-        symbols: list[str],
-        *,
-        timeout: float = 30.0,
-    ) -> dict[str, list[OptionSnapshot]]:
+    async def snapshots(self, symbols: list[str], *, timeout: float = 30.0) -> dict[str, list[OptionSnapshot]]:
         """Request option snapshots (trade, quote, greeks, IV).
 
         Returns ``{symbol: [OptionSnapshot]}``.

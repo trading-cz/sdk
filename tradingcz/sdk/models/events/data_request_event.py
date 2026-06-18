@@ -23,6 +23,7 @@ from tradingcz.sdk.models.enums.event import (
     AssetType,
     Broker,
     DataRequestType,
+    EventType,
     MarketDataType,
 )
 from tradingcz.sdk.models.enums.timeframe import Timeframe
@@ -47,9 +48,10 @@ class DataReady(BaseModel):
     """Acknowledgement: data is available on data_topic.
 
     Sent by ingestion after fulfilling a DataRequest.
-    ``record_count`` is set only when ``type="historic"``.
+    ``record_count`` is set only when ``type=DataRequestType.HISTORIC``.
     """
 
+    event_type: EventType = Field(default=EventType.DATA_READY, description="Event type (always DATA_READY)")
     event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     data_topic: str = Field(..., description="Kafka topic where data is published")
@@ -60,6 +62,7 @@ class DataReady(BaseModel):
 class DataError(BaseModel):
     """Error response to a DataRequest."""
 
+    event_type: EventType = Field(default=EventType.DATA_ERROR, description="Event type (always DATA_ERROR)")
     event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     error: str = Field(..., description="Error message describing the failure")

@@ -19,8 +19,8 @@ class SignalPublisher:
         await self._faf.send(
             signal,
             event_type=EventType.TRADING_SIGNAL,
+            event_id=event_id,
             key=str(signal.id),
-            extra_headers={"event_id": event_id},
         )
 
 

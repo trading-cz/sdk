@@ -10,10 +10,7 @@ This module is a placeholder demonstrating the pattern.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from tradingcz.sdk.market_data._base import BaseDataClient
+from tradingcz.sdk.market_data._base import BaseDataClient
 
 
 class CorporateActionsClient:
@@ -28,12 +25,7 @@ class CorporateActionsClient:
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
-    async def dividends(
-        self,
-        symbols: list[str],
-        *,
-        timeout: float = 30.0,
-    ) -> dict[str, list]:
+    async def dividends(self, symbols: list[str], *, timeout: float = 30.0) -> dict[str, list]:
         """Request dividend history for symbols.
 
         Returns ``{symbol: [dividend events]}``.
@@ -43,12 +35,7 @@ class CorporateActionsClient:
             "See tradingcz.model.corporate (planned)."
         )
 
-    async def splits(
-        self,
-        symbols: list[str],
-        *,
-        timeout: float = 30.0,
-    ) -> dict[str, list]:
+    async def splits(self, symbols: list[str], *, timeout: float = 30.0) -> dict[str, list]:
         """Request stock split history for symbols.
 
         Returns ``{symbol: [split events]}``.

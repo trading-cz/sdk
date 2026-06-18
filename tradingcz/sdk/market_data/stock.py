@@ -17,8 +17,7 @@ from typing import TYPE_CHECKING
 from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
-if TYPE_CHECKING:
-    from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
+from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
 
 
 class StockDataClient:
@@ -52,14 +51,7 @@ class StockDataClient:
 
     # -- One-time ------------------------------------------------------
 
-    async def bars(
-        self,
-        symbols: list[str],
-        *,
-        days: int = 14,
-        timeframe: str = "1d",
-        timeout: float = 30.0,
-    ) -> dict[str, list[Bar]]:
+    async def bars(self, symbols: list[str], *, days: int, timeframe: str, timeout: float = 30.0) -> dict[str, list[Bar]]:
         """Request historical OHLCV bars.
 
         Returns ``{symbol: [Bar sorted by timestamp]}``.
@@ -76,12 +68,7 @@ class StockDataClient:
 
     # -- Streaming -----------------------------------------------------
 
-    async def stream_quotes(
-        self,
-        symbols: list[str],
-        *,
-        timeout: float = 30.0,
-    ) -> StreamHandle[StreamQuote]:
+    async def stream_quotes(self, symbols: list[str], *, timeout: float = 30.0) -> StreamHandle[StreamQuote]:
         """Stream live bid/ask quotes.
 
         Returns a :class:`StreamHandle` that yields :class:`StreamQuote`
@@ -96,12 +83,7 @@ class StockDataClient:
             timeout=timeout,
         )
 
-    async def stream_trades(
-        self,
-        symbols: list[str],
-        *,
-        timeout: float = 30.0,
-    ) -> StreamHandle[Trade]:
+    async def stream_trades(self, symbols: list[str], *, timeout: float = 30.0) -> StreamHandle[Trade]:
         """Stream live trade ticks.
 
         Returns a :class:`StreamHandle` that yields :class:`Trade`
