@@ -21,6 +21,7 @@ from collections.abc import Callable
 from pydantic import BaseModel
 
 from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.serialization.protocol import Deserializer, Serializer
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.headers import EventHeaders, Header, KafkaKey
@@ -56,6 +57,7 @@ class RequestReply:
         self._channel = channel
         self._service_id = service_id
         self._seq = 0
+        self._serializer: JsonSerializer = JsonSerializer()
         self._types: dict[str, type[BaseModel]] = (dict(message_types) if message_types else {})
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
@@ -132,7 +134,7 @@ class RequestReply:
         mt = request_type or _infer_message_type(req)
         self._seq += 1
 
-        payload = req.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
+        payload = self._serializer.serialize(req)
         headers = EventHeaders(
             event_type=mt,
             source_app=self._service_id,
