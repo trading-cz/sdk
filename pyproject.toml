@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trading-sdk"
-version = "0.1.16"
+version = "0.1.17"
 description = "Shared SDK and data models for the trading platform (namespace: tradingcz.model)"
 readme = "README.md"
 license = "MIT"
