@@ -11,7 +11,7 @@ from confluent_kafka import Producer as SyncProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from tradingcz.sdk.transport.channel import KafkaChannel
-from tradingcz.sdk.transport.settings import KafkaSettings
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 logger = logging.getLogger(__name__)
 

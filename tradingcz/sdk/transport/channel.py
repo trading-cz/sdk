@@ -9,15 +9,12 @@ One ``KafkaChannel`` per topic, one shared ``Producer`` per ``KafkaTransport``.
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
 
+from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.aio import AIOConsumer
 
 from tradingcz.sdk.transport.message import KafkaMessage
-from tradingcz.sdk.transport.settings import KafkaSettings
-
-if TYPE_CHECKING:
-    from confluent_kafka import Producer as ConfluentProducer
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 logger = logging.getLogger(__name__)
 

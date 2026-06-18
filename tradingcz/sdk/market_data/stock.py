@@ -12,8 +12,6 @@ Streaming (returns :class:`StreamHandle`):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 

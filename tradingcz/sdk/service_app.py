@@ -30,7 +30,7 @@ from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.health_publisher import HealthPublisher
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.channel import KafkaChannel
-from tradingcz.sdk.transport.settings import KafkaSettings
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.topics import TopicRegistry
 from tradingcz.sdk.transport.transport import KafkaTransport
 

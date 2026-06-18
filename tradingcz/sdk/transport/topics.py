@@ -1,38 +1,11 @@
-"""Topic registry — single source of truth for Kafka topic names and configs.
-
-Provides hyphen-separated, K8s-safe, environment-scoped topic names
-(e.g. ``dev-event``, ``dev-stock-market-stream-data``).
-
-Topic names are environment-scoped for security isolation
-(``dev-stock-market-stream-data`` and ``prd-stock-market-stream-data`` are
-separate topics).
-
-Message keys are plain strings (e.g. ``"AAPL"``) for partition routing.
-Metadata lives in headers via ``tradingcz.model.headers.make_headers()``.
-
-Usage (in any service)::
-
-    from tradingcz.sdk.transport import TopicRegistry
-
-    topics = TopicRegistry(env="dev")
-    channel = await transport.channel(topics.market_data.name)
-    await channel.send(payload, key="AAPL", headers=make_headers(...))
-"""
+"""Topic registry — environment-scoped Kafka topic names (e.g. dev-event)."""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
 class TopicConfig:
-    """Immutable topic configuration.
-
-    Attributes:
-        name: Kafka topic name (e.g. ``"dev-stock-market-stream-data"``).
-        partitions: Default partition count for auto-creation.
-        replication_factor: Default replication factor.
-        retention_ms: Retention in milliseconds (default 5 days).
-        cleanup_policy: ``"delete"`` or ``"compact"``.
-    """
+    """Immutable topic configuration."""
 
     name: str
     partitions: int = 5
@@ -42,27 +15,15 @@ class TopicConfig:
 
 
 class TopicRegistry:
-    """Central topic naming and configuration.
+    """Central topic naming, scoped by environment.
 
-    Instantiate once per process with the target environment.
-    Topic names are environment-scoped for security isolation.
+    Usage::
 
-    Example::
-
-        registry = TopicRegistry(env=\"dev\")
-        assert registry.market_data.name == \"dev-stock-market-stream-data\"
-        assert registry.events.name == \"dev-event\"
+        topics = TopicRegistry(env=\"dev\")
+        channel = await transport.channel(topics.market_data.name)
     """
 
     def __init__(self, env: str = "dev") -> None:
-        # Control plane: single partition ensures total ordering of
-        # DataRequest/DataReady/DataError messages.
         self.events = TopicConfig(name=f"{env}-event", partitions=1)
-
-        # Live stock streaming: 5 partitions, keyed by symbol for
-        # independent consumption by multiple strategies.
         self.market_data = TopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
-
-        # Historical stock data: single partition, shared across all
-        # historical requests (event_id used for filtering).
         self.historical_data = TopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)
