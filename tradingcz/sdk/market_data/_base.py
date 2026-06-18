@@ -267,6 +267,7 @@ class BaseDataClient:
         data_type: MarketDataType,
         model_type: type[T],
         *,
+        timeframe: Timeframe | None = None,
         timeout: float = 30.0,
     ) -> StreamHandle[T]:
         """Send DataRequest for streaming, return a :class:`StreamHandle`.
@@ -281,6 +282,7 @@ class BaseDataClient:
             broker=self._broker,
             symbols=symbols,
             data_type=data_type,
+            timeframe=timeframe or Timeframe.D1,
         )
 
         resp = await self._rr.request(

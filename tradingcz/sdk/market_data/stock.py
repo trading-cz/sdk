@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
+from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
 
 from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
@@ -84,6 +85,28 @@ class StockDataClient:
             asset=AssetType.STOCK,
             data_type=MarketDataType.QUOTES,
             model_type=StreamQuote,
+            timeout=timeout,
+        )
+
+    async def stream_bars(self, symbols: list[str], *, timeframe: Timeframe = Timeframe.H4, timeout: float = 30.0) -> StreamHandle[Bar]:
+        """Stream live bar closes (OHLCV aggregates).
+
+        Returns a :class:`StreamHandle` that yields :class:`Bar`
+        objects indefinitely.  Use ``async for`` to iterate, or wrap
+        in ``async with`` for guaranteed unsubscribe on exit.
+
+        Args:
+            symbols: List of ticker symbols to stream.
+            timeframe: Candle timeframe from :class:`Timeframe` enum.  Default ``H4`` (4-hour).
+            timeout: Seconds to wait for the DataReady response.
+        """
+        logger.info("StockDataClient: stream_bars symbols=%d timeframe=%s", len(symbols), timeframe)
+        return await self._base._stream(
+            symbols=symbols,
+            asset=AssetType.STOCK,
+            data_type=MarketDataType.BARS,
+            model_type=Bar,
+            timeframe=timeframe,
             timeout=timeout,
         )
 
