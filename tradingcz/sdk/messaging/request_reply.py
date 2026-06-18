@@ -1,36 +1,228 @@
-"""Generic async request-reply client over a KafkaChannel.
+"""Request-reply messaging — typed request/response over KafkaChannel.
 
-Publish requests with a correlation ID and await matching responses
-on the same channel.  One instance handles many concurrent requests
-via a single background consumer.
+Two complementary classes:
 
-Generic in the request type ``Req`` and response type ``Resp``.
-The caller provides serializers, deserializers, and ID extractors —
-the client has no knowledge of the message schemas.
+- ``RequestReply`` — send typed request, await correlated response by event_id.
+  Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
+- ``RequestReplyClient`` — generic async request-reply client with pluggable
+  serializers/deserializers and ID extraction.
 
-Usage::
-
-    from tradingcz.sdk.messaging.request_reply import RequestReplyClient
-
-    async with RequestReplyClient[DataRequest, DataReady | DataError](
-        channel=events_channel,
-        request_serializer=JsonCodec(DataRequest),
-        response_deserializer=data_response_deserializer,
-        event_id_of=lambda r: r.event_id,
-        response_id_of=lambda r: r.event_id,
-        timeout=30.0,
-    ) as client:
-        response = await client.request(my_data_request)
+Correlation is by ID — both request and response must have an identifiable
+field (convention: ``event_id: str``).
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 
+from pydantic import BaseModel
+
+from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.serialization.protocol import Deserializer, Serializer
-from tradingcz.sdk.transport.kafka import KafkaChannel
+from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.headers import EventHeaders, Header, KafkaKey
 
 logger = logging.getLogger(__name__)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# RequestReply — typed request/response by event_id
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class RequestReply:
+    """Send a typed request, await a correlated typed response.
+
+    Correlation is by ``event_id`` — both request and response models
+    must have a ``event_id: str`` field (convention, not Protocol).
+
+    Uses ``make_headers()`` for consistent header construction.
+    Flushes after each request to guarantee delivery before awaiting
+    the response.
+
+    Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
+    """
+
+    def __init__(
+        self,
+        channel: KafkaChannel,
+        service_id: str,
+        *,
+        message_types: dict[str, type[BaseModel]] | None = None,
+    ) -> None:
+        self._channel = channel
+        self._service_id = service_id
+        self._seq = 0
+        self._types: dict[str, type[BaseModel]] = (
+            dict(message_types) if message_types else {}
+        )
+        self._pending: dict[str, asyncio.Future[BaseModel]] = {}
+        self._listen_task: asyncio.Task[None] | None = None
+        self._skipped = 0
+
+    # ------------------------------------------------------------------
+    # Type registry
+    # ------------------------------------------------------------------
+
+    def register_type(
+        self, message_type: str | EventType, model: type[BaseModel]
+    ) -> None:
+        """Register a message_type → model mapping for response deserialization.
+
+        Accepts both :class:`EventType` enum values and plain strings
+        (for custom response types not in the standard enum).
+        """
+        self._types[str(message_type)] = model
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Start the background listener (idempotent)."""
+        if self._listen_task is not None:
+            return
+        self._listen_task = asyncio.create_task(self._listen())
+
+    async def close(self) -> None:
+        """Cancel listener and reject all pending futures."""
+        if self._listen_task and not self._listen_task.done():
+            self._listen_task.cancel()
+            try:
+                await self._listen_task
+            except asyncio.CancelledError:
+                pass
+        for future in self._pending.values():
+            if not future.done():
+                future.cancel()
+        self._pending.clear()
+
+    # ------------------------------------------------------------------
+    # Core API
+    # ------------------------------------------------------------------
+
+    async def request[Resp: BaseModel](  # pylint: disable=unused-argument
+        self,
+        req: BaseModel,
+        *,
+        response_type: type[Resp],  # type-checker only, not used at runtime
+        request_type: EventType | None = None,
+        timeout: float = 30.0,
+    ) -> Resp:
+        """Send *req*, await a correlated *Resp*.
+
+        Args:
+            req: The request model (must have ``event_id: str``).
+            response_type: Expected response Pydantic model class.
+            request_type: :class:`EventType` enum value for the header
+                (auto-inferred from the request class name if None).
+            timeout: Seconds to wait before raising TimeoutError.
+
+        Returns:
+            The matched response, typed as *Resp*.
+
+        Raises:
+            TimeoutError: No correlated response within *timeout*.
+            ValueError: If *req* has no ``event_id`` attribute.
+        """
+        event_id: str = getattr(req, "event_id", "")
+        if not event_id:
+            raise ValueError(f"Request model {type(req).__name__} has no event_id")
+
+        _ = response_type  # used only for type-checker generic binding
+        mt = request_type or _infer_message_type(req)
+        self._seq += 1
+
+        payload = req.model_dump_json(exclude_none=True, exclude={"timestamp"}).encode()
+        headers = EventHeaders(
+            event_type=mt,
+            source_app=self._service_id,
+            event_id=event_id,
+        ).to_kafka()
+        key = str(KafkaKey.for_event(mt, self._service_id, event_id))
+        # Send + flush — request delivery must be guaranteed before awaiting response
+        await self._channel.send(payload, key=key, headers=headers)
+        await self._channel.flush()
+
+        future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
+        self._pending[event_id] = future  # type: ignore[assignment]
+
+        try:
+            done, _ = await asyncio.wait([future], timeout=timeout)
+            if not done:
+                raise TimeoutError(
+                    f"Request {event_id!r} timed out after {timeout:.1f}s"
+                )
+            return future.result()
+        finally:
+            self._pending.pop(event_id, None)
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    async def _listen(self) -> None:
+        """Background task: consume channel, dispatch responses by event_id."""
+        logger.debug("RequestReply listener started on %s", self._channel.name)
+        try:
+            async for msg in self._channel.receive():
+                msg_type = msg.headers.get(Header.EVENT_TYPE, "")
+                model_type = self._types.get(msg_type)
+                if model_type is None:
+                    self._skipped += 1
+                    continue
+
+                try:
+                    parsed = model_type.model_validate_json(msg.payload)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    self._skipped += 1
+                    continue
+
+                resp_id: str = getattr(parsed, Header.EVENT_ID, "")
+                if not resp_id:
+                    continue
+
+                future = self._pending.get(resp_id)
+                if future is not None and not future.done():
+                    future.set_result(parsed)
+        except asyncio.CancelledError:
+            logger.debug("RequestReply listener cancelled")
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("RequestReply listener crashed")
+
+    @property
+    def skipped_count(self) -> int:
+        """Number of messages skipped (not matching any registered type)."""
+        return self._skipped
+
+
+def _infer_message_type(model: BaseModel) -> EventType:
+    """Infer EventType from model class name: DataRequest → DATA_REQUEST.
+
+    Converts CamelCase class name to snake_case and looks up the
+    corresponding :class:`EventType` enum member.
+
+    Raises:
+        ValueError: If no EventType matches the inferred name.
+            Pass an explicit ``request_type`` to avoid inference.
+    """
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
+    try:
+        return EventType(snake)
+    except ValueError:
+        raise ValueError(
+            f"Cannot infer EventType from class {type(model).__name__!r}: "
+            f"'{snake}' is not a known EventType. "
+            f"Pass an explicit 'request_type' to RequestReply.request()."
+        ) from None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# RequestReplyClient — generic request/reply with pluggable serialization
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 class RequestReplyClient[Req, Resp]:
@@ -109,7 +301,7 @@ class RequestReplyClient[Req, Resp]:
                 future.cancel()
         self._pending.clear()
 
-    async def __aenter__(self) -> RequestReplyClient[Req, Resp]:
+    async def __aenter__(self) -> "RequestReplyClient[Req, Resp]":
         """Async context manager entry — calls ``start()``."""
         await self.start()
         return self
@@ -146,10 +338,6 @@ class RequestReplyClient[Req, Resp]:
         self._pending[req_id] = future
 
         try:
-            # Use asyncio.wait (not wait_for) so that CancelledError
-            # from a future cancelled by close() propagates directly
-            # instead of being converted to TimeoutError by the
-            # asyncio.timeout() context manager (Python 3.12+).
             done, _ = await asyncio.wait([future], timeout=self._timeout)
             if not done:
                 logger.error(
@@ -181,7 +369,7 @@ class RequestReplyClient[Req, Resp]:
             async for msg in self._channel.receive():
                 try:
                     resp = self._response_deserializer.deserialize(msg.payload)
-                except ValueError, TypeError, LookupError:
+                except (ValueError, TypeError, LookupError):
                     # Expected: message on shared topic not meant for us
                     # (e.g. requests from other services on the same topic)
                     continue
@@ -211,3 +399,5 @@ class RequestReplyClient[Req, Resp]:
                     future.set_exception(
                         RuntimeError("RequestReplyClient listener crashed")
                     )
+
+
