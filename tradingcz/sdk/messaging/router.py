@@ -46,6 +46,91 @@ class EventRouter:
             that cannot be dispatched (missing/unknown event_type header
             or Pydantic validation failure).  Receives the raw
             ``KafkaMessage``.
+
+    **Offset Commit — Three Modes**
+
+    Every message from :meth:`KafkaChannel.receive` carries an
+    :meth:`~KafkaMessage.commit` method.  Choose how offsets are
+    committed:
+
+    *Mode 1 — Router auto-commit (default, recommended)*::
+
+        router = EventRouter(channel, auto_commit=True)
+
+        @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
+        async def on_signal(model, raw):
+            await place_order(model)
+
+        await router.run()
+        # Router calls raw.commit() after on_signal completes.
+        # If on_signal raises → offset NOT committed → re-delivered.
+
+    This is "hardcoded auto-commit" — the router itself commits after
+    every successful handler invocation.  Combine with
+    ``enable.auto.commit=false`` in the Kafka consumer config to avoid
+    librdkafka's background auto-commit (harmless but wasteful)::
+
+        # In environment or .env:
+        KAFKA_CONSUMER_OVERRIDES='{"enable.auto.commit": "false"}'
+
+    *Mode 2 — Manual commit (handler controls when)*::
+
+        router = EventRouter(channel, auto_commit=False)
+
+        @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
+        async def on_request(model, raw):
+            await db.save(model)       # persist first
+            await raw.commit()         # then commit offset
+            await submit_to_broker(model)  # fire-and-forget
+
+        await router.run()
+
+    Use this when you need to guarantee the offset is committed ONLY
+    after a side effect (e.g. DB write) succeeds — not before.
+
+    *Mode 3 — Kafka-managed auto-commit (librdkafka)*::
+
+        # KAFKA_CONSUMER_OVERRIDES='{"enable.auto.commit": "true"}'
+        # (this is the default in KafkaSettings)
+
+        router = EventRouter(channel, auto_commit=False)
+        # librdkafka commits periodically in the background (~5 s).
+        # No guarantee the handler finished before commit.
+
+    This is the legacy behaviour — offsets drift forward regardless
+    of handler outcome.  Prefer Mode 1 or 2 for trading workloads.
+
+    **Error Notification** ::
+
+        async def log_bad_message(raw: KafkaMessage) -> None:
+            logger.error("Undispatchable message: offset=%d payload=%r",
+                         raw.offset, raw.payload[:200])
+
+        router = EventRouter(channel, on_error=log_bad_message)
+
+    The ``on_error`` callback receives the raw ``KafkaMessage`` for
+    every message that could not be dispatched — missing/unknown
+    ``event_type`` header or Pydantic validation failure.  Exceptions
+    raised by ``on_error`` are caught and logged; they do not crash
+    the router loop.
+
+    **Typical executor setup** (with health monitoring)::
+
+        svc = ServiceApp(service_id="executor", env="dev", health_interval=300)
+        await svc.start()
+
+        router = EventRouter(
+            svc.events_channel,
+            auto_commit=False,   # handler commits after DB save
+            on_error=log_bad_message,
+        )
+        monitor = HealthMonitor(router, ttl=600)
+
+        router.on(EventType.TRADING_SIGNAL, TradingSignal, on_signal, spawn_task=True)
+        router.on(EventType.SERVICE_REQUEST, ServiceRequestEvent, on_service_request)
+
+        await monitor.start()
+        await router.run()   # blocks until cancelled
     """
 
     def __init__(

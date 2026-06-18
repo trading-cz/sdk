@@ -37,6 +37,26 @@ class KafkaMessage:
         Only available for messages obtained from
         :meth:`KafkaChannel.receive`.  Raises ``RuntimeError``
         when called on a manually-constructed message (e.g. in tests).
+
+        **Manual commit example** (with ``EventRouter(auto_commit=False)``)::
+
+            router = EventRouter(channel, auto_commit=False)
+
+            async def handler(model, raw: KafkaMessage):
+                await db.save(model)   # persist first
+                await raw.commit()     # then commit offset — at-least-once
+
+        **Auto-commit example** (router commits for you)::
+
+            router = EventRouter(channel, auto_commit=True)
+
+            async def handler(model, raw: KafkaMessage):
+                await place_order(model)
+                # raw.commit() called automatically after return
+
+        Double-commit is harmless — calling ``raw.commit()`` inside the
+        handler AND having ``auto_commit=True`` is safe (Kafka treats
+        duplicate commits as idempotent).
         """
         commit_fn: Callable[[], Awaitable[None]] | None = getattr(
             self, "_commit_fn", None
