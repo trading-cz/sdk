@@ -12,9 +12,10 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 
-from tradingcz.sdk.transport.topics import TopicRegistry
+from tradingcz.sdk.transport.topics import TopicAdmin, TopicRegistry
 from tradingcz.sdk.transport.dedup import DedupFilter
-from tradingcz.sdk.transport.transport import KafkaTransport
+from tradingcz.sdk.transport.transport_consumer import TransportConsumer
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import Broker, EventType, MarketDataType, DataRequestType, AssetType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
@@ -149,7 +150,7 @@ class BaseDataClient:
     def __init__(
         self,
         rr: RequestReply,
-        transport: KafkaTransport,
+        settings: KafkaSettings,
         topics: TopicRegistry,
         service_id: str,
         broker: Broker = Broker.ALPACA,
@@ -157,7 +158,7 @@ class BaseDataClient:
         dedup_max_size: int = 100_000,
     ) -> None:
         self._rr = rr
-        self._transport = transport
+        self._settings = settings
         self._topics = topics
         self._service_id = service_id
         self._broker = broker
@@ -227,13 +228,14 @@ class BaseDataClient:
 
         logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
-        channel = await self._transport.channel(resp.data_topic)
+        await TopicAdmin.ensure(self._settings, resp.data_topic)
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
 
+        consumer = TransportConsumer(resp.data_topic, self._settings, "data")
         try:
-            async for msg in channel.receive(group_suffix="data"):
+            async for msg in consumer:
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
@@ -249,7 +251,7 @@ class BaseDataClient:
                 if expected and count >= expected:
                     break
         finally:
-            await channel.close()
+            await consumer.close()
 
         for symbol_items in results.values():
             symbol_items.sort(key=lambda b: b.timestamp)  # type: ignore[attr-defined]
@@ -294,11 +296,12 @@ class BaseDataClient:
 
         self._validate_response(resp, DataRequestType.STREAM)
 
-        channel = await self._transport.channel(resp.data_topic)
+        await TopicAdmin.ensure(self._settings, resp.data_topic)
+        consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
 
         async def _consume() -> AsyncIterator[T]:
             try:
-                async for msg in channel.receive(group_suffix="stream"):
+                async for msg in consumer:
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
                         msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
@@ -311,7 +314,7 @@ class BaseDataClient:
                         continue
                     yield parsed
             finally:
-                await channel.close()
+                await consumer.close()
 
         unsubscribe = _Unsubscribe(
             rr=self._rr,

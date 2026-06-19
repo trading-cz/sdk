@@ -1,157 +1,113 @@
 # trading-sdk
 
-Shared SDK for the trading platform — batteries-included Kafka messaging,
-market data models, and strategy tooling.  **One `pip install`, zero boilerplate.**
+Shared SDK for the trading-cz platform — typed Kafka messaging, market data clients, and strategy tooling.
 
-## Install
+Requires **Python ≥ 3.14**.
 
-```bash
-pip install -e /path/to/sdk
+## Structure
+
+```
+tradingcz/sdk/
+│
+├── account/             # Balance, Orders, Positions clients
+├── health/              # HealthMonitor
+├── indicators/          # Technical indicators
+├── lang/                # Lazy, Registry, Retry, shutdown handlers
+├── market_data/         # Stock, Options, Corporate Actions clients
+├── messaging/           # Layer 3 — EventRouter, RequestReply, F&F, RecoveryReader
+├── models/              # Pydantic models, enums, events
+├── serialization/       # JsonCodec, JsonSerializer
+├── transport/           # Layer 1 — KafkaChannel, KafkaTransport, KafkaSettings
+├── typed/               # Layer 2 — TypedProducer, TypedConsumer
+│
+├── _README.md           # Layer 4 — ServiceApp & TradingApp
+├── exceptions.py        # SdkError hierarchy
+├── logging.py           # setup_logging(), LokiJSONFormatter
+├── service_app.py       # ServiceApp — base for ALL services
+└── trading_app.py       # TradingApp — batteries-included strategy entry
 ```
 
-Requires Python ≥ 3.14.  Bring your own Kafka broker (default: `localhost:9092`).
+## Layered Architecture
 
-## Quickstart — publish a trading signal
+Each layer depends only on the layer below it. A layer never reaches up.
 
-```python
-import asyncio
-from datetime import UTC, datetime
-from tradingcz.sdk import TradingApp
-from tradingcz.model.signal import TradingSignal
-
-async def main():
-    async with TradingApp(service_id="my-strategy") as app:
-        signal = TradingSignal(
-            symbol="AAPL",
-            side="LONG",
-            open_price=150.0,
-            entry_price=151.0,
-            stop_loss=149.0,
-            valid_until_et=datetime(2026, 6, 1, tzinfo=UTC),
-            atr_value=2.5,
-        )
-        await app.signals.publish(signal, tracking_id="trk-001")
-
-asyncio.run(main())
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Layer 4 — Application                                            │
+│   ServiceApp, TradingApp                                         │
+│   Owns: service lifecycle, shutdown, app-level wiring            │
+├──────────────────────────────────────────────────────────────────┤
+│ Layer 3 — Messaging Patterns                                     │
+│   EventRouter, RequestReply, FireAndForget, RecoveryReader       │
+│   Owns: handler dispatch, request/reply correlation, idle policy │
+├──────────────────────────────────────────────────────────────────┤
+│ Layer 2 — Typed Wrappers                                         │
+│   TypedProducer, TypedConsumer                                   │
+│   Owns: serialization, header-based dispatch, on_error routing   │
+├──────────────────────────────────────────────────────────────────┤
+│ Layer 1 — Transport                                              │
+│   KafkaTransport, KafkaChannel, ReceiveSession, KafkaMessage     │
+│   Owns: bytes ↔ Kafka, consumer lifecycle, offset commit         │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Quickstart — request historical data
+### Layer responsibilities
 
-```python
-async with TradingApp(service_id="my-strategy") as app:
-    bars = await app.data.request_historical(["AAPL", "MSFT"], days=30)
-    for symbol, daily_bars in bars.items():
-        print(f"{symbol}: {len(daily_bars)} bars")
+| Layer | Must handle | Must NEVER |
+|-------|-------------|------------|
+| **L1 Transport** | Raw Kafka I/O, consumer groups, offsets, corrupt-message commit | Serialize/deserialize payloads, inspect headers, decide business policy |
+| **L2 Typed** | Model serialization, `event_type` dispatch, route errors to `on_error` | Commit offsets directly (delegates to L1), know about handlers |
+| **L3 Messaging** | Handler registration, request/reply correlation, idle-timeout policy, auto vs manual commit | Decode raw bytes, manage consumer lifecycle directly |
+| **L4 Application** | Service lifecycle, topic wiring, health publishing | Touch Kafka internals |
+
+### Data flow (receive path)
+
+```
+Kafka broker
+  │
+  ▼
+ReceiveSession.poll()          ← L1: consume() batch → list[KafkaMessage]
+  │  (corrupt msg? → log + commit offset + skip — no recoverable data)
+  ▼
+TypedConsumer.__aiter__        ← L2: dispatch by event_type header → (type, model, raw)
+  │  (bad JSON / unknown type? → on_error(msg) + skip)
+  ▼
+EventRouter.run()              ← L3: match msg_type → registered handler
+  │  (handler raises? → log, don't commit → at-least-once)
+  ▼
+Application handler            ← L4: business logic
 ```
 
-## Quickstart — minimal service (no strategy features)
+### Cross-cutting rules
 
-```python
-from tradingcz.sdk import ServiceApp
+**`on_error`** — same name at every layer, type matches what the layer naturally has:
 
-async with ServiceApp(service_id="my-service") as svc:
-    # transport, events_channel, and health/heartbeat are ready
-    await svc.events_channel.send(b"hello", key="greeting")
-    await svc.wait_for_shutdown()   # blocks until SIGTERM
-```
+| Layer | Signature | Called with |
+|-------|-----------|-------------|
+| L1 `ReceiveSession` | `(partition: int, offset: int, error: str)` | Corrupt Kafka message — no payload/headers available |
+| L2 `TypedConsumer` | `(msg: KafkaMessage)` | Dispatch failure — message metadata intact |
+| L3 `EventRouter` | `(msg: KafkaMessage)` | Passed through to `TypedConsumer` |
 
-## Environment variables
+Each layer's `on_error` is independent. L2 does not pass its callback to L1 — they handle different error categories.
 
-| Variable                  | Default          | Description                         |
-|---------------------------|------------------|-------------------------------------|
-| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka broker addresses              |
-| `KAFKA_CONSUMER_GROUP`    | `<service_id>`   | Consumer group id                   |
-| `SDK_ENV`                 | `dev`            | Deployment environment              |
-| `SDK_HEALTH_INTERVAL`     | `300`            | Heartbeat interval (seconds)        |
-| `SDK_BROKER`              | `alpaca`         | Broker identifier (TradingApp only) |
+**Offset commit** — ownership is explicit:
 
-## Feature flags
+| Who creates the session | Who commits |
+|---|---|
+| `TypedConsumer` | `TypedConsumer` (auto_commit flag) |
+| `EventRouter` | `EventRouter` (`_dispatch` method, after handler success) |
+| `RequestReply._listen()` | `RequestReply` (every message, match or skip) |
+| `RecoveryReader` | Nobody (ephemeral group, discarded after replay) |
 
-Disable clients you don't need to reduce resource usage:
+**Exceptions** — propagate, don't swallow:
 
-```python
-app = TradingApp(service_id="risk-checker")
-app.with_signals(False).with_data(False)
-# Only app.positions, app.balance, app.orders are available
-```
+| Error | Layer | Action |
+|-------|-------|--------|
+| Corrupt Kafka message (`msg.error()`) | L1 | Log, commit offset, skip — no recoverable data |
+| Bad JSON / missing header / unknown type | L2 | Call `on_error(msg)`, skip |
+| Handler exception | L3 | Log, **don't** commit → re-delivered on restart |
+| Broker down / connection lost | L1 | Exception propagates ↑ — fail fast |
 
-## Unit tests — required for all public APIs
+**`ReceiveSession`** is single-use — one consumer per session. Call `poll()` for pull-based control or `async for` for convenience. Consumer is created in `__init__`, subscribed lazily, closed via `finally` or explicit `close()`.
 
-Every public symbol MUST have unit tests.  The SDK is the **wire protocol
-authority** — if its models or headers are wrong, every downstream service
-(simple-strategy, ingestion, risk, executor) breaks silently.
-
-### What must be tested
-
-| Layer             | What to test                                 | Example                                                                                |
-|-------------------|----------------------------------------------|----------------------------------------------------------------------------------------|
-| **Models**        | Round-trip JSON serialization                | `Bar.model_validate_json(bar.model_dump_json()) == bar`                                |
-| **Models**        | Field validation rejects bad data            | `Bar(symbol=123)` → raises `ValidationError`                                           |
-| **Headers**       | `make_headers()` output is correct           | `make_headers(message_type="bar")` → contains `message_type`, `source_app`, `sequence` |
-| **Headers**       | `parse_message()` deserializes correctly     | `parse_message(MessageType.DATA_READY, payload)` → `DataReady` instance                |
-| **Headers**       | `build_event_key()` is deterministic         | Same inputs → same key string                                                          |
-| **Configuration** | `TopicRegistry` names are environment-scoped | `TopicRegistry(env="dev").events.name == "dev-event"`                                  |
-| **Configuration** | `ServiceSettings` loads from env vars        | `SDK_ENV=tst` → `settings.env == "tst"`                                                |
-
-### How to write SDK unit tests
-
-```python
-# tests/unit/test_bar_model.py
-from tradingcz.model.ingestion.bar import Bar
-from datetime import datetime, timezone
-
-def test_bar_roundtrip():
-    """Bar survives JSON serialize → deserialize cycle."""
-    bar = Bar(
-        symbol="SPY",
-        timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        open=100.0, high=101.0, low=99.0, close=100.5,
-        volume=1_000_000.0,
-    )
-    json_str = bar.model_dump_json()
-    parsed = Bar.model_validate_json(json_str)
-    assert parsed == bar
-
-def test_bar_rejects_invalid_symbol_type():
-    """Bar symbol must be a string."""
-    import pytest
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        Bar(symbol=123, timestamp=..., open=0, high=0, low=0, close=0, volume=0)
-```
-
-### Why unit tests are non-negotiable
-
-The testing repo (`trading-cz/testing`) uses the SDK as a **tool** to:
-- Build correct Kafka headers via `make_headers()`
-- Serialize messages via `Bar.model_dump_json()`, `DataReady(...)`, etc.
-- Validate received messages via `TradingSignal.model_validate_json(msg)`
-
-If the SDK's wire format is broken, the testing repo **cannot detect it** — it
-trusts the SDK.  The safety net is the SDK's own unit test suite, which must
-pass on every PR.
-
-**Rule**: No SDK PR merges without green CI (pytest + mypy + ruff).
-
-## Cross-service testing
-
-Smoke, regression, and integration tests live in the centralized test harness:
-**`trading-cz/testing`**.
-
-- PRs trigger the 3-tier pipeline: smoke → regression → integration
-- Trigger: `/test` comment or `run-tests` label on the PR
-
-See the testing repo README for local setup.
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-pytest tests/ -v
-ruff check tradingcz/
-mypy tradingcz/
-```
-
-## See also
-
-- **[docs/python314.md](docs/python314.md)** — modern Python 3.14 patterns used in this codebase
+**Batch polling** — `poll()` uses `consume()` under the hood for throughput. Up to `consumer_batch_size` messages per `consumer_poll_timeout_ms` window. Returns `list[KafkaMessage]` (empty = no messages in window).

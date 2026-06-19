@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel
 
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.message import KafkaMessage
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 
@@ -29,11 +29,12 @@ class _Registration[T: BaseModel]:
 class EventRouter:
     """Single Kafka consumer.  Route messages to registered async handlers.
 
-    One instance per ``KafkaChannel``.  All handlers share the same
+    One instance per topic/consumer-group.  All handlers share the same
     consumer — no duplicate Kafka connections.
 
     Args:
-        channel: Kafka channel to consume from.
+        topic: Kafka topic to consume from.
+        settings: Kafka connection settings.
         auto_commit: When ``True`` (default), the router commits each
             message's offset after the handler completes successfully.
             When ``False``, the handler is responsible for calling
@@ -45,7 +46,7 @@ class EventRouter:
 
     *Mode 1 — Router auto-commit (default)*::
 
-        router = EventRouter(channel, auto_commit=True)
+        router = EventRouter(topic, settings, auto_commit=True)
 
         @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
         async def on_signal(model, raw):
@@ -55,7 +56,7 @@ class EventRouter:
 
     *Mode 2 — Manual commit (handler controls when)*::
 
-        router = EventRouter(channel, auto_commit=False)
+        router = EventRouter(topic, settings, auto_commit=False)
 
         @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
         async def on_request(model, raw):
@@ -64,18 +65,20 @@ class EventRouter:
             await submit_to_broker(model) # fire-and-forget
 
     Commit is owned by the router (via :class:`TypedConsumer` →
-    :class:`ReceiveSession`), not by :class:`KafkaMessage`.
+    :class:`TransportConsumer`), not by :class:`KafkaMessage`.
     """
 
     def __init__(
         self,
-        channel: KafkaChannel,
+        topic: str,
+        settings: KafkaSettings,
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
         group_suffix: str = "router",
     ) -> None:
-        self._channel = channel
+        self._topic = topic
+        self._settings = settings
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
@@ -146,7 +149,7 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        self._consumer = TypedConsumer(self._channel, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False)
+        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False)
 
         async for msg_type, model, raw in self._consumer:
             for reg in self._handlers:

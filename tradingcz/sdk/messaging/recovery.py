@@ -43,14 +43,15 @@ Usage::
         ...  # live consumption
 """
 
-import asyncio
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 from tradingcz.sdk.transport.headers import Header
 from tradingcz.sdk.transport.message import KafkaMessage
 
@@ -65,8 +66,9 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
     a clean replay of all available events from the topic.
     """
 
-    def __init__(self, channel: KafkaChannel, idle_timeout: float = 2.0) -> None:
-        self._channel = channel
+    def __init__(self, topic: str, settings: KafkaSettings, idle_timeout: float = 2.0) -> None:
+        self._topic = topic
+        self._settings = settings
         self._idle_timeout = idle_timeout
 
     async def replay(
@@ -76,39 +78,38 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
         group_suffix = uuid.uuid4().hex
         logger.info(
             "RecoveryReader: replaying %s (idle_timeout=%.1fs, group_suffix=%s)",
-            self._channel.name,
+            self._topic,
             self._idle_timeout,
             group_suffix,
         )
-        session = self._channel.receive(group_suffix=group_suffix)
+        session = TransportConsumer(self._topic, self._settings, group_suffix)
         count = 0
+        last_msg_at = time.monotonic()
         try:
             while True:
-                try:
-                    raw = await asyncio.wait_for(
-                        session.poll(), timeout=self._idle_timeout
-                    )
-                except TimeoutError:
-                    break  # no message for idle_timeout seconds → drained
-                if raw is None:
-                    continue  # empty poll → try again
-
-                msg_type = raw.headers.get(Header.EVENT_TYPE, "")
-                model_cls = types.get(msg_type)
-                if model_cls is None:
+                batch = await session.poll()
+                if not batch:
+                    if time.monotonic() - last_msg_at >= self._idle_timeout:
+                        break  # continuous silence → drained
                     continue
-                try:
-                    model = model_cls.model_validate_json(raw.payload)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.info(
-                        "RecoveryReader: skip bad payload for %s on %s (offset=%d)",
-                        msg_type,
-                        self._channel.name,
-                        raw.offset,
-                    )
-                    continue
-                count += 1
-                yield msg_type, model, raw
+                last_msg_at = time.monotonic()
+                for raw in batch:
+                    msg_type = raw.headers.get(Header.EVENT_TYPE, "")
+                    model_cls = types.get(msg_type)
+                    if model_cls is None:
+                        continue
+                    try:
+                        model = model_cls.model_validate_json(raw.payload)
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        logger.info(
+                            "RecoveryReader: skip bad payload for %s on %s (offset=%d)",
+                            msg_type,
+                            self._channel.name,
+                            raw.offset,
+                        )
+                        continue
+                    count += 1
+                    yield msg_type, model, raw
         finally:
             await session.close()
 

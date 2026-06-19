@@ -19,10 +19,9 @@ from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.health_publisher import HealthPublisher
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.topics import TopicRegistry
-from tradingcz.sdk.transport.transport import KafkaTransport
+from tradingcz.sdk.transport.topics import TopicAdmin, TopicRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,8 @@ class ServiceApp:
         # Set by start()
         self.transport: KafkaTransport | None = None
         self.topics: TopicRegistry | None = None
-        self.events_channel: KafkaChannel | None = None
+        self.events_producer: TransportProducer | None = None
+        self.events_topic: str = ""
         self._faf: FireAndForget | None = None
         self._health: HealthPublisher | None = None
 
@@ -62,12 +62,13 @@ class ServiceApp:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Initialize transport, topics, events channel, health."""
-        self.transport = KafkaTransport(self._kafka)
+        """Initialize topics, events producer, health."""
         self.topics = TopicRegistry(env=self._env)
-        self.events_channel = await self.transport.channel(self.topics.events.name)
+        self.events_topic = self.topics.events.name
+        await TopicAdmin.ensure_from_config(self._kafka, self.topics.events)
+        self.events_producer = TransportProducer(self._kafka)
 
-        self._faf = FireAndForget(self.events_channel, self.service_id)
+        self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
         self._health = HealthPublisher(self._faf, self.service_id, interval=self._health_interval)
         await self._health.start()
 
@@ -75,11 +76,11 @@ class ServiceApp:
         logger.info("ServiceApp started: id=%s env=%s", self.service_id, self._env)
 
     async def close(self) -> None:
-        """Stop health (emits 'down'), close transport."""
+        """Stop health (emits 'down'), flush producer."""
         if self._health is not None:
             await self._health.close()
-        if self.transport is not None:
-            await self.transport.close()
+        if self.events_producer is not None:
+            await self.events_producer.flush()
         logger.info("ServiceApp closed: id=%s", self.service_id)
 
     async def __aenter__(self) -> ServiceApp:

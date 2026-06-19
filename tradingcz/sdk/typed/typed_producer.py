@@ -1,4 +1,4 @@
-"""TypedProducer — publish typed Pydantic models to a KafkaChannel (Layer 2).
+"""TypedProducer — publish typed Pydantic models via TransportProducer (Layer 2).
 
 Layer 2 does pure type conversion: ``BaseModel``↔``bytes``,
 ``KafkaKey``↔``str``, ``KafkaHeaders``↔``dict[str, str]``.
@@ -14,7 +14,7 @@ import logging
 from pydantic import BaseModel
 
 from tradingcz.sdk.serialization.json import JsonSerializer
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.transport.headers import KafkaHeaders
 from tradingcz.sdk.transport.keys import KafkaKey
 
@@ -25,16 +25,17 @@ class TypedProducer:
     """Layer 2 typed producer — Pydantic models → Kafka topic.
 
     Pure type conversion: serializes the model, converts key/headers
-    to wire format, dispatches to the channel.  No auto-inference.
+    to wire format, dispatches to the producer.  No auto-inference.
     """
 
-    def __init__(self, channel: KafkaChannel) -> None:
-        self._channel = channel
+    def __init__(self, producer: TransportProducer, topic: str) -> None:
+        self._producer = producer
+        self._topic = topic
         self._serializer: JsonSerializer = JsonSerializer()
 
     @property
-    def channel(self) -> KafkaChannel:
-        return self._channel
+    def producer(self) -> TransportProducer:
+        return self._producer
 
     async def send(
         self,
@@ -51,7 +52,8 @@ class TypedProducer:
             headers: Kafka message headers (mandatory).
         """
         payload = self._serializer.serialize(value)
-        await self._channel.send(
+        await self._producer.send(
+            self._topic,
             payload,
             key=key.to_kafka(),
             headers=headers.to_headers(),
@@ -59,7 +61,7 @@ class TypedProducer:
 
     async def flush(self) -> None:
         """Wait for all queued messages to be delivered to Kafka."""
-        await self._channel.flush()
+        await self._producer.flush()
 
     async def __aenter__(self) -> TypedProducer:
         return self

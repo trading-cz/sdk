@@ -12,7 +12,7 @@ Direct Kafka communication primitives. Bytes in, bytes out. No typing, no serial
 ├─────────────────────────────────────────┤
 │  TypedProducer / TypedConsumer          │  ← Layer 2: Typed wrappers
 ├─────────────────────────────────────────┤
-│  KafkaChannel / ReceiveSession          │  ← Layer 1: THIS PACKAGE
+│  TransportProducer / TransportConsumer  │  ← Layer 1: THIS PACKAGE
 └─────────────────────────────────────────┘
 ```
 
@@ -21,10 +21,11 @@ Direct Kafka communication primitives. Bytes in, bytes out. No typing, no serial
 | Class | Role |
 |-------|------|
 | `KafkaSettings` | Env-driven config: bootstrap servers, consumer group, overrides |
-| `KafkaTransport` | One per process — shared `Producer`, channel cache, topic auto-creation |
-| `KafkaChannel` | One per topic — send raw bytes + headers |
-| `ReceiveSession` | One per consumer — iterate messages, **commit offsets** |
+| `TransportProducer` | Async producer — send raw bytes, flush, track delivery errors |
+| `TransportConsumer` | Async consumer — poll, iterate, commit offsets, handle corrupt messages |
 | `KafkaMessage` | Pure data: `payload`, `key`, `headers`, `offset`, `partition`, `topic` |
+| `TopicAdmin` | Creates Kafka topics via Admin API with class-level cache |
+| `TopicRegistry` / `TopicConfig` | Environment-scoped topic name/config registry |
 | `Header` / `EventHeaders` / `DataHeaders` | Canonical header keys and typed header models |
 | `KafkaKey` | Routing key builder for Kafka partitions |
 | `DedupFilter` | In-memory sequence-number deduplication |
@@ -117,15 +118,43 @@ await channel.flush()  # guarantee delivery
 
 # CREATE SESSION — one per consumer group:
 session = channel.receive(group_suffix="my-consumer")
-async for msg in session:
-    event_type = msg.headers.get("event_type", "")
-    print(f"offset={msg.offset} type={event_type}")
-    await session.commit(msg)
+
+# Pull-based (caller controls lifecycle):
+try:
+    while True:
+        batch = await session.poll()
+        for msg in batch:
+            print(f"offset={msg.offset} type={msg.headers.get('event_type')}")
+            await session.commit(msg)
+finally:
+    await session.close()
+
+# Or async iterator (convenience, auto-cleanup on break):
+async for msg in channel.receive(group_suffix="my-consumer"):
+    print(f"offset={msg.offset}")
+    await msg.commit  # no — use session.commit(msg)
+    # Commit is on the session, not the message! See below.
 
 # Concurrent consumers — each gets its own session:
 session_a = channel.receive(group_suffix="worker-a")
 session_b = channel.receive(group_suffix="worker-b")
 # Each has its own AIOConsumer, own consumer group, own commits.
+```
+
+> `group_suffix` controls isolation. Same suffix = shared consumer group
+> (competing consumers). Unique suffix = independent replay from `earliest`.
+
+### Batch polling
+
+`poll()` uses `consume()` under the hood — fetches up to `consumer_batch_size`
+messages per `consumer_poll_timeout_ms` window:
+
+```python
+# settings (env-driven, prefix KAFKA_):
+#   consumer_batch_size = 100        # max messages per poll()
+#   consumer_poll_timeout_ms = 500   # wait up to 500ms for a batch
+
+batch = await session.poll()  # → list[KafkaMessage] (empty if no messages)
 ```
 
 > `group_suffix` controls isolation. Same suffix = shared consumer group

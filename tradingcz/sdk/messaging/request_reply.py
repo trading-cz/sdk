@@ -1,4 +1,4 @@
-"""RequestReply — typed request/response over KafkaChannel, correlated by event_id."""
+"""RequestReply — typed request/response over Kafka, correlated by event_id."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.transport.channel import KafkaChannel
+from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.transport.transport_consumer import TransportConsumer
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.headers import EventHeaders, Header
@@ -28,7 +30,6 @@ class RequestReply:
     Correlation is by ``event_id`` — both request and response models
     must have a ``event_id: str`` field (convention, not Protocol).
 
-    Uses ``make_headers()`` for consistent header construction.
     Flushes after each request to guarantee delivery before awaiting
     the response.
 
@@ -37,12 +38,16 @@ class RequestReply:
 
     def __init__(
         self,
-        channel: KafkaChannel,
+        producer: TransportProducer,
+        topic: str,
+        settings: KafkaSettings,
         service_id: str,
         *,
         message_types: dict[str, type[BaseModel]] | None = None,
     ) -> None:
-        self._channel = channel
+        self._producer = producer
+        self._topic = topic
+        self._settings = settings
         self._service_id = service_id
         self._seq = 0
         self._serializer: JsonSerializer = JsonSerializer()
@@ -123,8 +128,8 @@ class RequestReply:
         ).to_headers()
         key = KafkaKey(value=f"{mt}:{self._service_id}:{event_id}").to_kafka()
         # Send + flush — request delivery must be guaranteed before awaiting response
-        await self._channel.send(payload, key=key, headers=headers)
-        await self._channel.flush()
+        await self._producer.send(self._topic, payload, key=key, headers=headers)
+        await self._producer.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
         self._pending[event_id] = future  # type: ignore[assignment]
@@ -145,8 +150,8 @@ class RequestReply:
 
     async def _listen(self) -> None:
         """Background task: consume channel, dispatch responses by event_id."""
-        logger.debug("RequestReply listener started on %s", self._channel.name)
-        session = self._channel.receive(group_suffix="rr")
+        logger.debug("RequestReply listener started on %s", self._topic)
+        session = TransportConsumer(self._topic, self._settings, "rr")
         try:
             async for msg in session:
                 msg_type = msg.headers.get(Header.EVENT_TYPE, "")

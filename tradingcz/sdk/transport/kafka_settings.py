@@ -14,7 +14,8 @@ class KafkaSettings(BaseSettings):
 
     bootstrap_servers: str = Field(...)
     consumer_group: str = Field(...)
-    consumer_poll_timeout: float = Field(1.0, gt=0)
+    consumer_poll_timeout_ms: int = Field(500, gt=0)
+    consumer_batch_size: int = Field(100, gt=0)
     default_num_partitions: int = Field(5, gt=0)
     default_replication_factor: int = Field(2, gt=1)
     default_retention_ms: int = Field(432000000)  # 5 days
