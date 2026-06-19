@@ -163,6 +163,7 @@ class BaseDataClient:
         self._service_id = service_id
         self._broker = broker
         self._dedup = DedupFilter(max_size=dedup_max_size)
+        self._topic_admin = KafkaTopicAdmin(settings)
         rr.register_type(EventType.DATA_READY, DataReady)
         rr.register_type(EventType.DATA_ERROR, DataError)
 
@@ -228,7 +229,7 @@ class BaseDataClient:
 
         logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
-        await KafkaTopicAdmin.ensure(self._settings, resp.data_topic)
+        await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
@@ -296,7 +297,7 @@ class BaseDataClient:
 
         self._validate_response(resp, DataRequestType.STREAM)
 
-        await KafkaTopicAdmin.ensure(self._settings, resp.data_topic)
+        await self._topic_admin.ensure(resp.data_topic)
         consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
 
         async def _consume() -> AsyncIterator[T]:

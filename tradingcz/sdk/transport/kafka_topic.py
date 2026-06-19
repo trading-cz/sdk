@@ -30,13 +30,31 @@ class KafkaTopicRegistry:
 
 
 class KafkaTopicAdmin:
-    """Creates Kafka topics via Admin API.  Class-level cache prevents duplicate creation."""
+    """Creates Kafka topics via Admin API with connection reuse.
 
-    _created: set[str] = set()
+    One instance per process.  Reuses a single :class:`AdminClient`
+    connection (lazy, created on first call) and caches created topic
+    names to avoid redundant Admin API calls.
 
-    @staticmethod
+    Usage::
+
+        admin = KafkaTopicAdmin(settings)
+        try:
+            await admin.ensure("my-topic", num_partitions=5)
+            await admin.ensure_from_config(config)
+        finally:
+            admin.close()
+    """
+
+    def __init__(self, settings: KafkaSettings) -> None:
+        self._settings = settings
+        self._admin: AdminClient | None = None
+        self._created: set[str] = set()
+
+    # ── Public API ──────────────────────────────────────────────────────
+
     async def ensure(
-        settings: KafkaSettings,
+        self,
         name: str,
         *,
         num_partitions: int | None = None,
@@ -45,22 +63,22 @@ class KafkaTopicAdmin:
         cleanup_policy: str | None = None,
     ) -> None:
         """Create a topic if it doesn't already exist."""
-        if name in KafkaTopicAdmin._created:
+        if name in self._created:
             return
 
-        admin = AdminClient({"bootstrap.servers": settings.bootstrap_servers})
+        admin = self._get_admin()
         loop = asyncio.get_running_loop()
         metadata = await loop.run_in_executor(None, lambda: admin.list_topics(timeout=10))
         for topic_name in metadata.topics:
-            KafkaTopicAdmin._created.add(topic_name)
+            self._created.add(topic_name)
 
-        if name in KafkaTopicAdmin._created:
+        if name in self._created:
             return
 
-        partitions = num_partitions if num_partitions is not None else max(1, settings.default_num_partitions)
-        rf = replication_factor if replication_factor is not None else settings.default_replication_factor
-        ret = retention_ms if retention_ms is not None else settings.default_retention_ms
-        cp = cleanup_policy if cleanup_policy is not None else settings.default_cleanup_policy
+        partitions = num_partitions if num_partitions is not None else max(1, self._settings.default_num_partitions)
+        rf = replication_factor if replication_factor is not None else self._settings.default_replication_factor
+        ret = retention_ms if retention_ms is not None else self._settings.default_retention_ms
+        cp = cleanup_policy if cleanup_policy is not None else self._settings.default_cleanup_policy
 
         topic_config: dict[str, str] = {"retention.ms": str(ret)}
         if cp:
@@ -79,16 +97,26 @@ class KafkaTopicAdmin:
                     logger.exception("Failed to create topic '%s'", topic)
                     raise
 
-        KafkaTopicAdmin._created.add(name)
+        self._created.add(name)
 
-    @staticmethod
-    async def ensure_from_config(settings: KafkaSettings, config: KafkaTopicConfig) -> None:
+    async def ensure_from_config(self, config: KafkaTopicConfig) -> None:
         """Create a topic from a :class:`KafkaTopicConfig`."""
-        await KafkaTopicAdmin.ensure(
-            settings,
+        await self.ensure(
             config.name,
             num_partitions=config.partitions,
             replication_factor=config.replication_factor,
             retention_ms=config.retention_ms,
             cleanup_policy=config.cleanup_policy,
         )
+
+    def close(self) -> None:
+        """Release the AdminClient reference (GC will clean up the connection)."""
+        self._admin = None
+        self._created.clear()
+
+    # ── Internal ─────────────────────────────────────────────────────────
+
+    def _get_admin(self) -> AdminClient:
+        if self._admin is None:
+            self._admin = AdminClient({"bootstrap.servers": self._settings.bootstrap_servers})
+        return self._admin

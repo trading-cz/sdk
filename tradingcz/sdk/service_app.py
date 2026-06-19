@@ -56,6 +56,7 @@ class ServiceApp:
         self.events_topic: str = ""
         self._faf: FireAndForget | None = None
         self._health: HealthPublisher | None = None
+        self._topic_admin: KafkaTopicAdmin | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -65,7 +66,8 @@ class ServiceApp:
         """Initialize topics, events producer, health."""
         self.topics = KafkaTopicRegistry(env=self._env)
         self.events_topic = self.topics.events.name
-        await KafkaTopicAdmin.ensure_from_config(self._kafka, self.topics.events)
+        self._topic_admin = KafkaTopicAdmin(self._kafka)
+        await self._topic_admin.ensure_from_config(self.topics.events)
         self.events_producer = TransportProducer(self._kafka)
 
         self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
@@ -81,6 +83,8 @@ class ServiceApp:
             await self._health.close()
         if self.events_producer is not None:
             await self.events_producer.flush()
+        if self._topic_admin is not None:
+            self._topic_admin.close()
         logger.info("ServiceApp closed: id=%s", self.service_id)
 
     async def __aenter__(self) -> ServiceApp:
