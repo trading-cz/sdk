@@ -1,12 +1,11 @@
-"""Serialization codec infrastructure."""
+"""Serialization infrastructure."""
 
-from tradingcz.sdk.serialization.json import JsonCodec, JsonSerializer
-from tradingcz.sdk.serialization.protocol import Codec, Deserializer, Serializer
+from tradingcz.sdk.serialization.json import JsonDeserializer, JsonSerializer
+from tradingcz.sdk.serialization.protocol import Deserializer, Serializer
 
 __all__ = [
     "Serializer",
     "Deserializer",
-    "Codec",
-    "JsonCodec",
+    "JsonDeserializer",
     "JsonSerializer",
 ]

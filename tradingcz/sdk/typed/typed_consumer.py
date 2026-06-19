@@ -14,11 +14,11 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from pydantic import BaseModel
 
 from tradingcz.sdk.exceptions import MessageTypeError, SdkError
-from tradingcz.sdk.serialization.json import JsonCodec
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.transport_consumer import TransportConsumer
+from tradingcz.sdk.serialization.json import JsonDeserializer
 from tradingcz.sdk.transport.kafka_header import Header
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ class TypedConsumer:
         self._on_error = on_error
         self._group_suffix = group_suffix
         self._session: TransportConsumer | None = None
+        self._deserializer = JsonDeserializer()
 
     async def commit(self, msg: KafkaMessage) -> None:
         """Commit a message's offset. Call during iteration when ``auto_commit=False``."""
@@ -49,9 +50,7 @@ class TypedConsumer:
         await self._session.commit(msg)
 
     async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        self._session = TransportConsumer(
-            self._topic, self._settings, self._group_suffix
-        )
+        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix)
         async for msg in self._session:
             try:
                 event_type, model = self._dispatch(msg)
@@ -75,8 +74,7 @@ class TypedConsumer:
             raise MessageTypeError(
                 f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})"
             )
-        codec = JsonCodec(model_type)
-        return event_type, codec.deserialize(msg.payload)
+        return event_type, self._deserializer.deserialize(msg.payload, model_type=model_type)
 
     # ── Internals ────────────────────────────────────────────────────────
 
@@ -85,13 +83,23 @@ class TypedConsumer:
             await self._session.commit(msg)
 
     async def _notify_error(self, msg: KafkaMessage) -> None:
-        logger.error("Caught exception while processing message on %s (offset=%d key=%r)", self._topic, msg.offset, msg.key, exc_info=True)
+        logger.error(
+            "Caught exception while processing message on %s (offset=%d key=%r)",
+            self._topic,
+            msg.offset,
+            msg.key,
+            exc_info=True,
+        )
         if self._on_error is not None:
             try:
                 await self._on_error(msg)
             except Exception:
-                logger.warning("on_error callback raised for %s (offset=%d)", self._topic, msg.offset, exc_info=True)
+                logger.warning(
+                    "on_error callback raised for %s (offset=%d)",
+                    self._topic,
+                    msg.offset,
+                    exc_info=True,
+                )
 
 
 __all__ = ["TypedConsumer"]
-

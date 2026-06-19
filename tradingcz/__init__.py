@@ -10,7 +10,7 @@ Each sub-package lives in its own distribution (namespace package):
 
 Public SDK API (``tradingcz.sdk``):
     - tradingcz.sdk.core.transport       — KafkaChannel, KafkaTransport, TypedProducer, TypedConsumer
-    - tradingcz.sdk.core.serialization   — Serializer, Deserializer, Codec, JsonCodec
+    - tradingcz.sdk.core.serialization   — Serializer, Deserializer, JsonDeserializer, JsonSerializer
     - tradingcz.sdk.common               — KafkaSettings, LoggingSettings, ConfigurationError
     - tradingcz.sdk.models.market        — Bar, Quote, Trade, etc.
     - tradingcz.sdk.models.events        — TradingSignal, DataRequest, etc.
