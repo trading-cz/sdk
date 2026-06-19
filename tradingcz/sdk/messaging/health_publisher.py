@@ -92,7 +92,7 @@ class HealthPublisher:
             service_id=self._service_id,
             event=event,
         )
-        key = KafkaKey.for_event(EventType.SERVICE_LIFECYCLE, self._service_id, event)
+        key = KafkaKey(value=f"{EventType.SERVICE_LIFECYCLE}:{self._service_id}:{event}").to_kafka()
         try:
             await self._faf.send_event(lifecycle, event_type=EventType.SERVICE_LIFECYCLE, event_id=str(key), key=key)
             if event in (LifecycleEventType.UP, LifecycleEventType.DOWN):

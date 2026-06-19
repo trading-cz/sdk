@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.messaging.pubsub import TypedParser
+from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.transport.message import KafkaMessage
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -32,46 +32,26 @@ class EventRouter:
     One instance per ``KafkaChannel``.  All handlers share the same
     consumer — no duplicate Kafka connections.
 
-    Registration is done via :meth:`on` (chainable) before calling
-    :meth:`run`.  Calling ``on`` after ``run`` has started has no effect
-    on the running loop (not thread-safe).
-
     Args:
         channel: Kafka channel to consume from.
         auto_commit: When ``True`` (default), the router commits each
             message's offset after the handler completes successfully.
             When ``False``, the handler is responsible for calling
-            ``await raw.commit()`` explicitly.
-        on_error: Optional async callback invoked for every message
-            that cannot be dispatched (missing/unknown event_type header
-            or Pydantic validation failure).  Receives the raw
-            ``KafkaMessage``.
+            ``await router.commit(raw)`` explicitly.
+        on_error: Optional async callback for undispatchable messages.
+        group_suffix: Appended to consumer group id for isolation.
 
-    **Offset Commit — Three Modes**
+    **Offset Commit — Two Modes**
 
-    Every message from :meth:`KafkaChannel.receive` carries an
-    :meth:`~KafkaMessage.commit` method.  Choose how offsets are
-    committed:
-
-    *Mode 1 — Router auto-commit (default, recommended)*::
+    *Mode 1 — Router auto-commit (default)*::
 
         router = EventRouter(channel, auto_commit=True)
 
         @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
         async def on_signal(model, raw):
             await place_order(model)
-
-        await router.run()
-        # Router calls raw.commit() after on_signal completes.
-        # If on_signal raises → offset NOT committed → re-delivered.
-
-    This is "hardcoded auto-commit" — the router itself commits after
-    every successful handler invocation.  Combine with
-    ``enable.auto.commit=false`` in the Kafka consumer config to avoid
-    librdkafka's background auto-commit (harmless but wasteful)::
-
-        # In environment or .env:
-        KAFKA_CONSUMER_OVERRIDES='{"enable.auto.commit": "false"}'
+        # Router commits offset after handler returns successfully.
+        # Handler raises → offset NOT committed → re-delivered.
 
     *Mode 2 — Manual commit (handler controls when)*::
 
@@ -79,58 +59,12 @@ class EventRouter:
 
         @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
         async def on_request(model, raw):
-            await db.save(model)       # persist first
-            await raw.commit()         # then commit offset
-            await submit_to_broker(model)  # fire-and-forget
+            await db.save(model)          # persist first
+            await router.commit(raw)      # commit offset via router
+            await submit_to_broker(model) # fire-and-forget
 
-        await router.run()
-
-    Use this when you need to guarantee the offset is committed ONLY
-    after a side effect (e.g. DB write) succeeds — not before.
-
-    *Mode 3 — Kafka-managed auto-commit (librdkafka)*::
-
-        # KAFKA_CONSUMER_OVERRIDES='{"enable.auto.commit": "true"}'
-        # (this is the default in KafkaSettings)
-
-        router = EventRouter(channel, auto_commit=False)
-        # librdkafka commits periodically in the background (~5 s).
-        # No guarantee the handler finished before commit.
-
-    This is the legacy behaviour — offsets drift forward regardless
-    of handler outcome.  Prefer Mode 1 or 2 for trading workloads.
-
-    **Error Notification** ::
-
-        async def log_bad_message(raw: KafkaMessage) -> None:
-            logger.error("Undispatchable message: offset=%d payload=%r",
-                         raw.offset, raw.payload[:200])
-
-        router = EventRouter(channel, on_error=log_bad_message)
-
-    The ``on_error`` callback receives the raw ``KafkaMessage`` for
-    every message that could not be dispatched — missing/unknown
-    ``event_type`` header or Pydantic validation failure.  Exceptions
-    raised by ``on_error`` are caught and logged; they do not crash
-    the router loop.
-
-    **Typical executor setup** (with health monitoring)::
-
-        svc = ServiceApp(service_id="executor", env="dev", health_interval=300)
-        await svc.start()
-
-        router = EventRouter(
-            svc.events_channel,
-            auto_commit=False,   # handler commits after DB save
-            on_error=log_bad_message,
-        )
-        monitor = HealthMonitor(router, ttl=600)
-
-        router.on(EventType.TRADING_SIGNAL, TradingSignal, on_signal, spawn_task=True)
-        router.on(EventType.SERVICE_REQUEST, ServiceRequestEvent, on_service_request)
-
-        await monitor.start()
-        await router.run()   # blocks until cancelled
+    Commit is owned by the router (via :class:`TypedConsumer` →
+    :class:`ReceiveSession`), not by :class:`KafkaMessage`.
     """
 
     def __init__(
@@ -139,11 +73,24 @@ class EventRouter:
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
+        group_suffix: str = "router",
     ) -> None:
         self._channel = channel
         self._auto_commit = auto_commit
         self._on_error = on_error
+        self._group_suffix = group_suffix
         self._handlers: list[_Registration] = []
+        self._consumer: TypedConsumer | None = None
+
+    async def commit(self, msg: KafkaMessage) -> None:
+        """Commit a message's offset. Available during :meth:`run`.
+
+        Use when ``auto_commit=False`` and the handler needs explicit
+        control over when the offset is committed.
+        """
+        if self._consumer is None:
+            raise RuntimeError("commit() called outside run()")
+        await self._consumer.commit(msg)
 
     def on[T: BaseModel](
         self,
@@ -186,9 +133,9 @@ class EventRouter:
     async def run(self) -> None:
         """Consume the channel until cancelled.  Dispatch each message.
 
-        Internally builds a :class:`TypedParser` from all registered types.
+        Internally builds a :class:`TypedConsumer` from all registered types.
         Messages whose ``message_type`` header matches no registration are
-        silently skipped (TypedParser behaviour).
+        silently skipped (TypedConsumer multi-type behaviour).
 
         Raises:
             asyncio.CancelledError: propagated normally on task cancellation.
@@ -199,9 +146,9 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        parser = TypedParser(self._channel, types, on_error=self._on_error)
+        self._consumer = TypedConsumer(self._channel, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False)
 
-        async for msg_type, model, raw in parser.parse():
+        async for msg_type, model, raw in self._consumer:
             for reg in self._handlers:
                 if reg.msg_type != msg_type:
                     continue
@@ -226,9 +173,8 @@ class EventRouter:
         On handler exception the offset is never committed (message
         will be re-delivered on restart — at-least-once semantics).
         When ``auto_commit`` is enabled the offset is committed after
-        a successful handler invocation.  Double-commit (handler also
-        calls ``raw.commit()``) is harmless — Kafka treats it as
-        idempotent.
+        a successful handler invocation via the underlying
+        :class:`TypedConsumer`.
         """
         try:
             await reg.handler(model, raw)  # type: ignore[arg-type]
@@ -241,13 +187,5 @@ class EventRouter:
             )
             return  # never commit on failure
 
-        if self._auto_commit:
-            try:
-                await raw.commit()
-            except RuntimeError:
-                # Commit not available (e.g. mocked KafkaMessage in tests)
-                logger.debug(
-                    "Commit unavailable for %s (offset=%d) — skipping",
-                    reg.msg_type,
-                    raw.offset,
-                )
+        if self._auto_commit and self._consumer is not None:
+            await self._consumer.commit(raw)

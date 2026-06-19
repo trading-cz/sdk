@@ -33,6 +33,10 @@ class MessageTypeError(SdkError):
     """Received a message of an unexpected type."""
 
 
+class KafkaConsumerError(SdkError):
+    """Kafka consumer-level error reported by librdkafka (corrupt message, etc.)."""
+
+
 __all__ = [
     "SdkError",
     "TransportError",
@@ -42,4 +46,5 @@ __all__ = [
     "ConfigurationError",
     "TopicNotFoundError",
     "MessageTypeError",
+    "KafkaConsumerError",
 ]

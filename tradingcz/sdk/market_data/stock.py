@@ -25,31 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 class StockDataClient:
-    """Request and consume stock market data.
-
-    All methods are async and return typed domain objects.
-    No Kafka knowledge required.
-
-    **One-time data** (returns a plain ``dict``)::
-
-        bars = await app.stock.bars(["AAPL", "MSFT"], days=30)
-        for symbol, daily_bars in bars.items():
-            print(f"{symbol}: {len(daily_bars)} bars")
-
-    **Streaming data** (returns a :class:`StreamHandle`)::
-
-        # Bare iteration — cleanup on loop exit
-        async for quote in app.stock.stream_quotes(["AAPL"]):
-            print(quote.quote.bid_price)
-            if done:
-                break
-
-        # Context manager — guaranteed unsubscribe
-        async with app.stock.stream_quotes(["AAPL"]) as stream:
-            async for quote in stream:
-                ...
-    """
-
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 

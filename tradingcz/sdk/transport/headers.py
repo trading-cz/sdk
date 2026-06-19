@@ -1,119 +1,72 @@
-"""Kafka wire format — header field names and builders.
-
-- ``Header`` — canonical header key enum
-- ``EventHeaders`` — Pydantic model for event-topic headers
-- ``DataHeaders`` — Pydantic model for data-topic headers (with sequence for dedup)
-"""
+"""Kafka header field names and typed header builders."""
 
 from __future__ import annotations
 
+import typing
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from tradingcz.sdk.models.enums.event import EventType
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Header — Kafka header field names
-# ═════════════════════════════════════════════════════════════════════════════
-
 
 class Header(StrEnum):
-    """Canonical Kafka header field names."""
+    """Canonical Kafka header field names (StrEnum)."""
 
-    # Universal
     EVENT_TYPE = "event_type"
     SOURCE_APP = "source_app"
-
-    # Data topics only
     SEQUENCE = "sequence"
-
-    # Event topic only
     EVENT_ID = "event_id"
     BROKER = "broker"
     SOURCE = "source"
 
 
-class EventHeaders(BaseModel):
-    """Headers for control-plane event-topic messages — no ``sequence`` field.
+class KafkaHeaders(BaseModel):
+    """Base class for all Kafka message headers.
 
-    Usage::
+    Provides the wire-format contract: typed Pydantic model
+    ↔ flat ``dict[str, str]`` suitable for Kafka headers.
 
-        headers = EventHeaders(
-            event_type=EventType.DATA_REQUEST,
-            source_app="ingestion",
-            event_id="abc-123",
-        )
-        await channel.send(payload, key=key, headers=headers.to_kafka())
-
-    Parsing incoming headers::
-
-        parsed = EventHeaders.from_kafka(msg.headers)
-        print(parsed.event_type)  # EventType.DATA_REQUEST
+    Every Kafka message must carry at least ``event_type`` and
+    ``source_app`` so that consumers can route and attribute messages
+    without inspecting the payload.
     """
 
     model_config = ConfigDict(extra="allow")
-    event_id: str = Field(..., description="Unique event identifier")
-    event_type: EventType = Field(..., description="Type of event")
-    source_app: str = Field(..., description="Source application that generated the event")
 
-    def to_kafka(self) -> dict[str, str]:
+    event_type: EventType
+    source_app: str
+
+    def to_headers(self) -> dict[str, str]:
+        """Convert to Kafka wire format (flat dict with string values)."""
         d = self.model_dump(exclude_none=True)
         return {k: str(v) for k, v in d.items()}
 
     @classmethod
-    def from_kafka(cls, headers: dict[str, str]) -> EventHeaders:
-        """Parse raw Kafka headers into a typed model.
-
-        Unknown fields are preserved (``extra="allow"``).
-        """
+    def from_headers(cls, headers: dict[str, str]) -> typing.Self:
+        """Construct from Kafka wire-format headers."""
         return cls(**headers)
 
 
-class DataHeaders(BaseModel):
-    """Headers for data-topic messages — includes ``sequence`` for dedup.
+class EventHeaders(KafkaHeaders):
+    """Headers for event-topic messages — no sequence field."""
 
-    Usage::
+    event_id: str
 
-        headers = DataHeaders(
-            event_type=EventType.BAR,
-            source_app="ingestion",
-            broker="alpaca",
-            symbol="AAPL",
-            sequence=42,
-        )
-        await channel.send(payload, key="AAPL", headers=headers.to_kafka())
-    """
 
-    model_config = ConfigDict(extra="allow")
-    event_type: EventType = Field(..., description="Type of market data event")
+class DataHeaders(KafkaHeaders):
+    """Headers for data-topic messages — includes sequence for dedup."""
 
-    source_app: str = Field(default="", description="Service identifier")
-    sequence: int = Field(default=0, description="Monotonic sequence number for deduplication")
-    broker: str = Field(default="", description="Broker identifier (e.g. alpaca)")
-    source: str = Field(default="", description="Source label (defaults to source_app if not set)")
-    symbol: str = Field(default="", description="Ticker symbol (e.g. AAPL)")
-    event_id: str = Field(default="", description="Correlation ID (set when data is a response to a request)")
-
-    def to_kafka(self) -> dict[str, str]:
-        """Serialize to Kafka wire format (``dict[str, str]``).
-
-        All fields (including extra kwargs) are serialized to string keys.
-        """
-        d = self.model_dump(exclude_none=True)
-        return {k: str(v) for k, v in d.items()}
-
-    @classmethod
-    def from_kafka(cls, headers: dict[str, str]) -> DataHeaders:
-        """Parse raw Kafka headers into a typed model.
-
-        Unknown fields are preserved (``extra="allow"``).
-        """
-        return cls(**headers)
+    event_id: str = ""
+    sequence: int = 0
+    broker: str = ""
+    source: str = ""
+    symbol: str = ""
 
 
 __all__ = [
     "Header",
+    "KafkaHeaders",
     "EventHeaders",
     "DataHeaders",
 ]

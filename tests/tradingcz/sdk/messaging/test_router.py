@@ -24,7 +24,6 @@ def _make_msg(
     offset: int = 0,
     msg_type: EventType = EventType.SERVICE_LIFECYCLE,
 ) -> KafkaMessage:
-    """Build a KafkaMessage with the given model as JSON payload."""
     payload = model.model_dump_json().encode()
     return KafkaMessage(
         payload=payload,
@@ -41,7 +40,6 @@ def _make_raw_msg(
     msg_type: str = "",
     offset: int = 0,
 ) -> KafkaMessage:
-    """Build a KafkaMessage with raw bytes payload."""
     headers: dict[str, str] = {}
     if msg_type:
         headers[Header.EVENT_TYPE] = msg_type
@@ -55,6 +53,47 @@ def _make_raw_msg(
     )
 
 
+def _mock_session(*messages: KafkaMessage) -> MagicMock:
+    """Create a mock ReceiveSession yielding *messages* with tracked commits."""
+    commits: list[KafkaMessage] = []
+
+    class _Session:
+        def __init__(self) -> None:
+            self._commits: list[KafkaMessage] = commits
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not hasattr(self, '_idx'):
+                self._idx = 0
+            if self._idx >= len(messages):
+                raise StopAsyncIteration
+            msg = messages[self._idx]
+            self._idx += 1
+            return msg
+
+        async def commit(self, msg: KafkaMessage) -> None:
+            commits.append(msg)
+
+    session = _Session()
+    return session  # type: ignore[return-value]
+
+
+def _was_committed(session: MagicMock, msg: KafkaMessage) -> bool:
+    """Check whether *msg* was committed via the mock session."""
+    return msg in session._commits  # type: ignore[attr-defined]
+
+
+def _setup_channel(*messages: KafkaMessage) -> MagicMock:
+    """Create a mock KafkaChannel that returns a mock ReceiveSession."""
+    channel = MagicMock()
+    channel.name = "events"
+    session = _mock_session(*messages)
+    channel.receive = MagicMock(return_value=session)
+    return channel
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Test 1: Success scenario — valid message dispatched to handler
 # ═════════════════════════════════════════════════════════════════════════════
@@ -65,21 +104,9 @@ class TestEventRouterSuccess:
 
     @pytest.mark.asyncio
     async def test_dispatches_valid_message_to_handler(self) -> None:
-        """A valid message with matching message_type is parsed and dispatched."""
-        # ── Arrange ───────────────────────────────────────────────────
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="ingestion",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="ingestion", event=LifecycleEventType.UP)
         kafka_msg = _make_msg(lifecycle_event, offset=42)
-
-        async def mock_receive():  # async generator — yields 1 msg then stops
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_calls: list[tuple[LifecycleEvent, KafkaMessage]] = []
 
@@ -89,33 +116,19 @@ class TestEventRouterSuccess:
         router = EventRouter(channel)
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
 
-        # ── Act ───────────────────────────────────────────────────────
         await router.run()
 
-        # ── Assert ────────────────────────────────────────────────────
-        assert len(handler_calls) == 1, "Handler should be called exactly once"
+        assert len(handler_calls) == 1
         model, raw = handler_calls[0]
         assert model.service_id == "ingestion"
         assert model.event == LifecycleEventType.UP
         assert raw.offset == 42
-        assert raw.topic == "events"
 
     @pytest.mark.asyncio
     async def test_dispatches_only_to_matching_msg_type(self) -> None:
-        """Only the handler registered for the matching EventType is called."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="risk",
-            event=LifecycleEventType.HEARTBEAT,
-        )
+        lifecycle_event = LifecycleEvent(service_id="risk", event=LifecycleEventType.HEARTBEAT)
         kafka_msg = _make_msg(lifecycle_event, offset=10)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         match_called = False
         other_called = False
@@ -129,71 +142,39 @@ class TestEventRouterSuccess:
             other_called = True
 
         router = EventRouter(channel)
-        # Register handler for a DIFFERENT event type
         router.on(EventType.DATA_REQUEST, LifecycleEvent, other_handler)
-        # Register handler for the CORRECT event type
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, match_handler)
 
         await router.run()
 
-        assert match_called, "Matching handler should be called"
-        assert not other_called, "Non-matching handler should NOT be called"
+        assert match_called
+        assert not other_called
 
     @pytest.mark.asyncio
     async def test_spawn_task_handler_is_called(self) -> None:
-        """Handler with spawn_task=True is called (as a task, not awaited inline)."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="executor",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="executor", event=LifecycleEventType.UP)
         kafka_msg = _make_msg(lifecycle_event, offset=1)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
         async def handler(model: LifecycleEvent, raw: KafkaMessage) -> None:
             nonlocal handler_called
             handler_called = True
-            # Simulate slow handler that would block inline dispatch
             await asyncio.sleep(0.01)
 
         router = EventRouter(channel)
-        router.on(
-            EventType.SERVICE_LIFECYCLE,
-            LifecycleEvent,
-            handler,
-            spawn_task=True,
-        )
+        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler, spawn_task=True)
 
         await router.run()
-
-        # Allow the spawned task to complete before asserting
         await asyncio.sleep(0.05)
-        assert handler_called, "Handler with spawn_task=True should be called"
+        assert handler_called
 
     @pytest.mark.asyncio
     async def test_filter_fn_blocks_handler(self) -> None:
-        """Handler is NOT called when filter_fn returns False."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         kafka_msg = _make_msg(lifecycle_event, offset=1)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -205,35 +186,17 @@ class TestEventRouterSuccess:
             return False
 
         router = EventRouter(channel)
-        router.on(
-            EventType.SERVICE_LIFECYCLE,
-            LifecycleEvent,
-            handler,
-            filter_fn=deny_all,
-        )
+        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler, filter_fn=deny_all)
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called when filter_fn returns False"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_filter_fn_allows_handler(self) -> None:
-        """Handler IS called when filter_fn returns True."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         kafka_msg = _make_msg(lifecycle_event, offset=1)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -245,16 +208,11 @@ class TestEventRouterSuccess:
             return True
 
         router = EventRouter(channel)
-        router.on(
-            EventType.SERVICE_LIFECYCLE,
-            LifecycleEvent,
-            handler,
-            filter_fn=allow_all,
-        )
+        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler, filter_fn=allow_all)
 
         await router.run()
 
-        assert handler_called, "Handler should be called when filter_fn returns True"
+        assert handler_called
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -267,20 +225,12 @@ class TestEventRouterParseFailure:
 
     @pytest.mark.asyncio
     async def test_skips_invalid_json_payload(self) -> None:
-        """A message with invalid JSON is silently skipped."""
-        channel = MagicMock()
-        channel.name = "events"
-
         kafka_msg = _make_raw_msg(
             payload=b"this is not valid json {{{",
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=99,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -293,28 +243,17 @@ class TestEventRouterParseFailure:
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called for invalid JSON payload"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_skips_payload_missing_required_fields(self) -> None:
-        """A message with valid JSON but missing required Pydantic fields is skipped."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        # Valid JSON but missing required fields for LifecycleEvent
         incomplete_payload = json.dumps({"extra_field": "value"}).encode()
         kafka_msg = _make_raw_msg(
             payload=incomplete_payload,
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=100,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -327,28 +266,14 @@ class TestEventRouterParseFailure:
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called when required fields are missing"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_skips_message_with_no_event_type_header(self) -> None:
-        """A message without the event_type header is silently skipped."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        # Valid payload, but no event_type header
-        lifecycle_event = LifecycleEvent(
-            service_id="test",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         payload = lifecycle_event.model_dump_json().encode()
         kafka_msg = _make_raw_msg(payload=payload, msg_type="", offset=101)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -361,31 +286,18 @@ class TestEventRouterParseFailure:
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called when event_type header is missing"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_skips_message_with_unregistered_event_type(self) -> None:
-        """A message whose event_type is not registered is silently skipped."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test",
-            event=LifecycleEventType.UP,
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         payload = lifecycle_event.model_dump_json().encode()
         kafka_msg = _make_raw_msg(
             payload=payload,
-            msg_type=str(EventType.DATA_REQUEST),  # not registered
+            msg_type=str(EventType.DATA_REQUEST),
             offset=102,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -394,31 +306,20 @@ class TestEventRouterParseFailure:
             handler_called = True
 
         router = EventRouter(channel)
-        # Register only for SERVICE_LIFECYCLE, not DATA_REQUEST
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called for unregistered event_type"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_skips_empty_payload(self) -> None:
-        """An empty byte payload is silently skipped."""
-        channel = MagicMock()
-        channel.name = "events"
-
         kafka_msg = _make_raw_msg(
             payload=b"",
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=103,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -431,32 +332,18 @@ class TestEventRouterParseFailure:
 
         await router.run()
 
-        assert not handler_called, (
-            "Handler should NOT be called for empty payload"
-        )
+        assert not handler_called
 
     @pytest.mark.asyncio
     async def test_continues_after_parse_failure(self) -> None:
-        """After a parse failure, subsequent valid messages are still processed."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="valid-service",
-            event=LifecycleEventType.DOWN,
-        )
+        lifecycle_event = LifecycleEvent(service_id="valid-service", event=LifecycleEventType.DOWN)
         valid_msg = _make_msg(lifecycle_event, offset=2)
         invalid_msg = _make_raw_msg(
             payload=b"garbage",
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=1,
         )
-
-        async def mock_receive():
-            yield invalid_msg   # first: parse failure → skipped
-            yield valid_msg     # second: valid → dispatched
-
-        channel.receive = mock_receive
+        channel = _setup_channel(invalid_msg, valid_msg)
 
         handler_calls: list[tuple[LifecycleEvent, KafkaMessage]] = []
 
@@ -468,38 +355,13 @@ class TestEventRouterParseFailure:
 
         await router.run()
 
-        assert len(handler_calls) == 1, (
-            "Only the valid message should be dispatched; invalid one skipped"
-        )
+        assert len(handler_calls) == 1
         assert handler_calls[0][0].service_id == "valid-service"
         assert handler_calls[0][1].offset == 2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Helpers for commit-aware messages
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-def _attach_commit(msg: KafkaMessage) -> KafkaMessage:
-    """Attach a mock ``_commit_fn`` to *msg* so ``raw.commit()`` works."""
-    state: dict[str, bool] = {"committed": False}
-
-    async def _mock_commit() -> None:
-        state["committed"] = True
-
-    object.__setattr__(msg, "_commit_fn", _mock_commit)
-    object.__setattr__(msg, "_commit_state", state)
-    return msg
-
-
-def _was_committed(msg: KafkaMessage) -> bool:
-    """Check whether ``msg.commit()`` was called."""
-    state: dict[str, bool] | None = getattr(msg, "_commit_state", None)
-    return state["committed"] if state else False
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Test 3: Commit behaviour
+# Test 3: Commit behaviour — via ReceiveSession through TypedConsumer
 # ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -508,19 +370,9 @@ class TestEventRouterCommit:
 
     @pytest.mark.asyncio
     async def test_auto_commit_true_commits_after_success(self) -> None:
-        """With auto_commit=True (default), offset is committed after handler."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
-        kafka_msg = _attach_commit(_make_msg(lifecycle_event, offset=7))
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
+        kafka_msg = _make_msg(lifecycle_event, offset=7)
+        channel = _setup_channel(kafka_msg)
 
         handler_called = False
 
@@ -534,25 +386,14 @@ class TestEventRouterCommit:
         await router.run()
 
         assert handler_called
-        assert _was_committed(kafka_msg), (
-            "Offset should be committed after successful handler with auto_commit=True"
-        )
+        session = channel.receive.return_value
+        assert _was_committed(session, kafka_msg)
 
     @pytest.mark.asyncio
     async def test_auto_commit_true_does_not_commit_on_handler_failure(self) -> None:
-        """Offset is NOT committed when the handler raises an exception."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
-        kafka_msg = _attach_commit(_make_msg(lifecycle_event, offset=8))
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
+        kafka_msg = _make_msg(lifecycle_event, offset=8)
+        channel = _setup_channel(kafka_msg)
 
         async def failing_handler(model: LifecycleEvent, raw: KafkaMessage) -> None:
             raise RuntimeError("simulated handler crash")
@@ -560,104 +401,68 @@ class TestEventRouterCommit:
         router = EventRouter(channel, auto_commit=True)
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, failing_handler)
 
-        await router.run()  # should NOT raise — exception is caught
+        await router.run()
 
-        assert not _was_committed(kafka_msg), (
-            "Offset should NOT be committed when handler raises"
-        )
+        session = channel.receive.return_value
+        assert not _was_committed(session, kafka_msg)
 
     @pytest.mark.asyncio
     async def test_auto_commit_false_does_not_auto_commit(self) -> None:
-        """With auto_commit=False, offset is NOT committed automatically."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
-        kafka_msg = _attach_commit(_make_msg(lifecycle_event, offset=9))
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
+        kafka_msg = _make_msg(lifecycle_event, offset=9)
+        channel = _setup_channel(kafka_msg)
 
         async def handler(model: LifecycleEvent, raw: KafkaMessage) -> None:
-            pass  # does NOT call raw.commit()
+            pass  # does NOT call router.commit()
 
         router = EventRouter(channel, auto_commit=False)
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
 
         await router.run()
 
-        assert not _was_committed(kafka_msg), (
-            "Offset should NOT be committed when auto_commit=False "
-            "and handler does not call raw.commit()"
-        )
+        session = channel.receive.return_value
+        assert not _was_committed(session, kafka_msg)
 
     @pytest.mark.asyncio
-    async def test_manual_commit_via_raw_commit(self) -> None:
-        """Handler can explicitly commit by calling ``await raw.commit()``."""
-        channel = MagicMock()
-        channel.name = "events"
+    async def test_manual_commit_via_router_commit(self) -> None:
+        """Handler can explicitly commit by calling ``await router.commit(raw)``."""
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
+        kafka_msg = _make_msg(lifecycle_event, offset=10)
+        channel = _setup_channel(kafka_msg)
 
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
-        kafka_msg = _attach_commit(_make_msg(lifecycle_event, offset=10))
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        # Need access to router inside handler — use nonlocal
+        committed: list[KafkaMessage] = []
 
         async def handler(model: LifecycleEvent, raw: KafkaMessage) -> None:
-            await raw.commit()  # explicit manual commit
+            await router.commit(raw)
+            committed.append(raw)
 
-        # auto_commit=False so only manual commit matters
         router = EventRouter(channel, auto_commit=False)
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
 
         await router.run()
 
-        assert _was_committed(kafka_msg), (
-            "Offset should be committed when handler calls raw.commit()"
-        )
+        assert len(committed) == 1
+        session = channel.receive.return_value
+        assert _was_committed(session, kafka_msg)
 
     @pytest.mark.asyncio
     async def test_spawn_task_auto_commits_after_task_completes(self) -> None:
-        """With spawn_task=True, commit happens after the spawned task finishes."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
-        kafka_msg = _attach_commit(_make_msg(lifecycle_event, offset=11))
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
+        kafka_msg = _make_msg(lifecycle_event, offset=11)
+        channel = _setup_channel(kafka_msg)
 
         async def handler(model: LifecycleEvent, raw: KafkaMessage) -> None:
-            await asyncio.sleep(0.01)  # simulate async work
+            await asyncio.sleep(0.01)
 
         router = EventRouter(channel, auto_commit=True)
-        router.on(
-            EventType.SERVICE_LIFECYCLE,
-            LifecycleEvent,
-            handler,
-            spawn_task=True,
-        )
+        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler, spawn_task=True)
 
         await router.run()
-        # Wait for the spawned dispatch task to complete
         await asyncio.sleep(0.1)
 
-        assert _was_committed(kafka_msg), (
-            "Offset should be committed after spawned task completes"
-        )
+        session = channel.receive.return_value
+        assert _was_committed(session, kafka_msg)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -670,20 +475,12 @@ class TestEventRouterOnError:
 
     @pytest.mark.asyncio
     async def test_on_error_called_for_invalid_json(self) -> None:
-        """on_error is called when payload fails Pydantic validation."""
-        channel = MagicMock()
-        channel.name = "events"
-
         kafka_msg = _make_raw_msg(
             payload=b"not json",
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=200,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         errors: list[KafkaMessage] = []
 
@@ -698,25 +495,15 @@ class TestEventRouterOnError:
 
         await router.run()
 
-        assert len(errors) == 1, "on_error should be called once for invalid JSON"
+        assert len(errors) == 1
         assert errors[0].offset == 200
 
     @pytest.mark.asyncio
     async def test_on_error_called_for_missing_event_type_header(self) -> None:
-        """on_error is called when event_type header is missing."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         payload = lifecycle_event.model_dump_json().encode()
         kafka_msg = _make_raw_msg(payload=payload, msg_type="", offset=201)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         errors: list[KafkaMessage] = []
 
@@ -731,29 +518,19 @@ class TestEventRouterOnError:
 
         await router.run()
 
-        assert len(errors) == 1, "on_error should be called for missing header"
+        assert len(errors) == 1
         assert errors[0].offset == 201
 
     @pytest.mark.asyncio
     async def test_on_error_called_for_unregistered_event_type(self) -> None:
-        """on_error is called when event_type is not registered."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         payload = lifecycle_event.model_dump_json().encode()
         kafka_msg = _make_raw_msg(
             payload=payload,
-            msg_type=str(EventType.DATA_REQUEST),  # not registered
+            msg_type=str(EventType.DATA_REQUEST),
             offset=202,
         )
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         errors: list[KafkaMessage] = []
 
@@ -764,31 +541,18 @@ class TestEventRouterOnError:
             pass
 
         router = EventRouter(channel, on_error=on_error)
-        # Only register for SERVICE_LIFECYCLE, not DATA_REQUEST
         router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
 
         await router.run()
 
-        assert len(errors) == 1, (
-            "on_error should be called for unregistered event_type"
-        )
+        assert len(errors) == 1
         assert errors[0].offset == 202
 
     @pytest.mark.asyncio
     async def test_on_error_not_called_for_valid_message(self) -> None:
-        """on_error is NOT called when the message is dispatched successfully."""
-        channel = MagicMock()
-        channel.name = "events"
-
-        lifecycle_event = LifecycleEvent(
-            service_id="test", event=LifecycleEventType.UP
-        )
+        lifecycle_event = LifecycleEvent(service_id="test", event=LifecycleEventType.UP)
         kafka_msg = _make_msg(lifecycle_event, offset=203)
-
-        async def mock_receive():
-            yield kafka_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(kafka_msg)
 
         errors: list[KafkaMessage] = []
 
@@ -803,31 +567,18 @@ class TestEventRouterOnError:
 
         await router.run()
 
-        assert len(errors) == 0, (
-            "on_error should NOT be called for valid dispatched messages"
-        )
+        assert len(errors) == 0
 
     @pytest.mark.asyncio
     async def test_on_error_exception_does_not_crash_router(self) -> None:
-        """An exception in on_error does not crash the router loop."""
-        channel = MagicMock()
-        channel.name = "events"
-
         invalid_msg = _make_raw_msg(
             payload=b"bad",
             msg_type=str(EventType.SERVICE_LIFECYCLE),
             offset=204,
         )
-        lifecycle_event = LifecycleEvent(
-            service_id="valid", event=LifecycleEventType.DOWN
-        )
+        lifecycle_event = LifecycleEvent(service_id="valid", event=LifecycleEventType.DOWN)
         valid_msg = _make_msg(lifecycle_event, offset=205)
-
-        async def mock_receive():
-            yield invalid_msg
-            yield valid_msg
-
-        channel.receive = mock_receive
+        channel = _setup_channel(invalid_msg, valid_msg)
 
         error_count = 0
 
@@ -848,38 +599,5 @@ class TestEventRouterOnError:
 
         await router.run()
 
-        assert error_count >= 1, "on_error should have been called at least once"
-        assert handler_called, (
-            "Valid message should still be dispatched after on_error crashes"
-        )
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Test 5: KafkaMessage.commit() contract
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-class TestKafkaMessageCommit:
-    """KafkaMessage.commit() behaviour."""
-
-    @pytest.mark.asyncio
-    async def test_commit_raises_runtime_error_for_manual_message(self) -> None:
-        """commit() raises RuntimeError on a manually-constructed KafkaMessage."""
-        msg = KafkaMessage(payload=b"{}")
-        with pytest.raises(RuntimeError, match="Commit not available"):
-            await msg.commit()
-
-    @pytest.mark.asyncio
-    async def test_commit_works_when_commit_fn_attached(self) -> None:
-        """commit() works when _commit_fn is attached (as channel.receive() does)."""
-        msg = KafkaMessage(payload=b"{}")
-        committed = False
-
-        async def mock_commit() -> None:
-            nonlocal committed
-            committed = True
-
-        object.__setattr__(msg, "_commit_fn", mock_commit)
-        await msg.commit()
-
-        assert committed, "commit() should call the attached _commit_fn"
+        assert error_count >= 1
+        assert handler_called

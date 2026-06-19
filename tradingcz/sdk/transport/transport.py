@@ -1,8 +1,4 @@
-"""KafkaTransport — shared Producer, cached channels, topic auto-creation.
-
-One ``KafkaTransport`` per process.  Topics are created on first use
-via Admin API if they don't already exist.
-"""
+"""KafkaTransport — shared Producer, cached channels, topic auto-creation."""
 
 import asyncio
 import logging
@@ -18,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class KafkaTransport:
-    """Kafka-backed transport — one shared ``Producer``, cached channels.
-
-    Topics are created on first use via Admin API if they don't already exist.
-    """
+    """Kafka-backed transport — one shared Producer, cached channels, auto-create topics."""
 
     _producer: SyncProducer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))  # type: ignore[assignment]  # pylint: disable=protected-access
 
@@ -39,25 +32,9 @@ class KafkaTransport:
         retention_ms: int | None = None,
         cleanup_policy: str | None = None,
     ) -> KafkaChannel:
-        """Get or create a Kafka channel for *name*.
-
-        Args:
-            name: Kafka topic name.
-            num_partitions: Override default partition count.
-            replication_factor: Override default replication factor.
-            retention_ms: Override default retention in milliseconds.
-            cleanup_policy: Override default cleanup policy.
-
-        All overrides are optional — when ``None``, the ``KafkaSettings``
-        default is used.  Channels are cached by name, so topic config
-        only applies on first call for a given name.
-        """
+        """Get or create a cached KafkaChannel. Topic auto-created if needed."""
         if name not in self._channels:
-            partitions = (
-                num_partitions
-                if num_partitions is not None
-                else self._settings.default_num_partitions
-            )
+            partitions = num_partitions if num_partitions is not None else max(1, self._settings.default_num_partitions)
             await self._ensure_topic(
                 name,
                 num_partitions=partitions,
@@ -82,12 +59,12 @@ class KafkaTransport:
             return
 
         loop = asyncio.get_running_loop()
-        metadata = await loop.run_in_executor(
-            None,
-            lambda: self._admin.list_topics(timeout=10),
-        )
-        if name in metadata.topics:
-            self._topics_created.add(name)
+        metadata = await loop.run_in_executor(None, lambda: self._admin.list_topics(timeout=10))
+        # add all topics to self._topics_created to avoid repeated metadata fetches
+        for topic_name in metadata.topics:
+            self._topics_created.add(topic_name)
+
+        if name in self._topics_created:
             return
 
         rf = (
@@ -123,7 +100,7 @@ class KafkaTransport:
                 logger.info("Created topic '%s'", topic)
             except Exception as exc:
                 if "TOPIC_ALREADY_EXISTS" in str(exc):
-                    logger.info( "Topic '%s' already exists (race — created by another client)", topic, )
+                    logger.info("Topic '%s' already exists (race — created by another client)", topic)
                 else:
                     logger.exception("Failed to create topic '%s'", topic)
                     raise
@@ -131,11 +108,7 @@ class KafkaTransport:
         self._topics_created.add(name)
 
     async def close(self) -> None:
-        """Close all channels and release transport resources.
-
-        Flushes the producer to ensure all queued messages are delivered
-        before shutting down.
-        """
+        """Flush producer, close all channels, release resources."""
         if self._producer is not None:
             self._producer.flush(timeout=10)
             self._producer.poll(0)

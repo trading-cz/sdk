@@ -233,7 +233,7 @@ class BaseDataClient:
         expected = resp.record_count or 0
 
         try:
-            async for msg in channel.receive():
+            async for msg in channel.receive(group_suffix="data"):
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
@@ -298,7 +298,7 @@ class BaseDataClient:
 
         async def _consume() -> AsyncIterator[T]:
             try:
-                async for msg in channel.receive():
+                async for msg in channel.receive(group_suffix="stream"):
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
                         msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),

@@ -24,26 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 class HealthMonitor:
-    """Tracks liveness of other services.  Calls ``on_down`` on timeout.
-
-    Registers on a shared ``EventRouter`` for ``SERVICE_LIFECYCLE`` events
-    instead of opening its own Kafka consumer.  The periodic sweep for
-    TTL expiry runs as a background task.
-
-    Two triggers fire the callback:
-      - Explicit ``"down"`` event (graceful shutdown)
-      - No heartbeat for > *ttl* seconds (crash / partition)
-
-    Usage::
-
-        router = EventRouter(channel)
-        monitor = HealthMonitor(router, ttl=600)
-        monitor.on_down(lambda sid: print(f"Service down: {sid}"))
-        await monitor.start()
-        await router.run()   # EventRouter dispatches lifecycle events to monitor
-        await monitor.stop()
-    """
-
     def __init__(
         self,
         router: EventRouter,

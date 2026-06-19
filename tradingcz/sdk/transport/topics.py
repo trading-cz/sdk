@@ -1,4 +1,4 @@
-"""Topic registry — environment-scoped Kafka topic names (e.g. dev-event)."""
+"""Topic registry — environment-scoped Kafka topic names."""
 
 from dataclasses import dataclass
 
@@ -15,13 +15,7 @@ class TopicConfig:
 
 
 class TopicRegistry:
-    """Central topic naming, scoped by environment.
-
-    Usage::
-
-        topics = TopicRegistry(env=\"dev\")
-        channel = await transport.channel(topics.market_data.name)
-    """
+    """Central topic naming, scoped by environment (e.g. dev-event)."""
 
     def __init__(self, env: str = "dev") -> None:
         self.events = TopicConfig(name=f"{env}-event", partitions=1)
