@@ -12,6 +12,7 @@ Usage::
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 
 class Lazy[T]:
@@ -22,7 +23,7 @@ class Lazy[T]:
     bypass the descriptor entirely.
     """
 
-    def __init__(self, factory: Callable[[object], T]) -> None:
+    def __init__(self, factory: Callable[[Any], T]) -> None:
         self._factory = factory
         self._name: str = ""  # set by __set_name__
 

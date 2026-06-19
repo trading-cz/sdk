@@ -66,7 +66,7 @@ class StockDataClient:
             asset=AssetType.STOCK,
             data_type=MarketDataType.BARS,
             model_type=Bar,
-            timeframe=timeframe,
+            timeframe=Timeframe(timeframe),
             days=days,
             timeout=timeout,
         )

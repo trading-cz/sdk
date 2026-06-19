@@ -23,7 +23,7 @@ class KafkaTransport:
     Topics are created on first use via Admin API if they don't already exist.
     """
 
-    _producer: SyncProducer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))  # type: ignore[assignment]
+    _producer: SyncProducer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))  # type: ignore[assignment]  # pylint: disable=protected-access
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings

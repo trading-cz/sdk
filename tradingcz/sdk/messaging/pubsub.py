@@ -2,7 +2,7 @@
 
 import logging
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -11,7 +11,6 @@ from tradingcz.sdk.serialization import JsonSerializer
 from tradingcz.sdk.serialization.protocol import Deserializer, Serializer
 from tradingcz.sdk.transport.channel import KafkaChannel
 from tradingcz.sdk.transport.message import KafkaMessage
-from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.headers import DataHeaders, Header
 from tradingcz.sdk.models.market import MarketItem, market_item_message_type
 

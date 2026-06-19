@@ -177,7 +177,7 @@ class KafkaChannel:
 
                 # Attach commit capability — captures consumer + confluent-kafka
                 # message in a closure.  object.__setattr__ bypasses frozen=True.
-                async def _commit() -> None:
+                async def _commit(msg: KafkaMessage = msg) -> None:
                     await consumer.commit(message=msg)
 
                 object.__setattr__(kafka_msg, "_commit_fn", _commit)

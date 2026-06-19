@@ -80,7 +80,9 @@ class TimeKeeper:
             ):
                 logger.info( "Refreshing market clock cache from broker API source of truth..." )
                 await self._clock.refresh_clock()
-                logger.info( "Refreshing market clock cache." "New data:\n Market time: %s,\n Next open: %s,\n Next close: %s", await self._clock.get_current_market_time(),
+                logger.info(
+                    "Refreshing market clock cache. New data:\n"
+                    " Market time: %s,\n Next open: %s,\n Next close: %s", await self._clock.get_current_market_time(),
                     await self._clock.get_next_market_open(),
                     await self._clock.get_next_market_close(),
                 )

@@ -58,15 +58,14 @@ class KafkaMessage:
         handler AND having ``auto_commit=True`` is safe (Kafka treats
         duplicate commits as idempotent).
         """
-        commit_fn: Callable[[], Awaitable[None]] | None = getattr(
-            self, "_commit_fn", None
-        )
-        if commit_fn is None:
+        commit_fn_raw = getattr(self, "_commit_fn", None)
+        if not callable(commit_fn_raw):
             raise RuntimeError(
                 "Commit not available: this KafkaMessage was not "
                 "received from KafkaChannel.receive()"
             )
-        await commit_fn()
+        commit_fn: Callable[[], Awaitable[None]] = commit_fn_raw
+        await commit_fn()  # pylint: disable=not-callable
 
 
 __all__ = ["KafkaMessage"]
