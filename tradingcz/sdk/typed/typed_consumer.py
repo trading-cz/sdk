@@ -85,12 +85,12 @@ class TypedConsumer:
             await self._session.commit(msg)
 
     async def _notify_error(self, msg: KafkaMessage) -> None:
-        logger.error("Caught exception while processing message on %s (offset=%d key=%r)", self._channel.name, msg.offset, msg.key, exc_info=True)
+        logger.error("Caught exception while processing message on %s (offset=%d key=%r)", self._topic, msg.offset, msg.key, exc_info=True)
         if self._on_error is not None:
             try:
                 await self._on_error(msg)
             except Exception:
-                logger.warning("on_error callback raised for %s (offset=%d)", self._channel.name, msg.offset, exc_info=True)
+                logger.warning("on_error callback raised for %s (offset=%d)", self._topic, msg.offset, exc_info=True)
 
 
 __all__ = ["TypedConsumer"]
