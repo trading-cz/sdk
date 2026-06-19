@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class TopicConfig:
+class KafkaTopicConfig:
     name: str
     partitions: int = 5
     replication_factor: int = 2
@@ -20,16 +20,16 @@ class TopicConfig:
     cleanup_policy: str = "delete"
 
 
-class TopicRegistry:
+class KafkaTopicRegistry:
     """Environment-scoped topic name registry."""
 
     def __init__(self, env: str = "dev") -> None:
-        self.events = TopicConfig(name=f"{env}-event", partitions=1)
-        self.market_data = TopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
-        self.historical_data = TopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)
+        self.events = KafkaTopicConfig(name=f"{env}-event", partitions=1)
+        self.market_data = KafkaTopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
+        self.historical_data = KafkaTopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)
 
 
-class TopicAdmin:
+class KafkaTopicAdmin:
     """Creates Kafka topics via Admin API.  Class-level cache prevents duplicate creation."""
 
     _created: set[str] = set()
@@ -45,16 +45,16 @@ class TopicAdmin:
         cleanup_policy: str | None = None,
     ) -> None:
         """Create a topic if it doesn't already exist."""
-        if name in TopicAdmin._created:
+        if name in KafkaTopicAdmin._created:
             return
 
         admin = AdminClient({"bootstrap.servers": settings.bootstrap_servers})
         loop = asyncio.get_running_loop()
         metadata = await loop.run_in_executor(None, lambda: admin.list_topics(timeout=10))
         for topic_name in metadata.topics:
-            TopicAdmin._created.add(topic_name)
+            KafkaTopicAdmin._created.add(topic_name)
 
-        if name in TopicAdmin._created:
+        if name in KafkaTopicAdmin._created:
             return
 
         partitions = num_partitions if num_partitions is not None else max(1, settings.default_num_partitions)
@@ -79,12 +79,12 @@ class TopicAdmin:
                     logger.exception("Failed to create topic '%s'", topic)
                     raise
 
-        TopicAdmin._created.add(name)
+        KafkaTopicAdmin._created.add(name)
 
     @staticmethod
-    async def ensure_from_config(settings: KafkaSettings, config: TopicConfig) -> None:
-        """Create a topic from a :class:`TopicConfig`."""
-        await TopicAdmin.ensure(
+    async def ensure_from_config(settings: KafkaSettings, config: KafkaTopicConfig) -> None:
+        """Create a topic from a :class:`KafkaTopicConfig`."""
+        await KafkaTopicAdmin.ensure(
             settings,
             config.name,
             num_partitions=config.partitions,

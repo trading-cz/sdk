@@ -45,7 +45,7 @@ async with TypedProducer(channel, source_app="ingestion") as p:
     await p.send(Bar(symbol="MSFT", ...))
 ```
 
-Headers are built by :meth:`DataHeaders.for_item` in ``transport/headers.py``.
+Headers are built by :meth:`DataHeader.for_item` in ``transport/headers.py``.
 For custom header logic, subclass ``TypedProducer`` and override ``send()``.
 
 ## TypedConsumer
@@ -83,5 +83,5 @@ async for msg_type, model, raw in consumer:
 | Generic? | No | No |
 | Constructor | `channel, source_app=, broker=` | `channel, types=dict` |
 | Interface | `send(value)`, `flush()`, `async with` | `async for msg_type, model, raw in consumer` |
-| Headers | Auto-built via `DataHeaders.for_item()` | Read via `Header.EVENT_TYPE` |
+| Headers | Auto-built via `DataHeader.for_item()` | Read via `Header.EVENT_TYPE` |
 | Layer 3 users | FireAndForget | EventRouter, RecoveryReader |

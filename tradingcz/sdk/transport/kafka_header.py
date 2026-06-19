@@ -21,7 +21,7 @@ class Header(StrEnum):
     SOURCE = "source"
 
 
-class KafkaHeaders(BaseModel):
+class KafkaHeader(BaseModel):
     """Base class for all Kafka message headers.
 
     Provides the wire-format contract: typed Pydantic model
@@ -48,13 +48,13 @@ class KafkaHeaders(BaseModel):
         return cls(**headers)
 
 
-class EventHeaders(KafkaHeaders):
+class EventHeader(KafkaHeader):
     """Headers for event-topic messages — no sequence field."""
 
     event_id: str
 
 
-class DataHeaders(KafkaHeaders):
+class DataHeader(KafkaHeader):
     """Headers for data-topic messages — includes sequence for dedup."""
 
     event_id: str = ""
@@ -66,7 +66,7 @@ class DataHeaders(KafkaHeaders):
 
 __all__ = [
     "Header",
-    "KafkaHeaders",
-    "EventHeaders",
-    "DataHeaders",
+    "KafkaHeader",
+    "EventHeader",
+    "DataHeader",
 ]

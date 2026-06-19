@@ -13,8 +13,8 @@ from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.headers import EventHeaders, Header
-from tradingcz.sdk.transport.keys import KafkaKey
+from tradingcz.sdk.transport.kafka_header import EventHeader, Header
+from tradingcz.sdk.transport.kafka_key import KafkaKey
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class RequestReply:
         self._seq += 1
 
         payload = self._serializer.serialize(req)
-        headers = EventHeaders(
+        headers = EventHeader(
             event_type=mt,
             source_app=self._service_id,
             event_id=event_id,

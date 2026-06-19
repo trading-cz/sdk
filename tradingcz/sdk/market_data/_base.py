@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 
-from tradingcz.sdk.transport.topics import TopicAdmin, TopicRegistry
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
 from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
@@ -20,7 +20,7 @@ from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import Broker, EventType, MarketDataType, DataRequestType, AssetType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
-from tradingcz.sdk.transport.headers import Header
+from tradingcz.sdk.transport.kafka_header import Header
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ class BaseDataClient:
         self,
         rr: RequestReply,
         settings: KafkaSettings,
-        topics: TopicRegistry,
+        topics: KafkaTopicRegistry,
         service_id: str,
         broker: Broker = Broker.ALPACA,
         *,
@@ -228,7 +228,7 @@ class BaseDataClient:
 
         logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
-        await TopicAdmin.ensure(self._settings, resp.data_topic)
+        await KafkaTopicAdmin.ensure(self._settings, resp.data_topic)
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
@@ -296,7 +296,7 @@ class BaseDataClient:
 
         self._validate_response(resp, DataRequestType.STREAM)
 
-        await TopicAdmin.ensure(self._settings, resp.data_topic)
+        await KafkaTopicAdmin.ensure(self._settings, resp.data_topic)
         consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
 
         async def _consume() -> AsyncIterator[T]:

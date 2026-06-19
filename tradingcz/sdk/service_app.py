@@ -21,7 +21,7 @@ from tradingcz.sdk.messaging.health_publisher import HealthPublisher
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.topics import TopicAdmin, TopicRegistry
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class ServiceApp:
 
         # Set by start()
         self.transport: KafkaTransport | None = None
-        self.topics: TopicRegistry | None = None
+        self.topics: KafkaTopicRegistry | None = None
         self.events_producer: TransportProducer | None = None
         self.events_topic: str = ""
         self._faf: FireAndForget | None = None
@@ -63,9 +63,9 @@ class ServiceApp:
 
     async def start(self) -> None:
         """Initialize topics, events producer, health."""
-        self.topics = TopicRegistry(env=self._env)
+        self.topics = KafkaTopicRegistry(env=self._env)
         self.events_topic = self.topics.events.name
-        await TopicAdmin.ensure_from_config(self._kafka, self.topics.events)
+        await KafkaTopicAdmin.ensure_from_config(self._kafka, self.topics.events)
         self.events_producer = TransportProducer(self._kafka)
 
         self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)

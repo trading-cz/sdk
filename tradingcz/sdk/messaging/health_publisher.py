@@ -10,7 +10,7 @@ import logging
 
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
-from tradingcz.sdk.transport.keys import KafkaKey
+from tradingcz.sdk.transport.kafka_key import KafkaKey
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 
 logger = logging.getLogger(__name__)

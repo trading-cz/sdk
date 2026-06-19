@@ -2,7 +2,7 @@
 
 Two send methods:
 - ``send()``       — raw bytes + headers (any topic)
-- ``send_event()`` — typed model with auto EventHeaders + KafkaKey (event topic)
+- ``send_event()`` — typed model with auto EventHeader + KafkaKey (event topic)
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from pydantic import BaseModel
 from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.headers import EventHeaders
-from tradingcz.sdk.transport.keys import KafkaKey
+from tradingcz.sdk.transport.kafka_header import EventHeader
+from tradingcz.sdk.transport.kafka_key import KafkaKey
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,11 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
         await self._producer.send(self._topic, payload, key=key, headers=headers)
 
     # ------------------------------------------------------------------
-    # Typed send — event topic, auto-builds EventHeaders + KafkaKey
+    # Typed send — event topic, auto-builds EventHeader + KafkaKey
     # ------------------------------------------------------------------
 
     async def send_event(self, message: BaseModel, *, event_type: EventType, event_id: str, key: str = "") -> None:
-        headers = EventHeaders(event_type=event_type, source_app=self._service_id, event_id=event_id).to_headers()
+        headers = EventHeader(event_type=event_type, source_app=self._service_id, event_id=event_id).to_headers()
         if not key:
             key = KafkaKey(value=f"{event_type}:{self._service_id}:{event_id}").to_kafka()
         payload = self._serializer.serialize(message)

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 
 logger = logging.getLogger(__name__)

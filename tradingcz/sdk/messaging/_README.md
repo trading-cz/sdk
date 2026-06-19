@@ -94,7 +94,7 @@ async with RequestReply(channel, service_id="my-service") as rr:
 ```python
 from tradingcz.sdk.messaging import EventRouter
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
 router = EventRouter(channel)  # auto_commit=True by default, group_suffix="router"
 

@@ -8,7 +8,7 @@ from confluent_kafka import TopicPartition
 from confluent_kafka.aio import AIOConsumer
 
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 

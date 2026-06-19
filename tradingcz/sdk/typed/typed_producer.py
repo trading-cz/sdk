@@ -1,7 +1,7 @@
 """TypedProducer — publish typed Pydantic models via TransportProducer (Layer 2).
 
 Layer 2 does pure type conversion: ``BaseModel``↔``bytes``,
-``KafkaKey``↔``str``, ``KafkaHeaders``↔``dict[str, str]``.
+``KafkaKey``↔``str``, ``KafkaHeader``↔``dict[str, str]``.
 No business logic — key and headers are mandatory, built by the caller (Layer 3).
 
 See ``typed/_README.md`` for usage examples.
@@ -15,8 +15,8 @@ from pydantic import BaseModel
 
 from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.transport.transport_producer import TransportProducer
-from tradingcz.sdk.transport.headers import KafkaHeaders
-from tradingcz.sdk.transport.keys import KafkaKey
+from tradingcz.sdk.transport.kafka_header import KafkaHeader
+from tradingcz.sdk.transport.kafka_key import KafkaKey
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class TypedProducer:
         value: BaseModel,
         *,
         key: KafkaKey,
-        headers: KafkaHeaders,
+        headers: KafkaHeader,
     ) -> None:
         """Publish a typed model to Kafka.
 

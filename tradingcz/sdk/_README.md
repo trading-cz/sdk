@@ -15,7 +15,7 @@ async with ServiceApp(service_id="my-service", env="dev", health_interval=300) a
     # ── Provided by ServiceApp ──────────────────────────────────────
     # svc.events_channel   — KafkaChannel for the events topic
     # svc.transport        — KafkaTransport (shared producer, channel cache)
-    # svc.topics           — TopicRegistry (resolved topic names)
+    # svc.topics           — KafkaTopicRegistry (resolved topic names)
     # svc.source_app       — service_id (used in Kafka headers)
 
     # ── Fire-and-forget publish ─────────────────────────────────────

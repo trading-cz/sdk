@@ -17,8 +17,8 @@ from tradingcz.sdk.exceptions import MessageTypeError, SdkError
 from tradingcz.sdk.serialization.json import JsonCodec
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.transport_consumer import TransportConsumer
-from tradingcz.sdk.transport.headers import Header
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_header import Header
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 

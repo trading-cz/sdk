@@ -24,9 +24,9 @@ Direct Kafka communication primitives. Bytes in, bytes out. No typing, no serial
 | `TransportProducer` | Async producer — send raw bytes, flush, track delivery errors |
 | `TransportConsumer` | Async consumer — poll, iterate, commit offsets, handle corrupt messages |
 | `KafkaMessage` | Pure data: `payload`, `key`, `headers`, `offset`, `partition`, `topic` |
-| `TopicAdmin` | Creates Kafka topics via Admin API with class-level cache |
-| `TopicRegistry` / `TopicConfig` | Environment-scoped topic name/config registry |
-| `Header` / `EventHeaders` / `DataHeaders` | Canonical header keys and typed header models |
+| `KafkaTopicAdmin` | Creates Kafka topics via Admin API with class-level cache |
+| `KafkaTopicRegistry` / `KafkaTopicConfig` | Environment-scoped topic name/config registry |
+| `Header` / `EventHeader` / `DataHeader` | Canonical header keys and typed header models |
 | `KafkaKey` | Routing key builder for Kafka partitions |
 | `DedupFilter` | In-memory sequence-number deduplication |
 
@@ -99,11 +99,11 @@ messages that came from this session — and only while the session is active
 ## KafkaChannel — send (shared producer) + create sessions
 
 ```python
-from tradingcz.sdk.transport import KafkaChannel, EventHeaders, KafkaKey
+from tradingcz.sdk.transport import KafkaChannel, EventHeader, KafkaKey
 from tradingcz.sdk.models.enums.event import EventType
 
 # SEND — shared Producer, async-safe via run_in_executor:
-headers = EventHeaders(
+headers = EventHeader(
     event_type=EventType.DATA_REQUEST,
     source_app="my-service",
     event_id="req-001",
@@ -208,7 +208,7 @@ await transport.close()  # flush producer, close channels
 ## Headers
 
 ```python
-from tradingcz.sdk.transport import Header, EventHeaders, DataHeaders
+from tradingcz.sdk.transport import Header, EventHeader, DataHeader
 
 # Canonical keys:
 Header.EVENT_TYPE   # "event_type"
@@ -219,12 +219,12 @@ Header.BROKER       # "broker"
 Header.SOURCE       # "source"
 
 # Event-topic headers:
-eh = EventHeaders(event_type=EventType.DATA_REQUEST, source_app="ingestion", event_id="abc-123")
+eh = EventHeader(event_type=EventType.DATA_REQUEST, source_app="ingestion", event_id="abc-123")
 wire = eh.to_kafka()                         # → dict[str, str]
-parsed = EventHeaders.from_kafka(wire)       # → EventHeaders instance
+parsed = EventHeader.from_kafka(wire)       # → EventHeader instance
 
 # Data-topic headers (includes sequence for dedup):
-dh = DataHeaders(event_type=EventType.BAR, source_app="ingestion", broker="alpaca", symbol="AAPL", sequence=42)
+dh = DataHeader(event_type=EventType.BAR, source_app="ingestion", broker="alpaca", symbol="AAPL", sequence=42)
 wire = dh.to_kafka()
 ```
 

@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from tradingcz.sdk.messaging.router import EventRouter
 from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
 logger = logging.getLogger(__name__)
 

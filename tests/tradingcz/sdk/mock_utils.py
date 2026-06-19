@@ -5,7 +5,7 @@ test files don't need to re-implement mock consumers, producers, or helpers.
 
 Usage::
 
-    from tests.tradingcz.sdk.mock_utils import MockConsumer, KafkaSettings, settings
+    from tests.tradingcz.sdk.mock_utils import MockConsumer, KafkaSettings, kafka_settings
 
     consumer = MockConsumer(
         KafkaMessage(payload=b'{"x":1}', key="", headers={"event_type": "svc.lifecycle"}, offset=0, partition=0, topic="events"),
@@ -20,12 +20,12 @@ Usage::
 from __future__ import annotations
 
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.message import KafkaMessage
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
 
 # ── Settings factory ────────────────────────────────────────────────────────
 
-def settings() -> KafkaSettings:
+def kafka_settings() -> KafkaSettings:
     """Create KafkaSettings with defaults suitable for unit tests (no real broker)."""
     return KafkaSettings(bootstrap_servers="localhost:9092", consumer_group="test")
 
@@ -87,4 +87,4 @@ class MockConsumer:
         self._committed.append(msg)
 
 
-__all__ = ["MockConsumer", "KafkaSettings", "settings"]
+__all__ = ["MockConsumer", "KafkaSettings", "kafka_settings"]
