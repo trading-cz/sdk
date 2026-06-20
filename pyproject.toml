@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.13",
     "pydantic-settings>=2.14",
-    "confluent-kafka>=2.14.0",
+    "confluent-kafka>=2.14.2",
 ]
 
 [project.optional-dependencies]
