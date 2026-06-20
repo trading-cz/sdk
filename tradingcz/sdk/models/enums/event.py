@@ -147,8 +147,21 @@ class Broker(StrEnum):
 
 
 class LifecycleEventType(StrEnum):
-    """``LifecycleEvent.type`` — service health/lifecycle transitions."""
+    """``LifecycleEvent.type`` — service health/lifecycle transitions.
 
-    UP = "up"
+    Every service follows this sequence::
+
+        INITIALIZING → READY → HEARTBEAT (periodic) → DOWN
+
+    * INITIALIZING — service is starting, resources being set up
+    * READY — service is fully initialized, heartbeat begins
+    * HEARTBEAT — periodic liveness signal (every 5 min by default)
+    * DOWN — graceful shutdown
+    * EXPIRED — monitor-internal, not a wire event (TTL timeout)
+    """
+
+    INITIALIZING = "initializing"
+    READY = "ready"
     HEARTBEAT = "heartbeat"
     DOWN = "down"
+    EXPIRED = "expired"  # monitor-internal, not sent on the wire

@@ -17,7 +17,7 @@ class CorporateActionsClient:
 
     Usage::
 
-        async with TradingApp(service_id="risk-checker") as app:
+        async with ServiceApp(service_id="risk-checker") as app:
             divs = await app.corporate_actions.dividends(["AAPL"], days=365)
             splits = await app.corporate_actions.splits(["AAPL"], days=365)
     """

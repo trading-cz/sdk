@@ -1,5 +1,7 @@
 from uuid import UUID, uuid4
+
 from pydantic import BaseModel, Field
+
 from tradingcz.sdk.models.enums.event import OrderRequest, StrategyType
 
 

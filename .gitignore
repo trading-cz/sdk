@@ -24,7 +24,7 @@ megalinter-reports/
 .venv/
 venv/
 ENV/
-
+docs
 # IDE
 .idea/
 .vscode/

@@ -2,16 +2,17 @@
 
 Usage::
 
-    class KafkaTransport:
+    class TransportProducer:
         _producer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))
 
-        def channel(self, name):
+        def send(self, name, payload):
             producer = self._producer  # initialized on first access
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 
 class Lazy[T]:
@@ -22,7 +23,7 @@ class Lazy[T]:
     bypass the descriptor entirely.
     """
 
-    def __init__(self, factory: Callable[[object], T]) -> None:
+    def __init__(self, factory: Callable[[Any], T]) -> None:
         self._factory = factory
         self._name: str = ""  # set by __set_name__
 

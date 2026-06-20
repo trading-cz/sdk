@@ -1,103 +1,95 @@
 # trading-sdk
 
-Shared SDK for the trading-cz platform — typed Kafka messaging, market data clients, and strategy tooling.
+Shared SDK for the trading-cz platform — typed Kafka messaging, market data
+clients, health monitoring, and strategy tooling.  Every service in the
+platform (ingestion, executor, risk, simple-strategy) is built on this SDK.
 
-## Structure
-
-```
-tradingcz/sdk/
-├── service_app.py       # ServiceApp — base for ALL services (transport, health, shutdown)
-├── trading_app.py       # TradingApp — batteries-included strategy entry point
-├── exceptions.py        # SdkError hierarchy
-├── logging.py           # setup_logging(), LokiJSONFormatter
-│
-├── market_data/         # StockDataClient, OptionsDataClient, CorporateActionsClient, TimeKeeper
-├── account/             # BalanceClient, OrderClient, PositionClient, SignalPublisher
-├── health/              # HealthMonitor — track other services' liveness
-├── indicators/          # Technical indicators (calculate_atr, …)
-├── lang/                # Registry, Retry — language-level utilities
-│
-├── models/              # Pydantic models — enums, events, market data, orders
-├── transport/           # KafkaChannel, KafkaTransport, KafkaSettings (internal)
-├── messaging/           # TypedProducer/Consumer, RequestReply, EventRouter, FireAndForget
-└── serialization/       # JsonCodec, JsonSerializer, Serializer/Deserializer protocol
-```
-
-## Quickstart
-
-### Strategy (consume data, publish signals)
-
-```python
-from tradingcz.sdk import TradingApp
-from tradingcz.sdk.market_data import StockDataClient
-from tradingcz.sdk.indicators import calculate_atr
-
-async with TradingApp(service_id="my-strategy") as app:
-    # Historical data
-    bars = await app.stock.bars(["AAPL"], days=30)
-
-    # Streaming (context manager = guaranteed unsubscribe)
-    async with app.stock.stream_quotes(["AAPL"]) as stream:
-        async for quote in stream:
-            ...
-
-    # Account state
-    balance = await app.balance.get_balance()
-    positions = await app.positions.get_positions()
-
-    # Publish signal
-    await app.signals.publish(signal, event_id="abc-123")
-```
-
-### Provider (ingestion, executor)
-
-```python
-import asyncio
-from tradingcz.sdk import ServiceApp
-from tradingcz.sdk.health import HealthMonitor
-from tradingcz.sdk.messaging import EventRouter
-from tradingcz.sdk.models.events import DataRequest, DataResponse
-from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.message import KafkaMessage
-
-
-async def my_handler(request: DataRequest, raw: KafkaMessage) -> None:
-    """Process a DataRequest and publish a DataResponse."""
-    source_app = raw.headers.get("source_app", "(unknown)")
-    print(f"Received {request.request_id} from {source_app} "
-          f"for symbols={request.symbols}")
-
-    # ... fetch data, compute ...
-
-    # Publish response via the service app
-    response = DataResponse(
-        request_id=request.request_id,
-        symbols=request.symbols,
-        bars=[],  # your data here
-    )
-    # Usually you'd call: await svc.publish_event(response, ...)
-
-
-async with ServiceApp(service_id="ingestion", env="dev", health_interval=300) as svc:
-    router = EventRouter(svc.events_channel)
-    router.on(EventType.DATA_REQUEST, DataRequest, handler=my_handler)
-    await router.run()
-```
+Requires **Python ≥ 3.14**.
 
 ## Install
 
-Requires **Python ≥ 3.14**, Kafka broker (default: `localhost:9092`).
+```bash
+pip install trading-sdk
+```text
+
+With optional dev tooling:
 
 ```bash
-# Install from GitHub release tag
-pip install "trading-sdk @ git+https://github.com/trading-cz/sdk@v0.1.7"
+pip install trading-sdk[dev]      # pytest, ruff, mypy
+```text
 
-# Uninstall
+To uninstall:
+
+```bash
 pip uninstall trading-sdk
+```text
 
-# Or add to pyproject.toml dependencies:
-#   "trading-sdk @ git+https://github.com/trading-cz/sdk@v0.1.7",
+## What it does
 
-# Dev (editable install from local checkout)
-pip install -e /path/to/sdk
-```
+| Capability | Where |
+| ---------- | ----- |
+| **Kafka transport** — produce/consume raw bytes, manage consumer groups, commit offsets | `transport/` |
+| **Typed messaging** — serialize/deserialize Pydantic models, header-based dispatch | `typed/` |
+| **Messaging patterns** — request/reply, fire-and-forget, event routing, startup replay | `messaging/` |
+| **Application wiring** — one-line lifecycle (health, shutdown, topic admin) | `service_app.py` |
+| **Market data clients** — bars, quotes, streaming, options, corporate actions | `market_data/`, `account/` |
+| **Shared models** — enums, events, order types, indicators | `models/`, `indicators/` |
+
+## Architecture
+
+Four layers, each depends only on the one below it:
+
+```text
+┌─────────────────────────────────────────┐
+│  ServiceApp  (+ BrokerScope)            │  ← Layer 4: Application wiring
+├─────────────────────────────────────────┤
+│  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
+├─────────────────────────────────────────┤
+│  TypedProducer / TypedConsumer          │  ← Layer 2: Typed wrappers
+├─────────────────────────────────────────┤
+│  TransportProducer / TransportConsumer  │  ← Layer 1: Raw Kafka transport
+└─────────────────────────────────────────┘
+```text
+
+Detailed docs live in each package:
+
+| Layer | Readme |
+| ----- | ------ |
+| L1 — Transport | [`transport/_README.md`](tradingcz/sdk/transport/_README.md) |
+| L2 — Typed | [`typed/_README.md`](tradingcz/sdk/typed/_README.md) |
+| L3 — Messaging | [`messaging/_README.md`](tradingcz/sdk/messaging/_README.md) |
+| L4 — Application | [`_README.md`](tradingcz/sdk/_README.md) |
+
+## Quick start
+
+```python
+from tradingcz.sdk import ServiceApp
+
+async with ServiceApp(service_id="my-app", env="dev") as svc:
+    # Publish events (fire-and-forget)
+    await svc.publish_event(model, message_type=EventType.DATA_READY, event_id="evt-001")
+
+    # Consume with EventRouter (L3)
+    router = EventRouter(svc.events_topic, svc.kafka_settings, group_suffix="worker")
+    await router.start()
+
+    await svc.run_until_shutdown(tasks)
+```text
+
+## Naming conventions
+
+- **Layer files**: `snake_case` — `fire_and_forget.py`, `request_reply.py`
+- **Class names**: `PascalCase` — `EventRouter`, `FireAndForget`, `ReplayConsumer`
+- **Layer 3 classes**: `NounPhrase` describing the pattern — `EventRouter`, `RequestReply`
+- **Private helpers**: `_LeadingUnderscore` — `_Registration`, `_BrokerScope`
+- **`async with`** for objects with start/stop lifecycle
+- **`async for`** for consumers that auto-close on loop exit
+
+## Tests
+
+Smoke tests live in the [`testing`](https://github.com/trading-cz/testing) repository.
+Local unit tests:
+
+```bash
+pytest tests/ test_service_app_smoke.py -v
+```text

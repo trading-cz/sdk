@@ -1,28 +1,17 @@
-"""Typed messaging layer on top of transport."""
+"""Messaging patterns — Layer 3 of the SDK architecture.
 
-from tradingcz.sdk.messaging.pubsub import (
-    TypedConsumer,
-    TypedParser,
-    TypedProducer,
-    make_market_headers,
-    stream_producer,
-)
-from tradingcz.sdk.messaging.recovery import RecoveryReader
-from tradingcz.sdk.messaging.request_reply import RequestReply, RequestReplyClient
-from tradingcz.sdk.messaging.router import EventRouter
+Built on top of :mod:`tradingcz.sdk.typed` (Layer 2) and
+:mod:`tradingcz.sdk.transport` (Layer 1).
+"""
+
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.messaging.health_publisher import HealthPublisher
+from tradingcz.sdk.messaging.recovery import ReplayConsumer
+from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.messaging.router import EventRouter
 
 __all__ = [
-    "TypedProducer",
-    "TypedConsumer",
-    "TypedParser",
     "RequestReply",
-    "RequestReplyClient",
     "EventRouter",
-    "RecoveryReader",
+    "ReplayConsumer",
     "FireAndForget",
-    "HealthPublisher",
-    "make_market_headers",
-    "stream_producer",
 ]

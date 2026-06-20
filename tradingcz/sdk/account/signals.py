@@ -26,7 +26,7 @@ class SignalPublisher:
             "Signal published: strategy=%s orders=%d event_id=%s",
             signal.strategy_type, len(signal.orders), event_id,
         )
-        await self._faf.send_event(
+        await self._faf.send(
             signal,
             event_type=EventType.TRADING_SIGNAL,
             event_id=event_id,

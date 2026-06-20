@@ -4,13 +4,14 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from types import TracebackType
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.messaging.pubsub import TypedParser
-from tradingcz.sdk.transport.channel import KafkaChannel
-from tradingcz.sdk.transport.message import KafkaMessage
 from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.transport.kafka_message import KafkaMessage
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +30,122 @@ class _Registration[T: BaseModel]:
 class EventRouter:
     """Single Kafka consumer.  Route messages to registered async handlers.
 
-    One instance per ``KafkaChannel``.  All handlers share the same
+    One instance per topic/consumer-group.  All handlers share the same
     consumer — no duplicate Kafka connections.
 
-    Registration is done via :meth:`on` (chainable) before calling
-    :meth:`run`.  Calling ``on`` after ``run`` has started has no effect
-    on the running loop (not thread-safe).
+    Args:
+        topic: Kafka topic to consume from.
+        settings: Kafka connection settings.
+        auto_commit: When ``True`` (default), the router commits each
+            message's offset after the handler completes successfully.
+            When ``False``, the handler is responsible for calling
+            ``await router.commit(raw)`` explicitly.
+        on_error: Optional async callback for undispatchable messages.
+        group_suffix: Appended to consumer group id for isolation.
+        auto_offset_reset: Override :attr:`KafkaSettings.auto_offset_reset`
+            for this consumer only.  ``None`` (default) uses the global setting.
+        poll_timeout_ms: Override :attr:`KafkaSettings.consumer_poll_timeout_ms`
+            for this consumer only.  ``None`` uses the global setting.
+        batch_size: Override :attr:`KafkaSettings.consumer_batch_size`
+            for this consumer only.  ``None`` uses the global setting.
+
+    **Offset Commit — Two Modes**
+
+    *Mode 1 — Router auto-commit (default)*::
+
+        router = EventRouter(topic, settings, group_suffix="signals", auto_commit=True)
+
+        @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
+        async def on_signal(model, raw):
+            await place_order(model)
+        # Router commits offset after handler returns successfully.
+        # Handler raises → offset NOT committed → re-delivered.
+
+    *Mode 2 — Manual commit (handler controls when)*::
+
+        router = EventRouter(topic, settings, group_suffix="executor", auto_commit=False)
+
+        @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
+        async def on_request(model, raw):
+            await db.save(model)          # persist first
+            await router.commit(raw)      # commit offset via router
+            await submit_to_broker(model) # fire-and-forget
+
+    Commit is owned by the router (via :class:`TypedConsumer` →
+    :class:`TransportConsumer`).  Use :meth:`EventRouter.commit`, not
+    :class:`KafkaMessage` (which is a pure-data DTO with no commit capability).
     """
 
-    def __init__(self, channel: KafkaChannel) -> None:
-        self._channel = channel
+    def __init__(
+        self,
+        topic: str,
+        settings: KafkaSettings,
+        *,
+        auto_commit: bool = True,
+        on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
+        group_suffix: str,
+        auto_offset_reset: str | None = None,
+        poll_timeout_ms: int | None = None,
+        batch_size: int | None = None,
+    ) -> None:
+        self._topic = topic
+        self._settings = settings
+        self._auto_commit = auto_commit
+        self._on_error = on_error
+        self._group_suffix = group_suffix
+        self._auto_offset_reset = auto_offset_reset
+        self._poll_timeout_ms = poll_timeout_ms
+        self._batch_size = batch_size
         self._handlers: list[_Registration] = []
+        self._consumer: TypedConsumer | None = None
+        self._run_task: asyncio.Task[None] | None = None
+
+    # ── Lifecycle ──────────────────────────────────────────────────────
+
+    async def start(self) -> None:
+        """Start consuming in a background task (idempotent).
+
+        Equivalent to calling :meth:`run` in a background task.
+        Use with :meth:`close` or as an ``async with`` context manager.
+        """
+        if self._run_task is not None:
+            return
+        self._run_task = asyncio.create_task(self.run(), name=f"router-{self._topic}")
+
+    async def close(self) -> None:
+        """Cancel the background consumer task and wait for it to finish."""
+        if self._run_task and not self._run_task.done():
+            self._run_task.cancel()
+            try:
+                await self._run_task
+            except asyncio.CancelledError:
+                pass
+        self._run_task = None
+        self._consumer = None
+
+    async def __aenter__(self) -> EventRouter:
+        await self.start()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        await self.close()
+
+    # ── Handler registration ───────────────────────────────────────────
+
+    async def commit(self, msg: KafkaMessage) -> None:
+        """Commit a message's offset. Available during :meth:`run` or after :meth:`start`.
+
+        Use when ``auto_commit=False`` and the handler needs explicit
+        control over when the offset is committed.
+        """
+        if self._consumer is None:
+            raise RuntimeError("commit() called outside run()")
+        await self._consumer.commit(msg)
 
     def on[T: BaseModel](
         self,
@@ -82,9 +188,9 @@ class EventRouter:
     async def run(self) -> None:
         """Consume the channel until cancelled.  Dispatch each message.
 
-        Internally builds a :class:`TypedParser` from all registered types.
+        Internally builds a :class:`TypedConsumer` from all registered types.
         Messages whose ``message_type`` header matches no registration are
-        silently skipped (TypedParser behaviour).
+        silently skipped (TypedConsumer multi-type behaviour).
 
         Raises:
             asyncio.CancelledError: propagated normally on task cancellation.
@@ -95,9 +201,9 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        parser = TypedParser(self._channel, types)
+        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
 
-        async for msg_type, model, raw in parser.parse():
+        async for msg_type, model, raw in self._consumer:
             for reg in self._handlers:
                 if reg.msg_type != msg_type:
                     continue
@@ -105,8 +211,36 @@ class EventRouter:
                     continue
                 if reg.spawn_task:
                     asyncio.create_task(
-                        reg.handler(model, raw),  # type: ignore[arg-type]
+                        self._dispatch(reg, model, raw),
                         name=f"router-{msg_type}",
                     )
                 else:
-                    await reg.handler(model, raw)  # type: ignore[arg-type]
+                    await self._dispatch(reg, model, raw)
+
+    async def _dispatch(
+        self,
+        reg: _Registration[BaseModel],
+        model: BaseModel,
+        raw: KafkaMessage,
+    ) -> None:
+        """Invoke a handler and optionally commit the offset.
+
+        On handler exception the offset is never committed (message
+        will be re-delivered on restart — at-least-once semantics).
+        When ``auto_commit`` is enabled the offset is committed after
+        a successful handler invocation via the underlying
+        :class:`TypedConsumer`.
+        """
+        try:
+            await reg.handler(model, raw)  # type: ignore[arg-type]
+        except Exception:
+            logger.exception(
+                "Handler %s failed for %s (offset=%d)",
+                reg.handler.__name__,
+                reg.msg_type,
+                raw.offset,
+            )
+            return  # never commit on failure
+
+        if self._auto_commit and self._consumer is not None:
+            await self._consumer.commit(raw)

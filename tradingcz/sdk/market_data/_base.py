@@ -2,7 +2,7 @@
 
 Application code never references this module directly.  Use
 ``StockDataClient``, ``OptionsDataClient``, or ``CorporateActionsClient``
-via ``TradingApp``.
+via ``ServiceApp``.
 """
 
 from __future__ import annotations
@@ -12,14 +12,21 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 
-from tradingcz.sdk.transport.topics import TopicRegistry
-from tradingcz.sdk.transport.dedup import DedupFilter
-from tradingcz.sdk.transport.transport import KafkaTransport
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import Broker, EventType, MarketDataType, DataRequestType, AssetType
+from tradingcz.sdk.models.enums.event import (
+    AssetType,
+    Broker,
+    DataRequestType,
+    EventType,
+    MarketDataType,
+)
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
-from tradingcz.sdk.transport.headers import Header
+from tradingcz.sdk.transport.dedup import DedupFilter
+from tradingcz.sdk.transport.kafka_header import Header
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
+from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -142,26 +149,27 @@ class BaseDataClient:
     Application code never references ``BaseDataClient`` directly.
 
     One ``BaseDataClient`` is created per broker scope inside
-    ``TradingApp.start()`` and shared by all data clients that use
+    ``ServiceApp.start()`` and shared by all data clients that use
     the same broker.
     """
 
     def __init__(
         self,
         rr: RequestReply,
-        transport: KafkaTransport,
-        topics: TopicRegistry,
+        settings: KafkaSettings,
+        topics: KafkaTopicRegistry,
         service_id: str,
-        broker: str = "alpaca",
+        broker: Broker = Broker.ALPACA,
         *,
         dedup_max_size: int = 100_000,
     ) -> None:
         self._rr = rr
-        self._transport = transport
+        self._settings = settings
         self._topics = topics
         self._service_id = service_id
         self._broker = broker
         self._dedup = DedupFilter(max_size=dedup_max_size)
+        self._topic_admin = KafkaTopicAdmin(settings)
         rr.register_type(EventType.DATA_READY, DataReady)
         rr.register_type(EventType.DATA_ERROR, DataError)
 
@@ -227,13 +235,14 @@ class BaseDataClient:
 
         logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
 
-        channel = await self._transport.channel(resp.data_topic)
+        await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
 
+        consumer = TransportConsumer(resp.data_topic, self._settings, "data")
         try:
-            async for msg in channel.receive():
+            async for msg in consumer:
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
@@ -249,7 +258,7 @@ class BaseDataClient:
                 if expected and count >= expected:
                     break
         finally:
-            await channel.close()
+            await consumer.close()
 
         for symbol_items in results.values():
             symbol_items.sort(key=lambda b: b.timestamp)  # type: ignore[attr-defined]
@@ -294,11 +303,12 @@ class BaseDataClient:
 
         self._validate_response(resp, DataRequestType.STREAM)
 
-        channel = await self._transport.channel(resp.data_topic)
+        await self._topic_admin.ensure(resp.data_topic)
+        consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
 
         async def _consume() -> AsyncIterator[T]:
             try:
-                async for msg in channel.receive():
+                async for msg in consumer:
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
                         msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
@@ -311,7 +321,7 @@ class BaseDataClient:
                         continue
                     yield parsed
             finally:
-                await channel.close()
+                await consumer.close()
 
         unsubscribe = _Unsubscribe(
             rr=self._rr,

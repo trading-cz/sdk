@@ -1,11 +1,12 @@
-"""StockDataClient — historical bars + streaming quotes/trades.
+"""StockDataClient — historical bars + latest quotes + streaming.
 
 One-time (returns ``dict``):
-  - ``bars()``     — OHLCV aggregates for a time range
+  - ``bars()``          — OHLCV aggregates for a time range
+  - ``latest_quotes()`` — most recent bid/ask per symbol (poll-friendly)
 
 Streaming (returns :class:`StreamHandle`):
-  - ``stream_quotes()``   — live bid/ask quotes, yields indefinitely
-  - ``stream_trades()``   — live trade ticks, yields indefinitely
+  - ``stream_quotes()`` — live bid/ask quotes, yields indefinitely
+  - ``stream_trades()`` — live trade ticks, yields indefinitely
 """
 
 # pylint: disable=protected-access
@@ -14,41 +15,15 @@ from __future__ import annotations
 
 import logging
 
+from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
-from tradingcz.sdk.models.market import Bar, StreamQuote, Trade
-
-from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
+from tradingcz.sdk.models.market import Bar, Quote, StreamQuote, Trade
 
 logger = logging.getLogger(__name__)
 
 
 class StockDataClient:
-    """Request and consume stock market data.
-
-    All methods are async and return typed domain objects.
-    No Kafka knowledge required.
-
-    **One-time data** (returns a plain ``dict``)::
-
-        bars = await app.stock.bars(["AAPL", "MSFT"], days=30)
-        for symbol, daily_bars in bars.items():
-            print(f"{symbol}: {len(daily_bars)} bars")
-
-    **Streaming data** (returns a :class:`StreamHandle`)::
-
-        # Bare iteration — cleanup on loop exit
-        async for quote in app.stock.stream_quotes(["AAPL"]):
-            print(quote.quote.bid_price)
-            if done:
-                break
-
-        # Context manager — guaranteed unsubscribe
-        async with app.stock.stream_quotes(["AAPL"]) as stream:
-            async for quote in stream:
-                ...
-    """
-
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
@@ -65,10 +40,33 @@ class StockDataClient:
             asset=AssetType.STOCK,
             data_type=MarketDataType.BARS,
             model_type=Bar,
-            timeframe=timeframe,
+            timeframe=Timeframe(timeframe),
             days=days,
             timeout=timeout,
         )
+
+    # -- Latest (poll-friendly, no streaming) ---------------------------
+
+    async def latest_quotes(self, symbols: list[str], *, timeout: float = 5.0) -> dict[str, Quote]:
+        """Request the most recent quote for each symbol.
+
+        Returns ``{symbol: Quote}`` — exactly one quote per symbol
+        (the latest available).  Use for polling-based price checks
+        where streaming every tick is unnecessary overhead.
+
+        Uses ``MarketDataType.LATEST_QUOTES`` — ingestion returns the
+        most recent bid/ask without opening a persistent stream.
+        """
+        logger.info("StockDataClient: latest_quotes symbols=%d", len(symbols))
+        result = await self._base._request_historical(
+            symbols=symbols,
+            asset=AssetType.STOCK,
+            data_type=MarketDataType.LATEST_QUOTES,
+            model_type=Quote,
+            timeout=timeout,
+        )
+        # _request_historical returns dict[symbol, list[T]] — flatten to one per symbol
+        return {sym: quotes[-1] for sym, quotes in result.items() if quotes}
 
     # -- Streaming -----------------------------------------------------
 

@@ -1,7 +1,4 @@
-"""Deduplication filter — skip duplicate messages by (source, sequence).
-
-Tracks seen (source_app, sequence) pairs. Memory bounded by max_size (LRU eviction).
-"""
+"""Deduplication filter — skip duplicate messages by (source_app, sequence)."""
 
 from __future__ import annotations
 
@@ -12,11 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class DedupFilter:
-    """Track seen (source_app, sequence) pairs to skip duplicates.
-
-    Sequence numbers are globally monotonic per (source_app, topic).
-    Max 100k entries, LRU eviction on overflow.
-    """
+    """Track seen (source_app, sequence) pairs. LRU eviction at max_size."""
 
     def __init__(self, max_size: int = 100_000) -> None:
         self._seen: OrderedDict[tuple[str, str], None] = OrderedDict()
@@ -25,7 +18,7 @@ class DedupFilter:
         self._total = 0
 
     def is_duplicate(self, source_app: str, sequence: str) -> bool:
-        """Return True if (source_app, sequence) already seen. Records pair as side effect."""
+        """Return True if pair already seen; record it as side effect."""
         self._total += 1
         key = (source_app, sequence)
         if key in self._seen:
@@ -42,19 +35,17 @@ class DedupFilter:
         return False
 
     def clear(self) -> None:
-        """Reset tracking state."""
+        """Reset all tracking state."""
         self._seen.clear()
         self._hits = 0
         self._total = 0
 
     @property
     def skipped_count(self) -> int:
-        """Duplicates skipped."""
         return self._hits
 
     @property
     def total_count(self) -> int:
-        """Total messages checked."""
         return self._total
 
 
