@@ -26,6 +26,11 @@ class HealthPublisher:
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._running = False
 
+    @property
+    def running(self) -> bool:
+        """Whether the heartbeat loop is active."""
+        return self._running
+
     async def initializing(self) -> None:
         """Emit INITIALIZING."""
         await self._emit(LifecycleEventType.INITIALIZING)

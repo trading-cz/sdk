@@ -116,11 +116,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._env = env
         self._health_interval = health_interval
         self._broker = broker
-
-        if kafka_settings is not None:
-            self._kafka = kafka_settings
-        else:
-            self._kafka = KafkaSettings(consumer_group=service_id)  # type: ignore[call-arg]
+        self._kafka = kafka_settings
         self._shutdown = asyncio.Event()
 
         # Feature flags
@@ -294,7 +290,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         """
         if not self._enable_signals:
             raise RuntimeError("Signal publisher not enabled. Set enable_signals=True.")
-        if not self._health._running:
+        if not self._health.running:
             raise RuntimeError("Call start() before accessing signal publisher.")
         if self._signals is None:
             self._signals = SignalPublisher(faf=self._faf)
@@ -373,7 +369,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
     async def publish_event(self, message: BaseModel, *, message_type: EventType, event_id: str = "", key: str = "") -> None:
         """Publish a typed message on the events channel (fire-and-forget)."""
-        if not self._health._running:
+        if not self._health.running:
             raise RuntimeError("Call start() before publish_event()")
         await self._faf.send(message, event_type=message_type, event_id=event_id, key=key)
 

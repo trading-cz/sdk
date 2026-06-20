@@ -28,6 +28,11 @@ class HealthMonitor:
         self._running = False
         self._sweep_task: asyncio.Task[None] | None = None
 
+    @property
+    def running(self) -> bool:
+        """Whether the monitor sweep loop is active."""
+        return self._running
+
     def on(
         self,
         state: LifecycleEventType | str,
