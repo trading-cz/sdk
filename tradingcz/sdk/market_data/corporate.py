@@ -10,7 +10,6 @@ from __future__ import annotations
 from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings  # for docstring example
 
 
 class CorporateActionsClient:
