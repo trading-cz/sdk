@@ -2,6 +2,10 @@
 
 Handles: Kafka transport, events producer, health/heartbeat, graceful shutdown.
 
+All clients are created lazily on first access — no feature flags needed.
+RequestReply + BaseDataClient are always started (one consumer group overhead
+is negligible for the platform scale).
+
 Lifecycle::
 
     async with ServiceApp(service_id="my-app", env="dev", health_interval=300) as svc:
@@ -11,6 +15,12 @@ Lifecycle::
             message_type=EventType.SERVICE_LIFECYCLE,
             event_id="evt-001",
         )
+
+        # ── Market data (lazy — created on first access) ──────────
+        bars = await svc.stock.bars(["AAPL"], days=30)
+
+        # ── Signals (fire-and-forget, no RequestReply needed) ─────
+        await svc.signals.publish(signal, event_id="evt-1")
 
         # ── Access Kafka primitives for TypedConsumer / EventRouter ─
         consumer = TypedConsumer(
@@ -31,10 +41,14 @@ import logging
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.account.balance import BalanceClient
-from tradingcz.sdk.account.orders import OrderClient
-from tradingcz.sdk.account.positions import PositionClient
 from tradingcz.sdk.account.signals import SignalPublisher
+
+# NOTE: PositionClient, BalanceClient, OrderClient are implemented
+# in the SDK but not yet backed by executor handlers. Disabled until
+# executor gains get_positions / get_balance / get_orders support.
+# from tradingcz.sdk.account.balance import BalanceClient
+# from tradingcz.sdk.account.orders import OrderClient
+# from tradingcz.sdk.account.positions import PositionClient
 from tradingcz.sdk.health.publisher import HealthPublisher
 from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
 from tradingcz.sdk.market_data._base import BaseDataClient
@@ -62,20 +76,18 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
     **Strategy usage** (market data + signals)::
 
-        async with ServiceApp(
-            service_id="my-strategy",
-            env="dev",
-            enable_stock=True,
-            enable_signals=True,
-        ) as app:
+        async with ServiceApp(service_id="my-strategy", env="dev") as app:
             bars = await app.stock.bars(["AAPL"], days=30)
             await app.signals.publish(signal, event_id="evt-1")
 
     **Multi-broker**::
 
-        async with ServiceApp(service_id="arb", env="dev", enable_stock=True) as app:
+        async with ServiceApp(service_id="arb", env="dev") as app:
             ibkr = app.with_broker("ibkr")
             ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
+
+    All clients are created lazily on first access — no feature flags needed.
+    RequestReply + BaseDataClient are always started in :meth:`start`.
 
     Args:
         service_id: Unique identifier for this instance.
@@ -86,14 +98,6 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
             ``consumer_group`` defaults to *service_id* when not
             explicitly set on the passed-in settings.
         broker: Default broker for data clients (default ``"alpaca"``).
-
-        enable_stock: Enable ``app.stock`` — bars, quotes, streaming (default ``False``).
-        enable_options: Enable ``app.options`` — option snapshots (default ``False``).
-        enable_corporate: Enable ``app.corporate_actions`` — dividends, splits (default ``False``).
-        enable_signals: Enable ``app.signals`` — publish trading signals (default ``False``).
-        enable_positions: Enable ``app.positions`` — query open positions (default ``False``).
-        enable_balance: Enable ``app.balance`` — query account balance (default ``False``).
-        enable_orders: Enable ``app.orders`` — query order status (default ``False``).
     """
 
     def __init__(
@@ -104,13 +108,6 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         health_interval: float = 300.0,
         kafka_settings: KafkaSettings | None = None,
         broker: str = "alpaca",
-        enable_stock: bool = False,
-        enable_options: bool = False,
-        enable_corporate: bool = False,
-        enable_signals: bool = False,
-        enable_positions: bool = False,
-        enable_balance: bool = False,
-        enable_orders: bool = False,
     ) -> None:
         self.service_id = service_id
         self._env = env
@@ -118,15 +115,6 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._broker = broker
         self._kafka = kafka_settings
         self._shutdown = asyncio.Event()
-
-        # Feature flags
-        self._enable_stock = enable_stock
-        self._enable_options = enable_options
-        self._enable_corporate = enable_corporate
-        self._enable_signals = enable_signals
-        self._enable_positions = enable_positions
-        self._enable_balance = enable_balance
-        self._enable_orders = enable_orders
 
         # ── Kafka transport + messaging (sync init) ──────────────────────
         self.topics = KafkaTopicRegistry(env=self._env)
@@ -140,53 +128,53 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._rr: RequestReply | None = None
         self._base: BaseDataClient | None = None
 
-        # Lazy client slots
+        # Lazy client slots — created on first access
         self._stock: StockDataClient | None = None
         self._options: OptionsDataClient | None = None
         self._corporate: CorporateActionsClient | None = None
         self._signals: SignalPublisher | None = None
-        self._positions: PositionClient | None = None
-        self._balance: BalanceClient | None = None
-        self._orders: OrderClient | None = None
+
+        # NOTE: Disabled until executor implements handlers for:
+        #   get_positions / get_balance / get_orders
+        # self._positions: PositionClient | None = None
+        # self._balance: BalanceClient | None = None
+        # self._orders: OrderClient | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Ensure topics exist, emit INITIALIZING + READY, start optional clients."""
+        """Ensure topics exist, emit INITIALIZING + READY, start RequestReply.
+
+        RequestReply + BaseDataClient are always created (single consumer
+        group overhead is negligible at platform scale).  Individual data
+        clients (stock, options, corporate, signals) are created lazily
+        on first access.
+        """
         await self._topic_admin.ensure_from_config(self.topics.events)
 
         await self._health.initializing()
+
+        # ── Request/Reply + BaseDataClient (always — cheap at our scale) ──
+        self._rr = RequestReply(
+            producer=self.events_producer,
+            topic=self.events_topic,
+            settings=self._kafka,
+            service_id=self.service_id,
+            group_suffix="svc-reply",
+        )
+        await self._rr.start()
+        self._base = BaseDataClient(
+            rr=self._rr,
+            settings=self._kafka,
+            topics=self.topics,
+            service_id=self.service_id,
+            broker=self._broker,  # type: ignore[arg-type]
+        )
+        logger.info("ServiceApp: RequestReply + BaseDataClient ready")
+
         await self._health.ready()
-
-        # ── Request/Reply + BaseDataClient (only if any feature needs it) ──
-        needs_rr = any([
-            self._enable_stock, self._enable_options, self._enable_corporate,
-            self._enable_positions, self._enable_balance, self._enable_orders,
-        ])
-        if needs_rr:
-            self._rr = RequestReply(
-                producer=self.events_producer,
-                topic=self.events_topic,
-                settings=self._kafka,
-                service_id=self.service_id,
-                group_suffix="svc-reply",
-            )
-            await self._rr.start()
-            self._base = BaseDataClient(
-                rr=self._rr,
-                settings=self._kafka,
-                topics=self.topics,
-                service_id=self.service_id,
-                broker=self._broker,  # type: ignore[arg-type]
-            )
-            logger.info("ServiceApp: RequestReply + BaseDataClient ready")
-
-        # ── Signal publisher (uses existing _faf; no RR needed) ──
-        if self._enable_signals:
-            logger.info("ServiceApp: signal publisher enabled")
-
         setup_shutdown_handlers(self._shutdown)
         logger.info("ServiceApp started: id=%s env=%s", self.service_id, self._env)
 
@@ -240,10 +228,9 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     def stock(self) -> StockDataClient:
         """Stock data client — bars, quotes, trades, streaming.
 
-        Requires ``enable_stock=True``.  Created lazily on first access.
+        Created lazily on first access.  Requires :meth:`start` to have
+        been called first.
         """
-        if not self._enable_stock:
-            raise RuntimeError("Stock client not enabled. Set enable_stock=True.")
         if self._base is None:
             raise RuntimeError("Call start() before accessing stock client.")
         if self._stock is None:
@@ -254,10 +241,9 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     def options(self) -> OptionsDataClient:
         """Options data client — snapshots.
 
-        Requires ``enable_options=True``.  Created lazily on first access.
+        Created lazily on first access.  Requires :meth:`start` to have
+        been called first.
         """
-        if not self._enable_options:
-            raise RuntimeError("Options client not enabled. Set enable_options=True.")
         if self._base is None:
             raise RuntimeError("Call start() before accessing options client.")
         if self._options is None:
@@ -268,10 +254,9 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     def corporate_actions(self) -> CorporateActionsClient:
         """Corporate actions client — dividends, splits.
 
-        Requires ``enable_corporate=True``.  Created lazily on first access.
+        Created lazily on first access.  Requires :meth:`start` to have
+        been called first.
         """
-        if not self._enable_corporate:
-            raise RuntimeError("Corporate actions client not enabled. Set enable_corporate=True.")
         if self._base is None:
             raise RuntimeError("Call start() before accessing corporate actions client.")
         if self._corporate is None:
@@ -286,57 +271,25 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     def signals(self) -> SignalPublisher:
         """Signal publisher — fire-and-forget trading signals.
 
-        Requires ``enable_signals=True``.  Created lazily on first access.
+        Created lazily on first access.  Uses the existing
+        :class:`FireAndForget` transport (no RequestReply needed).
         """
-        if not self._enable_signals:
-            raise RuntimeError("Signal publisher not enabled. Set enable_signals=True.")
-        if not self._health.running:
-            raise RuntimeError("Call start() before accessing signal publisher.")
         if self._signals is None:
             self._signals = SignalPublisher(faf=self._faf)
         return self._signals
 
-    @property
-    def positions(self) -> PositionClient:
-        """Position client — query open positions.
-
-        Requires ``enable_positions=True``.  Created lazily on first access.
-        """
-        if not self._enable_positions:
-            raise RuntimeError("Position client not enabled. Set enable_positions=True.")
-        if self._rr is None:
-            raise RuntimeError("Call start() before accessing position client.")
-        if self._positions is None:
-            self._positions = PositionClient(rr=self._rr)
-        return self._positions
-
-    @property
-    def balance(self) -> BalanceClient:
-        """Balance client — query account balance.
-
-        Requires ``enable_balance=True``.  Created lazily on first access.
-        """
-        if not self._enable_balance:
-            raise RuntimeError("Balance client not enabled. Set enable_balance=True.")
-        if self._rr is None:
-            raise RuntimeError("Call start() before accessing balance client.")
-        if self._balance is None:
-            self._balance = BalanceClient(rr=self._rr)
-        return self._balance
-
-    @property
-    def orders(self) -> OrderClient:
-        """Order client — query order status.
-
-        Requires ``enable_orders=True``.  Created lazily on first access.
-        """
-        if not self._enable_orders:
-            raise RuntimeError("Order client not enabled. Set enable_orders=True.")
-        if self._rr is None:
-            raise RuntimeError("Call start() before accessing order client.")
-        if self._orders is None:
-            self._orders = OrderClient(rr=self._rr)
-        return self._orders
+    # NOTE: PositionClient, BalanceClient, OrderClient are implemented
+    # in the SDK but not yet backed by executor handlers.
+    # Disabled until executor gains get_positions / get_balance / get_orders support.
+    #
+    # @property
+    # def positions(self) -> PositionClient: ...
+    #
+    # @property
+    # def balance(self) -> BalanceClient: ...
+    #
+    # @property
+    # def orders(self) -> OrderClient: ...
 
     # ------------------------------------------------------------------
     # Multi-broker
@@ -348,7 +301,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         Creates data clients that talk to *broker* instead of the
         default broker.  Useful for multi-broker strategies::
 
-            async with ServiceApp(service_id="arb", env="dev", enable_stock=True) as app:
+            async with ServiceApp(service_id="arb", env="dev") as app:
                 ibkr = app.with_broker("ibkr")
                 ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
         """
