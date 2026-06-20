@@ -157,9 +157,11 @@ class LifecycleEventType(StrEnum):
     * READY — service is fully initialized, heartbeat begins
     * HEARTBEAT — periodic liveness signal (every 5 min by default)
     * DOWN — graceful shutdown
+    * EXPIRED — monitor-internal, not a wire event (TTL timeout)
     """
 
     INITIALIZING = "initializing"
     READY = "ready"
     HEARTBEAT = "heartbeat"
     DOWN = "down"
+    EXPIRED = "expired"  # monitor-internal, not sent on the wire

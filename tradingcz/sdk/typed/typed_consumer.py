@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 class TypedConsumer:
-    """Iterate typed Pydantic models from a multi-type Kafka topic. """
-
     def __init__(
         self,
         topic: str,
@@ -34,10 +32,7 @@ class TypedConsumer:
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
-        group_suffix: str,
-        auto_offset_reset: str | None = None,
-        poll_timeout_ms: int | None = None,
-        batch_size: int | None = None,
+        group_suffix: str = "consumer",
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -45,9 +40,6 @@ class TypedConsumer:
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
-        self._auto_offset_reset = auto_offset_reset
-        self._poll_timeout_ms = poll_timeout_ms
-        self._batch_size = batch_size
         self._session: TransportConsumer | None = None
         self._deserializer = JsonDeserializer()
 
@@ -58,7 +50,7 @@ class TypedConsumer:
         await self._session.commit(msg)
 
     async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
+        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix)
         async for msg in self._session:
             try:
                 event_type, model = self._dispatch(msg)
@@ -73,11 +65,15 @@ class TypedConsumer:
     def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel]:
         event_type = msg.headers.get(Header.EVENT_TYPE, "")
         if not event_type:
-            raise MessageTypeError(f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})")
+            raise MessageTypeError(
+                f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})"
+            )
 
         model_type = self._types.get(event_type)
         if model_type is None:
-            raise MessageTypeError(f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})")
+            raise MessageTypeError(
+                f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})"
+            )
         return event_type, self._deserializer.deserialize(msg.payload, model_type=model_type)
 
     # ── Internals ────────────────────────────────────────────────────────
@@ -87,12 +83,23 @@ class TypedConsumer:
             await self._session.commit(msg)
 
     async def _notify_error(self, msg: KafkaMessage) -> None:
-        logger.error("Caught exception while processing message on %s (offset=%d key=%r)", self._topic, msg.offset, msg.key, exc_info=True)
+        logger.error(
+            "Caught exception while processing message on %s (offset=%d key=%r)",
+            self._topic,
+            msg.offset,
+            msg.key,
+            exc_info=True,
+        )
         if self._on_error is not None:
             try:
                 await self._on_error(msg)
             except Exception:
-                logger.warning("on_error callback raised for %s (offset=%d)", self._topic, msg.offset, exc_info=True)
+                logger.warning(
+                    "on_error callback raised for %s (offset=%d)",
+                    self._topic,
+                    msg.offset,
+                    exc_info=True,
+                )
 
 
 __all__ = ["TypedConsumer"]
