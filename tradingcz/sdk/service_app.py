@@ -1,10 +1,12 @@
 """ServiceApp — common base for ALL trading services.
 
-Handles: Kafka transport, events producer, health/heartbeat, graceful shutdown.
+Handles: Kafka transport, events producer, health/lifecycle, graceful shutdown.
 
 Lifecycle::
 
     async with ServiceApp(service_id="my-app", env="dev", health_interval=300) as svc:
+        # start() already emitted INITIALIZING → READY, heartbeat is running
+
         # ── Publish events (fire-and-forget) ──────────────────────
         await svc.publish_event(
             some_model,
@@ -22,6 +24,11 @@ Lifecycle::
 
         # ── Run until SIGTERM/SIGINT, then cancel tasks ───────────
         await svc.run_until_shutdown(router_task)
+    # close() emits DOWN, stops heartbeat
+
+For services with custom init (e.g. recovery), override
+``_on_after_initializing()`` — it runs between ``INITIALIZING`` and
+``READY``.
 """
 
 from __future__ import annotations
@@ -41,7 +48,7 @@ from tradingcz.sdk.market_data.corporate import CorporateActionsClient
 from tradingcz.sdk.market_data.options import OptionsDataClient
 from tradingcz.sdk.market_data.stock import StockDataClient
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.messaging.health_publisher import HealthPublisher
+from tradingcz.sdk.health import HealthPublisher
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.transport_producer import TransportProducer
@@ -165,7 +172,9 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
         self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
         self._health = HealthPublisher(self._faf, self.service_id, interval=self._health_interval)
-        await self._health.start()
+
+        # ── Signal: initializing ──────────────────────────────────────
+        await self._health.initializing()
 
         # ── Request/Reply + BaseDataClient (only if any feature needs it) ──
         needs_rr = any([
@@ -195,12 +204,19 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
             logger.info("ServiceApp: signal publisher enabled")
 
         setup_shutdown_handlers(self._shutdown)
+
+        # ── Hook for subclass custom init (e.g. recovery) ──────────
+        await self._on_after_initializing()
+
+        # ── Signal: ready, start heartbeat ─────────────────────────
+        await self._health.ready()
+
         logger.info("ServiceApp started: id=%s env=%s", self.service_id, self._env)
 
     async def close(self) -> None:
         """Stop health (emits 'down'), close RR, flush producer."""
         if self._health is not None:
-            await self._health.close()
+            await self._health.down()
         if self._rr is not None:
             await self._rr.close()
         if self.events_producer is not None:
@@ -208,6 +224,17 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         if self._topic_admin is not None:
             await self._topic_admin.close()
         logger.info("ServiceApp closed: id=%s", self.service_id)
+
+    async def _on_after_initializing(self) -> None:
+        """Override in subclasses for custom initialization.
+
+        Called after ``INITIALIZING`` is emitted but before ``READY``
+        and heartbeat start.  Use for recovery, external service
+        connections, or any init that must complete before the service
+        is considered ready.
+
+        Default implementation is a no-op.
+        """
 
     async def __aenter__(self) -> ServiceApp:
         await self.start()

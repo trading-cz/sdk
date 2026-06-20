@@ -44,18 +44,36 @@ class TestHealthMonitor:
         assert args[0] == EventType.SERVICE_LIFECYCLE
         assert args[1] == LifecycleEvent
 
-    # ── UP event ───────────────────────────────────────────────────────
+    # ── INITIALIZING event ──────────────────────────────────────────────
 
-    async def test_up_event_tracks_service(
+    async def test_initializing_event_tracks_service(
         self, monitor: HealthMonitor, raw_msg: MagicMock,
     ) -> None:
-        """UP event → service is tracked as alive, no on_down callback."""
+        """INITIALIZING event → service is tracked as alive, no on_down callback."""
         cb = AsyncMock()
         monitor.on_down(cb)
         await monitor.start()
 
         await monitor._on_event(
-            LifecycleEvent(service_id="s1", event=LifecycleEventType.UP), raw_msg,
+            LifecycleEvent(service_id="s1", event=LifecycleEventType.INITIALIZING), raw_msg,
+        )
+        assert "s1" in monitor._seen
+        cb.assert_not_called()
+
+        await monitor.stop()
+
+    # ── READY event ────────────────────────────────────────────────────
+
+    async def test_ready_event_tracks_service(
+        self, monitor: HealthMonitor, raw_msg: MagicMock,
+    ) -> None:
+        """READY event → service is tracked as alive, no on_down callback."""
+        cb = AsyncMock()
+        monitor.on_down(cb)
+        await monitor.start()
+
+        await monitor._on_event(
+            LifecycleEvent(service_id="s1", event=LifecycleEventType.READY), raw_msg,
         )
         assert "s1" in monitor._seen
         cb.assert_not_called()

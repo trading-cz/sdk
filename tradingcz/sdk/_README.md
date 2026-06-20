@@ -32,7 +32,7 @@ market-data / account clients.
 | Event publishing | ``await svc.publish_event(model, message_type=…, event_id=…)`` |
 | Kafka settings | ``svc.kafka_settings`` — use with EventRouter / TypedConsumer |
 | Resolved topic names | ``svc.events_topic``, ``svc.topics`` |
-| Health / heartbeat | Automatic ``UP`` → ``HEARTBEAT`` → ``DOWN`` |
+| Health / heartbeat | Automatic ``INITIALIZING`` → ``READY`` → ``HEARTBEAT`` → ``DOWN`` |
 | Graceful shutdown | ``await svc.run_until_shutdown(tasks)`` or ``await svc.wait_for_shutdown()`` |
 | Market data (opt-in) | ``svc.stock.bars(…)``, ``svc.stock.stream_quotes(…)`` |
 | Account (opt-in) | ``svc.positions.get_positions()``, ``svc.balance.get_balance()`` |
@@ -97,16 +97,18 @@ ServiceApp.__aenter__()
        ├─ KafkaTopicAdmin.ensure_from_config()
        ├─ TransportProducer
        ├─ FireAndForget
-       ├─ HealthPublisher.start()  →  emits UP, starts heartbeat
-       └─ RequestReply + BaseDataClient  (if any feature flag is on)
-           └─ Market data clients: stock, options, corporate_actions
-           └─ Account clients: positions, balance, orders
+       ├─ HealthPublisher.initializing()  →  emits INITIALIZING
+       ├─ RequestReply + BaseDataClient  (if any feature flag is on)
+       │    └─ Market data clients: stock, options, corporate_actions
+       │    └─ Account clients: positions, balance, orders
+       ├─ _on_after_initializing()        ←  subclass hook (recovery, etc.)
+       └─ HealthPublisher.ready()         →  emits READY, starts heartbeat
 
-... application runs ...
+... application runs (heartbeat every 5 min) ...
 
 ServiceApp.__aexit__()
   └─ close()
-       ├─ HealthPublisher.close()  →  emits DOWN, stops heartbeat
+       ├─ HealthPublisher.down()  →  emits DOWN, stops heartbeat
        ├─ RequestReply.close()  →  cancel listener, reject pending
        └─ TransportProducer.flush()
 ```

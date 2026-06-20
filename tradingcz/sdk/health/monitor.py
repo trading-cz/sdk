@@ -93,7 +93,7 @@ class HealthMonitor:
             if was_tracked:
                 logger.info("HealthMonitor: %s reported down", sid)
             await self._notify(sid)
-        else:  # up or heartbeat
+        else:  # initializing, ready, or heartbeat
             is_new = sid not in self._seen
             self._seen[sid] = time.monotonic()
             if is_new:

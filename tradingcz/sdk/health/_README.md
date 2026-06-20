@@ -1,13 +1,43 @@
-# health — Service Health Monitoring
+# health — Service Health (Lifecycle Publisher + Monitor)
 
-Track liveness of other services. Registers on a shared `EventRouter` — no separate Kafka consumer.
+Two sides of the same coin:
+
+| Class | Role | Key API |
+|-------|------|---------|
+| `HealthPublisher` | Emit lifecycle events for **this** service | `initializing()` → `ready()` → `down()` |
+| `HealthMonitor` | Track liveness of **other** services | `on_down(cb)`, `start()`, `stop()` |
+
+## HealthPublisher
+
+Publishes the standard lifecycle sequence on the event topic:
+
+```
+initializing()  → INITIALIZING
+ready()         → READY + heartbeat loop starts
+  … heartbeat every N seconds …
+down()          → DOWN + heartbeat loop stops
+```
+
+Built into `ServiceApp` automatically — apps don't create it directly.
+
+```python
+from tradingcz.sdk.health import HealthPublisher
+
+health = HealthPublisher(faf, "my-service", interval=300)
+await health.initializing()   # INITIALIZING
+# ... init / recovery ...
+await health.ready()          # READY + heartbeat starts
+# ... app runs ...
+await health.down()           # DOWN + heartbeat stops
+```
 
 ## HealthMonitor
 
 Consumes `SERVICE_LIFECYCLE` events from other services via a shared `EventRouter`.
+Tracks liveness — marks a service alive on `INITIALIZING`, `READY`, or `HEARTBEAT`.
 Two triggers fire the `on_down` callback:
 - Explicit `"down"` event (graceful shutdown)
-- No heartbeat for > `ttl` seconds (crash / partition)
+- No lifecycle event for > `ttl` seconds (crash / partition)
 
 ```python
 from tradingcz.sdk.health import HealthMonitor
@@ -30,4 +60,4 @@ await monitor.stop()
 ```
 
 > **Shares the EventRouter consumer** — no duplicate consumer groups.
-> The monitor registers a handler via `router.on(EventType.SERVICE_LIFECYCLE, ...)`.
+> The monitor registers a handler via ``router.on(EventType.SERVICE_LIFECYCLE, ...)``.

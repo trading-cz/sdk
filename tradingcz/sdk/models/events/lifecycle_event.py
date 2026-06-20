@@ -5,10 +5,14 @@ topic so the platform can track which services are running, detect
 crashes, and trigger cleanup actions (e.g., ingestion removes streaming
 subscriptions for services that went down).
 
-Event types:
-  - ``"up"``         — emitted once on ``ServiceApp.start()``
-  - ``"heartbeat"``  — emitted periodically (default every 5 minutes)
-  - ``"down"``       — emitted on ``ServiceApp.close()`` (graceful shutdown)
+Lifecycle sequence (managed by ``HealthPublisher`` via ``ServiceApp``)::
+
+    INITIALIZING → READY → HEARTBEAT (periodic, default 5 min) → DOWN
+
+- ``"initializing"`` — emitted early in ``ServiceApp.start()``
+- ``"ready"``       — emitted after all init is complete, heartbeat begins
+- ``"heartbeat"``   — periodic liveness signal
+- ``"down"``        — emitted on ``ServiceApp.close()`` (graceful shutdown)
 """
 
 from datetime import UTC, datetime

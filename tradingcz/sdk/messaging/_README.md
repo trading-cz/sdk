@@ -35,7 +35,7 @@ they never touch raw bytes or Kafka consumers directly.
 | `RequestReply` | Send a typed request, await a correlated typed response | `await rr.request(req, response_type=…)` |
 | `FireAndForget` | Send a typed message, no response expected | `await faf.send(msg, event_type=…, event_id=…)` |
 | `ReplayConsumer` | Replay a topic from the beginning until a sentinel | `async for … in consumer.replay(types, until=…)` |
-| `HealthPublisher` | Emit periodic `UP` / `HEARTBEAT` / `DOWN` events | `await health.start()` / `await health.close()` |
+| `HealthPublisher` | Emit `INITIALIZING` / `READY` / `HEARTBEAT` / `DOWN` | `await health.initializing()` / `ready()` / `down()` |
 
 > **TypedProducer, TypedConsumer** are Layer 2 — see [typed/_README.md](../typed/_README.md).
 
@@ -47,7 +47,7 @@ they never touch raw bytes or Kafka consumers directly.
 | Send a request and await a response (correlated by `event_id`) | `RequestReply` |
 | Fire off a message and forget about it | `FireAndForget` |
 | Rebuild in-memory state from the event log on startup | `ReplayConsumer` |
-| Let the platform know your service is alive | `HealthPublisher` |
+| Let the platform know your service is alive | `HealthPublisher` (in ``tradingcz.sdk.health``) |
 
 ## Common patterns
 
@@ -175,23 +175,20 @@ await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
 ```python
 from tradingcz.sdk.messaging import ReplayConsumer
 
-# 1. Publish sentinel
-await svc.publish_event(
-    LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.INITIALIZING),
-    message_type=EventType.SERVICE_LIFECYCLE,
-)
-
-# 2. Replay until sentinel
+# INITIALIZING sentinel is published automatically by ServiceApp.start().
+# Replay until your own INITIALIZING:
 consumer = ReplayConsumer(topic, settings)
 async for msg_type, model, raw in consumer.replay(
     types={str(EventType.DATA_REQUEST): DataRequest, …},
-    until=lambda mt, m: mt == str(EventType.SERVICE_LIFECYCLE) and m.event == "initializing",
+    until=lambda mt, m: (
+        mt == str(EventType.SERVICE_LIFECYCLE)
+        and m.service_id == svc.service_id
+        and m.event == LifecycleEventType.INITIALIZING
+    ),
 ):
     reconstruct_state(msg_type, model, raw.headers)
 
-# 3. Publish READY, start live EventRouter
-await svc.publish_event(
-    LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.READY),
-    message_type=EventType.SERVICE_LIFECYCLE,
-)
+# READY is published automatically by ServiceApp.start() after
+# _on_after_initializing() completes.  Override that hook for
+# custom init (e.g., recovery).
 ```
