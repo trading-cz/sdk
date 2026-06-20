@@ -132,19 +132,17 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._enable_balance = enable_balance
         self._enable_orders = enable_orders
 
-        # Set by start()
-        self.topics: KafkaTopicRegistry | None = None
-        self.events_producer: TransportProducer | None = None
-        self.events_topic: str = ""
-        self._faf: FireAndForget | None = None
-        self._topic_admin: KafkaTopicAdmin | None = None
+        # ── Kafka transport + messaging (sync init) ──────────────────────
+        self.topics = KafkaTopicRegistry(env=self._env)
+        self.events_topic = self.topics.events.name
+        self.events_producer = TransportProducer(self._kafka)
+        self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
+        self._health = HealthPublisher(self._faf, self.service_id, interval=self._health_interval)
+        self._topic_admin = KafkaTopicAdmin(self._kafka)
+
+        # Set by start() (async init)
         self._rr: RequestReply | None = None
         self._base: BaseDataClient | None = None
-
-        # Health publisher — created early so initializing() can be called sync.
-        # FireAndForget is wired later in start() via set_faf().
-        self._health = HealthPublisher(faf=None, service_id=service_id, interval=health_interval)
-        self._health.initializing()
 
         # Lazy client slots
         self._stock: StockDataClient | None = None
@@ -160,15 +158,10 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Initialize topics, events producer, health, and optional data/account clients."""
-        self.topics = KafkaTopicRegistry(env=self._env)
-        self.events_topic = self.topics.events.name
-        self._topic_admin = KafkaTopicAdmin(self._kafka)
+        """Ensure topics exist, emit INITIALIZING + READY, start optional clients."""
         await self._topic_admin.ensure_from_config(self.topics.events)
-        self.events_producer = TransportProducer(self._kafka)
 
-        self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
-        self._health.set_faf(self._faf)
+        await self._health.initializing()
         await self._health.ready()
 
         # ── Request/Reply + BaseDataClient (only if any feature needs it) ──

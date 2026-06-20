@@ -19,29 +19,21 @@ logger = logging.getLogger(__name__)
 class HealthPublisher:
     """Publish service lifecycle events.  See health/_README.md."""
 
-    def __init__(self, faf: FireAndForget | None = None, service_id: str = "", interval: float = 300.0) -> None:
+    def __init__(self, faf: FireAndForget, service_id: str, interval: float = 300.0) -> None:
         self._faf = faf
         self._service_id = service_id
         self._interval = max(interval, 1.0)
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._running = False
-        self._needs_initializing = False
 
-    def set_faf(self, faf: FireAndForget) -> None:
-        """Wire the FireAndForget instance (called after ServiceApp creates it in start())."""
-        self._faf = faf
-
-    def initializing(self) -> None:
-        """Mark that INITIALIZING should be emitted when ready() is called.  Synchronous."""
-        self._needs_initializing = True
+    async def initializing(self) -> None:
+        """Emit INITIALIZING."""
+        await self._emit(LifecycleEventType.INITIALIZING)
 
     async def ready(self) -> None:
-        """Emit INITIALIZING (if marked), then READY, and start heartbeat loop."""
+        """Emit READY and start heartbeat loop."""
         if self._running:
             return
-        if self._needs_initializing:
-            await self._emit(LifecycleEventType.INITIALIZING)
-            self._needs_initializing = False
         await self._emit(LifecycleEventType.READY)
         self._running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
