@@ -82,7 +82,7 @@ class RecoveryReader:  # pylint: disable=too-few-public-methods
             self._idle_timeout,
             group_suffix,
         )
-        session = TransportConsumer(self._topic, self._settings, group_suffix)
+        session = TransportConsumer(self._topic, self._settings, group_suffix, auto_offset_reset="earliest")
         count = 0
         last_msg_at = time.monotonic()
         try:

@@ -39,6 +39,10 @@ class TypedConsumer:
             as ``{consumer_group}-{topic}-{group_suffix}``.  Must be unique
             per consumer instance on the same topic — otherwise Kafka splits
             partitions between them and each sees only a subset of messages.
+        auto_offset_reset: Override :attr:`KafkaSettings.auto_offset_reset`
+            for this consumer only.  ``None`` (default) uses the global setting.
+            Set to ``"earliest"`` to replay history, ``"latest"`` to start from
+            the end of the topic.
     """
 
     def __init__(
@@ -50,6 +54,7 @@ class TypedConsumer:
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
         group_suffix: str,
+        auto_offset_reset: str | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -57,6 +62,7 @@ class TypedConsumer:
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
+        self._auto_offset_reset = auto_offset_reset
         self._session: TransportConsumer | None = None
         self._deserializer = JsonDeserializer()
 
@@ -67,7 +73,7 @@ class TypedConsumer:
         await self._session.commit(msg)
 
     async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix)
+        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix, auto_offset_reset=self._auto_offset_reset)
         async for msg in self._session:
             try:
                 event_type, model = self._dispatch(msg)

@@ -43,6 +43,7 @@ class RequestReply:
         settings: KafkaSettings,
         service_id: str,
         *,
+        group_suffix: str,
         message_types: dict[str, type[BaseModel]] | None = None,
     ) -> None:
         self._producer = producer
@@ -55,6 +56,7 @@ class RequestReply:
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._skipped = 0
+        self._group_suffix = group_suffix
 
     # ------------------------------------------------------------------
     # Type registry
@@ -151,7 +153,7 @@ class RequestReply:
     async def _listen(self) -> None:
         """Background task: consume channel, dispatch responses by event_id."""
         logger.debug("RequestReply listener started on %s", self._topic)
-        session = TransportConsumer(self._topic, self._settings, "rr")
+        session = TransportConsumer(self._topic, self._settings, self._group_suffix)
         try:
             async for msg in session:
                 msg_type = msg.headers.get(Header.EVENT_TYPE, "")

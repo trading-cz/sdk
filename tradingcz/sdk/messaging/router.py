@@ -77,12 +77,14 @@ class EventRouter:
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
         group_suffix: str,
+        auto_offset_reset: str | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
+        self._auto_offset_reset = auto_offset_reset
         self._handlers: list[_Registration] = []
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
@@ -188,7 +190,7 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False)
+        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset)
 
         async for msg_type, model, raw in self._consumer:
             for reg in self._handlers:

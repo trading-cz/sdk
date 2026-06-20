@@ -20,6 +20,8 @@ class KafkaSettings(BaseSettings):
     default_replication_factor: int = Field(2, gt=1)
     default_retention_ms: int = Field(432000000)  # 5 days
     default_cleanup_policy: str = Field("delete")
+    auto_offset_reset: str = Field("latest", pattern="^(earliest|latest|none)$")
+    max_poll_interval_ms: int = Field(600_000, gt=0)  # 10 min — prevent rebalance on slow handlers
 
     producer_overrides: dict[str, str] = Field(default_factory=dict)
     consumer_overrides: dict[str, str] = Field(default_factory=dict)
@@ -41,8 +43,9 @@ class KafkaSettings(BaseSettings):
         base: dict[str, str] = {
             "bootstrap.servers": self.bootstrap_servers,
             "group.id": group_id,
-            "auto.offset.reset": "earliest",
+            "auto.offset.reset": self.auto_offset_reset,
             "enable.auto.commit": "false",
+            "max.poll.interval.ms": str(self.max_poll_interval_ms),
         }
         return {**base, **self.consumer_overrides}
 

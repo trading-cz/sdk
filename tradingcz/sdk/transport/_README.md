@@ -83,6 +83,9 @@ await producer.send(
 # Guarantee delivery — flush blocks until all queued messages are sent
 await producer.flush(timeout=30.0)
 
+# Close when done — flushes pending messages and releases the producer
+await producer.close()
+
 # On delivery failure — optional error callback
 async def on_error(error: str) -> None:
     print(f"Delivery failed: {error}")
@@ -96,6 +99,7 @@ errors: list[str] = producer.drain_errors()
 **Key points:**
 - Wraps `confluent_kafka.Producer` (sync) with `run_in_executor` for async
 - `flush()` blocks until all messages are delivered or timeout
+- `close()` flushes pending messages then releases the producer; use-after-close raises `RuntimeError`
 - Delivery errors are queued and accessible via `drain_errors()`
 - One `TransportProducer` per process (shared across all channels)
 
@@ -107,28 +111,25 @@ Creates Kafka topics via Admin API. Instance-based, reuses a single AdminClient 
 from tradingcz.sdk.transport import KafkaTopicAdmin, KafkaTopicConfig, KafkaSettings
 
 settings = KafkaSettings(consumer_group="my-service")
-admin = KafkaTopicAdmin(settings)
 
-# Create a topic with custom config
-await admin.ensure(
-    "dev-stock-market-stream-data",
-    num_partitions=5,
-    replication_factor=2,
-    retention_ms=259_200_000,  # 3 days
-    cleanup_policy="delete",
-)
+async with KafkaTopicAdmin(settings) as admin:
+    # Create a topic with custom config
+    await admin.ensure(
+        "dev-stock-market-stream-data",
+        num_partitions=5,
+        replication_factor=2,
+        retention_ms=259_200_000,  # 3 days
+        cleanup_policy="delete",
+    )
 
-# Create from a KafkaTopicConfig
-config = KafkaTopicConfig(name="dev-event", partitions=1)
-await admin.ensure_from_config(config)
-
-# Close when done (drops AdminClient reference)
-await admin.close()
+    # Create from a KafkaTopicConfig
+    config = KafkaTopicConfig(name="dev-event", partitions=1)
+    await admin.ensure_from_config(config)
+# auto-closed on exit
 ```
 
 **Key points:**
 - Lazy `AdminClient` — created on first `ensure()` call, reused thereafter
 - Instance-level cache — `_created` set prevents duplicate Admin API calls within the same instance
 - Thread-safe for async usage (confluent-kafka AdminClient is thread-safe)
-- `close()` drops the AdminClient reference for GC; use-after-close raises `RuntimeError`
-- `try/finally` ensures `close()` is called even if topic creation fails
+- `async with` ensures `close()` is called even if topic creation fails; use-after-close raises `RuntimeError`

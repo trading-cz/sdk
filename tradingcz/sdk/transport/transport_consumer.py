@@ -22,6 +22,7 @@ class TransportConsumer:
         settings: KafkaSettings,
         group_suffix: str,
         *,
+        auto_offset_reset: str | None = None,
         on_error: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> None:
         self._topic = topic
@@ -31,6 +32,8 @@ class TransportConsumer:
 
         group_id = f"{self._settings.consumer_group}-{self._topic}-{group_suffix}"
         config = self._settings.consumer_config(group_id=group_id)
+        if auto_offset_reset is not None:
+            config["auto.offset.reset"] = auto_offset_reset
         self._consumer = AIOConsumer(config)
         self._subscribed = False
         self._closed = False
