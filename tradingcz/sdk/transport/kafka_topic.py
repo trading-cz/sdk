@@ -111,11 +111,12 @@ class KafkaTopicAdmin:
         )
 
     async def close(self) -> None:
-        """Release the AdminClient reference (GC will clean up the connection).
+        """Mark the admin as closed.  Further :meth:`ensure` calls raise ``RuntimeError``.
 
-        After close, any further :meth:`ensure` call raises ``RuntimeError``.
+        The underlying :class:`AdminClient` reference is intentionally kept
+        alive to avoid a segfault in ``AdminClient.__del__`` on Python 3.14.
+        It will be released at process exit.
         """
-        self._admin = None
         self._created.clear()
         self._closed = True
 
