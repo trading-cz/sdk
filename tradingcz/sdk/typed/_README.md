@@ -87,4 +87,6 @@ consumer = TypedConsumer("dev-events", settings, types={...}, group_suffix="repl
 | `group_suffix` | ✅ | — | Must be unique per consumer on same topic |
 | `auto_commit` | — | `True` | Commit after each yield |
 | `auto_offset_reset` | — | `None` (uses `KafkaSettings.auto_offset_reset`) | `"earliest"` = replay, `"latest"` = new only |
+| `poll_timeout_ms` | — | `None` (uses `KafkaSettings.consumer_poll_timeout_ms`) | Longer timeouts reduce CPU spin on low-volume topics |
+| `batch_size` | — | `None` (uses `KafkaSettings.consumer_batch_size`) | Larger batches improve throughput on high-volume topics |
 | `on_error` | — | `None` | Callback for undispatchable messages |

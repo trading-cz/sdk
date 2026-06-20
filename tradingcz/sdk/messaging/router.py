@@ -42,6 +42,12 @@ class EventRouter:
             ``await router.commit(raw)`` explicitly.
         on_error: Optional async callback for undispatchable messages.
         group_suffix: Appended to consumer group id for isolation.
+        auto_offset_reset: Override :attr:`KafkaSettings.auto_offset_reset`
+            for this consumer only.  ``None`` (default) uses the global setting.
+        poll_timeout_ms: Override :attr:`KafkaSettings.consumer_poll_timeout_ms`
+            for this consumer only.  ``None`` uses the global setting.
+        batch_size: Override :attr:`KafkaSettings.consumer_batch_size`
+            for this consumer only.  ``None`` uses the global setting.
 
     **Offset Commit — Two Modes**
 
@@ -78,6 +84,8 @@ class EventRouter:
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
         group_suffix: str,
         auto_offset_reset: str | None = None,
+        poll_timeout_ms: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -85,6 +93,8 @@ class EventRouter:
         self._on_error = on_error
         self._group_suffix = group_suffix
         self._auto_offset_reset = auto_offset_reset
+        self._poll_timeout_ms = poll_timeout_ms
+        self._batch_size = batch_size
         self._handlers: list[_Registration] = []
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
@@ -190,7 +200,7 @@ class EventRouter:
         types: dict[str, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
-        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset)
+        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
 
         async for msg_type, model, raw in self._consumer:
             for reg in self._handlers:

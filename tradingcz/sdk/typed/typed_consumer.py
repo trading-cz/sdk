@@ -43,6 +43,12 @@ class TypedConsumer:
             for this consumer only.  ``None`` (default) uses the global setting.
             Set to ``"earliest"`` to replay history, ``"latest"`` to start from
             the end of the topic.
+        poll_timeout_ms: Override :attr:`KafkaSettings.consumer_poll_timeout_ms`
+            for this consumer only.  ``None`` (default) uses the global setting.
+            Longer timeouts reduce CPU spin on low-volume topics.
+        batch_size: Override :attr:`KafkaSettings.consumer_batch_size`
+            for this consumer only.  ``None`` (default) uses the global setting.
+            Larger batches improve throughput on high-volume topics.
     """
 
     def __init__(
@@ -55,6 +61,8 @@ class TypedConsumer:
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
         group_suffix: str,
         auto_offset_reset: str | None = None,
+        poll_timeout_ms: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -63,6 +71,8 @@ class TypedConsumer:
         self._on_error = on_error
         self._group_suffix = group_suffix
         self._auto_offset_reset = auto_offset_reset
+        self._poll_timeout_ms = poll_timeout_ms
+        self._batch_size = batch_size
         self._session: TransportConsumer | None = None
         self._deserializer = JsonDeserializer()
 
@@ -73,7 +83,7 @@ class TypedConsumer:
         await self._session.commit(msg)
 
     async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
-        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix, auto_offset_reset=self._auto_offset_reset)
+        self._session = TransportConsumer(self._topic, self._settings, self._group_suffix, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
         async for msg in self._session:
             try:
                 event_type, model = self._dispatch(msg)

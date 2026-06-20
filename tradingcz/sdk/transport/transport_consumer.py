@@ -23,12 +23,16 @@ class TransportConsumer:
         group_suffix: str,
         *,
         auto_offset_reset: str | None = None,
+        poll_timeout_ms: int | None = None,
+        batch_size: int | None = None,
         on_error: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
         self._on_error = on_error
         self._error_queue: queue.Queue[str] = queue.Queue()
+        self._poll_timeout_ms = poll_timeout_ms
+        self._batch_size = batch_size
 
         group_id = f"{self._settings.consumer_group}-{self._topic}-{group_suffix}"
         config = self._settings.consumer_config(group_id=group_id)
@@ -46,8 +50,8 @@ class TransportConsumer:
             raise RuntimeError("TransportConsumer is closed")
 
         raw_msgs = await self._consumer.consume(
-            num_messages=self._settings.consumer_batch_size,
-            timeout=self._settings.consumer_poll_timeout_ms / 1000.0,
+            num_messages=self._batch_size if self._batch_size is not None else self._settings.consumer_batch_size,
+            timeout=(self._poll_timeout_ms if self._poll_timeout_ms is not None else self._settings.consumer_poll_timeout_ms) / 1000.0,
         )
         result: list[KafkaMessage] = []
         for msg in raw_msgs:
