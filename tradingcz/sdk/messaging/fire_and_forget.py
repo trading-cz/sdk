@@ -20,20 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class FireAndForget:  # pylint: disable=too-few-public-methods
-    """Send typed messages via TypedProducer.  No response expected.
-
-    Auto-builds ``EventHeader`` and ``KafkaKey`` from business-level
-    parameters — the caller never touches wire-format details.
-
-    Usage::
-
-        faf = FireAndForget(producer, "dev-events", service_id="risk")
-        await faf.send(
-            lifecycle,
-            event_type=EventType.SERVICE_LIFECYCLE,
-            event_id="evt-001",
-        )
-    """
+    """Send typed messages via TypedProducer.  No response expected."""
 
     def __init__(self, producer: TransportProducer, topic: str, service_id: str) -> None:
         self._typed = TypedProducer(producer, topic)
@@ -41,11 +28,7 @@ class FireAndForget:  # pylint: disable=too-few-public-methods
 
     async def send(self, message: BaseModel, *, event_type: EventType, event_id: str, key: str = "") -> None:
         kafka_key = KafkaKey(value=key or f"{event_type}:{self._service_id}:{event_id}")
-        headers = EventHeader(
-            event_type=event_type,
-            source_app=self._service_id,
-            event_id=event_id,
-        )
+        headers = EventHeader(event_type=event_type, source_app=self._service_id, event_id=event_id)
         await self._typed.send(message, key=kafka_key, headers=headers)
         await self._typed.flush()
 

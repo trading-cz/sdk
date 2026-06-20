@@ -131,7 +131,7 @@ class RequestReply:
         await self._typed_producer.send(req, key=key, headers=headers)
         await self._typed_producer.flush()
 
-        future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
+        future: asyncio.Future[Resp] = asyncio.get_running_loop().create_future()
         self._pending[event_id] = future  # type: ignore[assignment]
 
         try:

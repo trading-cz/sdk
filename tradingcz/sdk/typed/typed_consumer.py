@@ -92,12 +92,7 @@ class TypedConsumer:
             try:
                 await self._on_error(msg)
             except Exception:
-                logger.warning(
-                    "on_error callback raised for %s (offset=%d)",
-                    self._topic,
-                    msg.offset,
-                    exc_info=True,
-                )
+                logger.warning("on_error callback raised for %s (offset=%d)", self._topic, msg.offset, exc_info=True)
 
 
 __all__ = ["TypedConsumer"]
