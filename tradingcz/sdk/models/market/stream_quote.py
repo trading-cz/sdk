@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tradingcz.sdk.models.enums.event import Broker
 from tradingcz.sdk.models.market.quote import Quote
 
+
 # TODO: move to ingestion ??
 class StreamQuote(BaseModel):
     """A streaming quote from a broker.

@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import logging
 
+from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, Quote, StreamQuote, Trade
-
-from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
 
 logger = logging.getLogger(__name__)
 

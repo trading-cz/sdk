@@ -35,18 +35,18 @@ from tradingcz.sdk.account.balance import BalanceClient
 from tradingcz.sdk.account.orders import OrderClient
 from tradingcz.sdk.account.positions import PositionClient
 from tradingcz.sdk.account.signals import SignalPublisher
+from tradingcz.sdk.health.publisher import HealthPublisher
 from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
 from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.market_data.corporate import CorporateActionsClient
 from tradingcz.sdk.market_data.options import OptionsDataClient
 from tradingcz.sdk.market_data.stock import StockDataClient
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.messaging.health_publisher import HealthPublisher
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +137,14 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self.events_producer: TransportProducer | None = None
         self.events_topic: str = ""
         self._faf: FireAndForget | None = None
-        self._health: HealthPublisher | None = None
         self._topic_admin: KafkaTopicAdmin | None = None
         self._rr: RequestReply | None = None
         self._base: BaseDataClient | None = None
+
+        # Health publisher — created early so initializing() can be called sync.
+        # FireAndForget is wired later in start() via set_faf().
+        self._health = HealthPublisher(faf=None, service_id=service_id, interval=health_interval)
+        self._health.initializing()
 
         # Lazy client slots
         self._stock: StockDataClient | None = None
@@ -164,8 +168,8 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self.events_producer = TransportProducer(self._kafka)
 
         self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
-        self._health = HealthPublisher(self._faf, self.service_id, interval=self._health_interval)
-        await self._health.start()
+        self._health.set_faf(self._faf)
+        await self._health.ready()
 
         # ── Request/Reply + BaseDataClient (only if any feature needs it) ──
         needs_rr = any([
@@ -200,7 +204,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     async def close(self) -> None:
         """Stop health (emits 'down'), close RR, flush producer."""
         if self._health is not None:
-            await self._health.close()
+            await self._health.down()
         if self._rr is not None:
             await self._rr.close()
         if self.events_producer is not None:
@@ -378,7 +382,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         """Publish a typed message on the events channel (fire-and-forget)."""
         if self._faf is None:
             raise RuntimeError("Call start() before publish_event()")
-        await self._faf.send_event(message, event_type=message_type, event_id=event_id, key=key)
+        await self._faf.send(message, event_type=message_type, event_id=event_id, key=key)
 
     # ------------------------------------------------------------------
     # Shutdown

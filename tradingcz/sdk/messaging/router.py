@@ -9,8 +9,8 @@ from types import TracebackType
 from pydantic import BaseModel
 
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,8 @@ class EventRouter:
             await submit_to_broker(model) # fire-and-forget
 
     Commit is owned by the router (via :class:`TypedConsumer` →
-    :class:`TransportConsumer`), not by :class:`KafkaMessage`.
+    :class:`TransportConsumer`).  Use :meth:`EventRouter.commit`, not
+    :class:`KafkaMessage` (which is a pure-data DTO with no commit capability).
     """
 
     def __init__(

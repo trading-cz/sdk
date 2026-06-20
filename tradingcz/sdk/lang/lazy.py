@@ -2,10 +2,10 @@
 
 Usage::
 
-    class KafkaTransport:
+    class TransportProducer:
         _producer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))
 
-        def channel(self, name):
+        def send(self, name, payload):
             producer = self._producer  # initialized on first access
 """
 

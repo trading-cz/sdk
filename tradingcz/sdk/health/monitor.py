@@ -34,7 +34,7 @@ class HealthMonitor:
         callback: Callable[[str], Awaitable[None]],
         *,
         ttl: float | None = None,
-    ) -> "HealthMonitor":
+    ) -> HealthMonitor:
         """Register callback for *state* (chainable).
 
         *ttl* is only meaningful for ``LifecycleEventType.EXPIRED`` —
@@ -83,6 +83,10 @@ class HealthMonitor:
                 pass
         self._sweep_task = None
         self._seen.clear()
+
+    async def close(self) -> None:
+        """Alias for :meth:`stop` — conforms to ServiceApp/EventRouter convention."""
+        await self.stop()
 
     async def _sweep(self) -> None:
         if self._ttl is None:

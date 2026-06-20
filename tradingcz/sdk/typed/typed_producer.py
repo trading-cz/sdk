@@ -14,9 +14,9 @@ import logging
 from pydantic import BaseModel
 
 from tradingcz.sdk.serialization.json import JsonSerializer
-from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.transport.kafka_header import KafkaHeader
 from tradingcz.sdk.transport.kafka_key import KafkaKey
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 

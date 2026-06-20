@@ -9,13 +9,15 @@ Each sub-package lives in its own distribution (namespace package):
     tradingcz.risk      — Risk management
 
 Public SDK API (``tradingcz.sdk``):
-    - tradingcz.sdk.core.transport       — KafkaChannel, KafkaTransport, TypedProducer, TypedConsumer
-    - tradingcz.sdk.core.serialization   — Serializer, Deserializer, JsonDeserializer, JsonSerializer
-    - tradingcz.sdk.common               — KafkaSettings, LoggingSettings, ConfigurationError
-    - tradingcz.sdk.models.market        — Bar, Quote, Trade, etc.
-    - tradingcz.sdk.models.events        — TradingSignal, DataRequest, etc.
-    - tradingcz.sdk.indicators           — ATR, SMA, etc.
-    - tradingcz.sdk.framework            — ServiceApp (application layer)
+    - tradingcz.sdk.transport       — TransportProducer, TransportConsumer, KafkaSettings, KafkaTopicAdmin
+    - tradingcz.sdk.typed           — TypedProducer, TypedConsumer
+    - tradingcz.sdk.messaging       — EventRouter, FireAndForget, RequestReply, ReplayConsumer
+    - tradingcz.sdk.health          — HealthMonitor, HealthPublisher
+    - tradingcz.sdk.serialization   — Serializer, Deserializer, JsonSerializer, JsonDeserializer
+    - tradingcz.sdk.models.market   — Bar, Quote, Trade, etc.
+    - tradingcz.sdk.models.events   — TradingSignal, DataRequest, etc.
+    - tradingcz.sdk.indicators      — ATR, SMA, etc.
+    - tradingcz.sdk.service_app     — ServiceApp (application facade)
 """
 
 from pathlib import Path

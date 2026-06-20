@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import logging
 
+from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
-
-from tradingcz.sdk.market_data._base import BaseDataClient
 
 logger = logging.getLogger(__name__)
 

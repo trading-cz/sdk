@@ -70,7 +70,7 @@ class OrderSummary(BaseModel):
     hwm: Decimal | None = None
 
     # ── Nested legs (bracket/OTO/OCO) ─────────────────────────────────
-    legs: list["OrderSummary"] | None = None
+    legs: list[OrderSummary] | None = None
 
 
 class OrderResponse(BaseModel):
