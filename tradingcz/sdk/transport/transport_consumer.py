@@ -124,9 +124,7 @@ class TransportConsumer:
 
     async def _commit_offset(self, topic: str, partition: int, offset: int) -> None:
         """Commit a single offset.  Shared by ``commit()`` and ``_handle_error()``."""
-        await self._consumer.commit(
-            offsets=[TopicPartition(topic, partition, offset)]
-        )
+        await self._consumer.commit(offsets=[TopicPartition(topic, partition, offset)])
 
     def _build_message(self, msg: object) -> KafkaMessage:
         """Convert a valid confluent-kafka message to a KafkaMessage DTO."""

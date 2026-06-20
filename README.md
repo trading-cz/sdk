@@ -111,3 +111,85 @@ Each layer's `on_error` is independent. L2 does not pass its callback to L1 — 
 **`ReceiveSession`** is single-use — one consumer per session. Call `poll()` for pull-based control or `async for` for convenience. Consumer is created in `__init__`, subscribed lazily, closed via `finally` or explicit `close()`.
 
 **Batch polling** — `poll()` uses `consume()` under the hood for throughput. Up to `consumer_batch_size` messages per `consumer_poll_timeout_ms` window. Returns `list[KafkaMessage]` (empty = no messages in window).
+
+---
+
+## Lifecycle Patterns
+
+Every SDK object follows one of three patterns.  Same role = same pattern.
+Context managers and async iteration provide safe defaults; manual control is
+always available.
+
+### Pattern A — Services & Routers: `async with`
+
+For objects that have explicit start/stop (background tasks, connections).
+
+```python
+# L4: ServiceApp / TradingApp
+async with TradingApp(service_id="my-strategy") as app:
+    bars = await app.stock.bars(["AAPL"], days=30)
+
+# L3: EventRouter (background consumer + handler dispatch)
+async with EventRouter("dev-events", settings, group_suffix="alerts") as router:
+
+    @router.on(EventType.TRADING_SIGNAL, TradingSignal)
+    async def on_signal(model, raw):
+        await place_order(model)
+
+    # start() → consumer task, close() → cancel + cleanup
+    ...
+
+# L3: RequestReply (typed request/response)
+async with RequestReply(producer, topic, settings, "my-svc") as rr:
+    resp = await rr.request(req, response_type=DataReady)
+```
+
+### Pattern B — Producers: `async with` (auto-flush)
+
+Flushes pending messages on exit by default.  Set `auto_flush=False` for
+manual batching.
+
+```python
+# L2: TypedProducer — safe default (auto-flush)
+async with TypedProducer(transport, "dev-events") as p:
+    await p.send(signal, key=kafka_key, headers=kafka_headers)
+# flushed automatically
+
+# L2: TypedProducer — manual batch (single flush for N messages)
+p = TypedProducer(transport, "dev-events", auto_flush=False)
+for signal in batch:
+    await p.send(signal, key=kafka_key, headers=kafka_headers)
+await p.flush()
+```
+
+### Pattern C — Consumers: `async for` (auto-close)
+
+Iteration manages the consumer lifecycle — closed on loop exit.
+
+```python
+# L2: TypedConsumer — auto-commit (default)
+async for msg_type, model, raw in TypedConsumer("dev-events", settings, types, group_suffix="alerts"):
+    await process(model)
+# committed after each successful yield
+
+# L2: TypedConsumer — manual commit
+consumer = TypedConsumer("dev-events", settings, types, group_suffix="signals", auto_commit=False)
+async for msg_type, model, raw in consumer:
+    await db.save(model)       # persist first
+    await consumer.commit(raw) # then commit offset
+```
+
+### Quick reference
+
+| Object | Pattern | Auto-behavior | Manual override |
+|--------|---------|---------------|-----------------|
+| `ServiceApp` / `TradingApp` | `async with` | start → close | `await svc.start()` / `await svc.close()` |
+| `RequestReply` | `async with` | start listener → cancel | `await rr.start()` / `await rr.close()` |
+| `EventRouter` | `async with` | background consumer → cancel | `await router.start()` / `await router.close()` |
+| `TypedProducer` | `async with` | flush on exit | `auto_flush=False` + manual `flush()` |
+| `TypedConsumer` | `async for` | commit after yield | `auto_commit=False` + manual `commit()` |
+| `TransportConsumer` | `async for` | close on exit | `poll()` + manual `close()` |
+| `KafkaTopicAdmin` | `async with` | close on exit | `await admin.ensure()` / `await admin.close()` |
+| `FireAndForget` | — (stateless) | — | — |
+| `RecoveryReader` | `async for` (replay) | session auto-close | `replay()` generator |
+| `StreamHandle` | `async with` | unsubscribe on exit | bare `async for` |

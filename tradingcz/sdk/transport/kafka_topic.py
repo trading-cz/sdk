@@ -4,6 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
@@ -38,18 +39,16 @@ class KafkaTopicAdmin:
 
     Usage::
 
-        admin = KafkaTopicAdmin(settings)
-        try:
+        async with KafkaTopicAdmin(settings) as admin:
             await admin.ensure("my-topic", num_partitions=5)
             await admin.ensure_from_config(config)
-        finally:
-            admin.close()
     """
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
         self._admin: AdminClient | None = None
         self._created: set[str] = set()
+        self._closed = False
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -63,6 +62,8 @@ class KafkaTopicAdmin:
         cleanup_policy: str | None = None,
     ) -> None:
         """Create a topic if it doesn't already exist."""
+        if self._closed:
+            raise RuntimeError("KafkaTopicAdmin is closed")
         if name in self._created:
             return
 
@@ -90,8 +91,8 @@ class KafkaTopicAdmin:
             try:
                 future.result()
                 logger.info("Created topic '%s'", topic)
-            except Exception as exc:
-                if "TOPIC_ALREADY_EXISTS" in str(exc):
+            except KafkaException as exc:
+                if exc.args[0].code() == KafkaError.TOPIC_ALREADY_EXISTS:
                     logger.info("Topic '%s' already exists (race — created by another client)", topic)
                 else:
                     logger.exception("Failed to create topic '%s'", topic)
@@ -109,14 +110,26 @@ class KafkaTopicAdmin:
             cleanup_policy=config.cleanup_policy,
         )
 
-    def close(self) -> None:
-        """Release the AdminClient reference (GC will clean up the connection)."""
+    async def close(self) -> None:
+        """Release the AdminClient reference (GC will clean up the connection).
+
+        After close, any further :meth:`ensure` call raises ``RuntimeError``.
+        """
         self._admin = None
         self._created.clear()
+        self._closed = True
+
+    async def __aenter__(self) -> KafkaTopicAdmin:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
 
     # ── Internal ─────────────────────────────────────────────────────────
 
     def _get_admin(self) -> AdminClient:
+        if self._closed:
+            raise RuntimeError("KafkaTopicAdmin is closed")
         if self._admin is None:
             self._admin = AdminClient({"bootstrap.servers": self._settings.bootstrap_servers})
         return self._admin

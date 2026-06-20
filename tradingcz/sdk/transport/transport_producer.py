@@ -17,6 +17,15 @@ class TransportProducer:
 
     Creates the underlying :class:`confluent_kafka.Producer` from
     :class:`KafkaSettings` — no external producer needed.
+
+    Usage::
+
+        producer = TransportProducer(settings)
+        try:
+            await producer.send("topic", b"payload", key="k", headers={"h": "v"})
+            await producer.flush()
+        finally:
+            await producer.close()
     """
 
     def __init__(
@@ -29,6 +38,7 @@ class TransportProducer:
         self._producer = SyncProducer(settings.producer_config())
         self._on_error = on_error
         self._error_queue: queue.Queue[str] = queue.Queue()
+        self._closed = False
 
     # ── Core API ────────────────────────────────────────────────────────
 
@@ -40,6 +50,8 @@ class TransportProducer:
         key: str = "",
         headers: dict[str, str] | None = None,
     ) -> None:
+        if self._closed:
+            raise RuntimeError("TransportProducer is closed")
         key_bytes = key.encode() if key else None
         header_list: list[tuple[str, bytes]] | None = None
         if headers:
@@ -59,6 +71,8 @@ class TransportProducer:
 
     async def flush(self, timeout: float = 30.0) -> None:
         """Wait for all queued messages to be delivered to Kafka."""
+        if self._closed:
+            raise RuntimeError("TransportProducer is closed")
 
         def _flush() -> int:
             return self._producer.flush(timeout)  # type: ignore[no-any-return]
@@ -66,9 +80,21 @@ class TransportProducer:
         loop = asyncio.get_running_loop()
         remaining = await loop.run_in_executor(None, _flush)
         if remaining > 0:
-            raise RuntimeError(
-                f"Failed to deliver messages: {remaining} message(s) still pending after flush"
-            )
+            raise RuntimeError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
+
+    async def close(self) -> None:
+        """Flush pending messages and release the underlying producer.
+
+        After close, any further :meth:`send` or :meth:`flush` raises
+        ``RuntimeError``.
+        """
+        if not self._closed:
+            try:
+                await self.flush()
+            except RuntimeError:
+                pass  # already flushed
+        self._producer = None  # type: ignore[assignment]
+        self._closed = True
 
     def drain_errors(self) -> list[str]:
         """Pull accumulated delivery errors (clears the queue)."""

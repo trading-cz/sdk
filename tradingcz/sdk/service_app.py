@@ -82,9 +82,9 @@ class ServiceApp:
         if self._health is not None:
             await self._health.close()
         if self.events_producer is not None:
-            await self.events_producer.flush()
+            await self.events_producer.close()
         if self._topic_admin is not None:
-            self._topic_admin.close()
+            await self._topic_admin.close()
         logger.info("ServiceApp closed: id=%s", self.service_id)
 
     async def __aenter__(self) -> ServiceApp:

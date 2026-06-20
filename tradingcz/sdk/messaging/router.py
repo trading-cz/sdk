@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from types import TracebackType
 
 from pydantic import BaseModel
 
@@ -46,7 +47,7 @@ class EventRouter:
 
     *Mode 1 — Router auto-commit (default)*::
 
-        router = EventRouter(topic, settings, auto_commit=True)
+        router = EventRouter(topic, settings, group_suffix="signals", auto_commit=True)
 
         @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
         async def on_signal(model, raw):
@@ -56,7 +57,7 @@ class EventRouter:
 
     *Mode 2 — Manual commit (handler controls when)*::
 
-        router = EventRouter(topic, settings, auto_commit=False)
+        router = EventRouter(topic, settings, group_suffix="executor", auto_commit=False)
 
         @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
         async def on_request(model, raw):
@@ -75,7 +76,7 @@ class EventRouter:
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
-        group_suffix: str = "router",
+        group_suffix: str,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -84,9 +85,47 @@ class EventRouter:
         self._group_suffix = group_suffix
         self._handlers: list[_Registration] = []
         self._consumer: TypedConsumer | None = None
+        self._run_task: asyncio.Task[None] | None = None
+
+    # ── Lifecycle ──────────────────────────────────────────────────────
+
+    async def start(self) -> None:
+        """Start consuming in a background task (idempotent).
+
+        Equivalent to calling :meth:`run` in a background task.
+        Use with :meth:`close` or as an ``async with`` context manager.
+        """
+        if self._run_task is not None:
+            return
+        self._run_task = asyncio.create_task(self.run(), name=f"router-{self._topic}")
+
+    async def close(self) -> None:
+        """Cancel the background consumer task and wait for it to finish."""
+        if self._run_task and not self._run_task.done():
+            self._run_task.cancel()
+            try:
+                await self._run_task
+            except asyncio.CancelledError:
+                pass
+        self._run_task = None
+        self._consumer = None
+
+    async def __aenter__(self) -> EventRouter:
+        await self.start()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        await self.close()
+
+    # ── Handler registration ───────────────────────────────────────────
 
     async def commit(self, msg: KafkaMessage) -> None:
-        """Commit a message's offset. Available during :meth:`run`.
+        """Commit a message's offset. Available during :meth:`run` or after :meth:`start`.
 
         Use when ``auto_commit=False`` and the handler needs explicit
         control over when the offset is committed.

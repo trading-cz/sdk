@@ -26,11 +26,25 @@ class TypedProducer:
 
     Pure type conversion: serializes the model, converts key/headers
     to wire format, dispatches to the producer.  No auto-inference.
+
+    Args:
+        producer: Shared :class:`TransportProducer` (one per process).
+        topic: Kafka topic to publish to.
+        auto_flush: When ``True`` (default), :meth:`flush` is called
+            automatically on context-manager exit.  Set to ``False``
+            when batching many messages and you want a single flush.
     """
 
-    def __init__(self, producer: TransportProducer, topic: str) -> None:
+    def __init__(
+        self,
+        producer: TransportProducer,
+        topic: str,
+        *,
+        auto_flush: bool = True,
+    ) -> None:
         self._producer = producer
         self._topic = topic
+        self._auto_flush = auto_flush
         self._serializer: JsonSerializer = JsonSerializer()
 
     @property
@@ -67,7 +81,8 @@ class TypedProducer:
         return self
 
     async def __aexit__(self, *args: object) -> None:
-        await self.flush()
+        if self._auto_flush:
+            await self.flush()
 
 
 __all__ = ["TypedProducer"]

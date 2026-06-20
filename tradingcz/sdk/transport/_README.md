@@ -123,11 +123,12 @@ config = KafkaTopicConfig(name="dev-event", partitions=1)
 await admin.ensure_from_config(config)
 
 # Close when done (drops AdminClient reference)
-admin.close()
+await admin.close()
 ```
 
 **Key points:**
 - Lazy `AdminClient` — created on first `ensure()` call, reused thereafter
 - Instance-level cache — `_created` set prevents duplicate Admin API calls within the same instance
 - Thread-safe for async usage (confluent-kafka AdminClient is thread-safe)
-- `close()` drops the AdminClient reference for GC
+- `close()` drops the AdminClient reference for GC; use-after-close raises `RuntimeError`
+- `try/finally` ensures `close()` is called even if topic creation fails

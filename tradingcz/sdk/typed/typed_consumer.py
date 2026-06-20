@@ -24,6 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 class TypedConsumer:
+    """Iterate typed Pydantic models from a multi-type Kafka topic.
+
+    Args:
+        topic: Kafka topic to consume.
+        settings: Kafka connection settings.
+        types: Mapping of ``event_type`` header value → Pydantic model class.
+        auto_commit: When ``True`` (default), commit each message's offset
+            after successful deserialization.  Set to ``False`` for manual
+            commit via :meth:`commit`.
+        on_error: Optional async callback for undispatchable messages
+            (bad JSON, missing header, unknown type).
+        group_suffix: **Required.**  Appended to the Kafka consumer group id
+            as ``{consumer_group}-{topic}-{group_suffix}``.  Must be unique
+            per consumer instance on the same topic — otherwise Kafka splits
+            partitions between them and each sees only a subset of messages.
+    """
+
     def __init__(
         self,
         topic: str,
@@ -32,7 +49,7 @@ class TypedConsumer:
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
-        group_suffix: str = "consumer",
+        group_suffix: str,
     ) -> None:
         self._topic = topic
         self._settings = settings
