@@ -10,6 +10,7 @@ from __future__ import annotations
 from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings  # for docstring example
 
 
 class CorporateActionsClient:
@@ -17,7 +18,7 @@ class CorporateActionsClient:
 
     Usage::
 
-        async with ServiceApp(service_id="risk-checker") as app:
+        async with ServiceApp(service_id="risk-checker", env="dev", kafka_settings=KafkaSettings(consumer_group="risk-checker")) as app:
             divs = await app.corporate_actions.dividends(["AAPL"], days=365)
             splits = await app.corporate_actions.splits(["AAPL"], days=365)
     """

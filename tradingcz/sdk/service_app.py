@@ -8,7 +8,7 @@ is negligible for the platform scale).
 
 Lifecycle::
 
-    async with ServiceApp(service_id="my-app", env="dev", health_interval=300) as svc:
+    async with ServiceApp(service_id="my-app", env="dev", kafka_settings=KafkaSettings(consumer_group="my-app")) as svc:
         # ── Publish events (fire-and-forget) ──────────────────────
         await svc.publish_event(
             some_model,
@@ -70,19 +70,19 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
     **Minimal usage** (Kafka transport + health only)::
 
-        async with ServiceApp(service_id="my-service", env="dev") as svc:
+        async with ServiceApp(service_id="my-service", env="dev", kafka_settings=KafkaSettings(consumer_group="my-service")) as svc:
             await svc.publish_event(...)
             await svc.run_until_shutdown(router_task)
 
     **Strategy usage** (market data + signals)::
 
-        async with ServiceApp(service_id="my-strategy", env="dev") as app:
+        async with ServiceApp(service_id="my-strategy", env="dev", kafka_settings=KafkaSettings(consumer_group="my-strategy")) as app:
             bars = await app.stock.bars(["AAPL"], days=30)
             await app.signals.publish(signal, event_id="evt-1")
 
     **Multi-broker**::
 
-        async with ServiceApp(service_id="arb", env="dev") as app:
+        async with ServiceApp(service_id="arb", env="dev", kafka_settings=KafkaSettings(consumer_group="arb")) as app:
             ibkr = app.with_broker("ibkr")
             ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
 
@@ -105,8 +105,8 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         *,
         service_id: str,
         env: str,
+        kafka_settings: KafkaSettings,
         health_interval: float = 300.0,
-        kafka_settings: KafkaSettings | None = None,
         broker: str = "alpaca",
     ) -> None:
         self.service_id = service_id
@@ -301,7 +301,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         Creates data clients that talk to *broker* instead of the
         default broker.  Useful for multi-broker strategies::
 
-            async with ServiceApp(service_id="arb", env="dev") as app:
+            async with ServiceApp(service_id="arb", env="dev", kafka_settings=KafkaSettings(consumer_group="arb")) as app:
                 ibkr = app.with_broker("ibkr")
                 ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
         """
