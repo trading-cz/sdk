@@ -12,7 +12,7 @@ class KafkaSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
 
-    bootstrap_servers: str = Field(...)
+    bootstrap_servers: str = Field(default="localhost:9092")
     consumer_group: str = Field(...)
     consumer_poll_timeout_ms: int = Field(500, gt=0)
     consumer_batch_size: int = Field(100, gt=0)

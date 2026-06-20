@@ -10,6 +10,13 @@ from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicConfi
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.request_reply import RequestReply
 
+# Backwards-compatible aliases for code that hasn't migrated from the
+# old combined KafkaTransport / KafkaChannel API (removed in L1-L3 refactor).
+# These exist only so downstream imports don't crash — the old .channel()
+# / .send() / .receive() / .flush() methods are NOT available.
+KafkaTransport = TransportProducer  # type: ignore[misc]
+KafkaChannel = TransportProducer  # type: ignore[misc]
+
 __all__ = [
     "TransportProducer",
     "TransportConsumer",
@@ -25,4 +32,6 @@ __all__ = [
     "KafkaKey",
     "FireAndForget",
     "RequestReply",
+    "KafkaTransport",   # deprecated — use TransportProducer
+    "KafkaChannel",     # deprecated — use TransportProducer
 ]
