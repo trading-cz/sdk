@@ -22,19 +22,6 @@ logger = logging.getLogger(__name__)
 
 
 class TypedProducer:
-    """Layer 2 typed producer — Pydantic models → Kafka topic.
-
-    Pure type conversion: serializes the model, converts key/headers
-    to wire format, dispatches to the producer.  No auto-inference.
-
-    Args:
-        producer: Shared :class:`TransportProducer` (one per process).
-        topic: Kafka topic to publish to.
-        auto_flush: When ``True`` (default), :meth:`flush` is called
-            automatically on context-manager exit.  Set to ``False``
-            when batching many messages and you want a single flush.
-    """
-
     def __init__(
         self,
         producer: TransportProducer,
@@ -51,20 +38,7 @@ class TypedProducer:
     def producer(self) -> TransportProducer:
         return self._producer
 
-    async def send(
-        self,
-        value: BaseModel,
-        *,
-        key: KafkaKey,
-        headers: KafkaHeader,
-    ) -> None:
-        """Publish a typed model to Kafka.
-
-        Args:
-            value: Pydantic model to publish.
-            key: Kafka message key (mandatory).
-            headers: Kafka message headers (mandatory).
-        """
+    async def send(self, value: BaseModel, *, key: KafkaKey, headers: KafkaHeader) -> None:
         payload = self._serializer.serialize(value)
         await self._producer.send(
             self._topic,
@@ -74,7 +48,6 @@ class TypedProducer:
         )
 
     async def flush(self) -> None:
-        """Wait for all queued messages to be delivered to Kafka."""
         await self._producer.flush()
 
     async def __aenter__(self) -> TypedProducer:

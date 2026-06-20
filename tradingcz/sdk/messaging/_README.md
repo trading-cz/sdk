@@ -1,192 +1,114 @@
 # messaging — Layer 3: Messaging Patterns
 
-Higher-level messaging patterns built on [typed](../typed/_README.md) (Layer 2)
+Ready-to-use messaging patterns built on [typed](../typed/_README.md) (Layer 2)
 and [transport](../transport/_README.md) (Layer 1).
 
+## Architecture position
+
 ```
-Layer 4: ServiceApp / TradingApp
-Layer 3: EventRouter, RequestReply, FireAndForget  ← THIS PACKAGE
-Layer 2: TypedProducer, TypedConsumer              (typed/)
-Layer 1: KafkaChannel                               (transport/)
+┌─────────────────────────────────────────┐
+│  ServiceApp                             │  ← Layer 4: Application
+├─────────────────────────────────────────┤
+│  EventRouter / RequestReply / F&F       │  ← Layer 3: THIS PACKAGE
+├─────────────────────────────────────────┤
+│  TypedProducer / TypedConsumer          │  ← Layer 2: Typed wrappers
+├─────────────────────────────────────────┤
+│  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
+└─────────────────────────────────────────┘
 ```
+
+## What this layer is
+
+Layer 3 provides **complete, ready-to-use messaging patterns**.  Each class
+solves one well-defined communication problem.  Application code imports a
+class, configures it, and uses it — no Kafka wiring, no serialization, no
+offset management.
+
+Layer 3 classes use Layer 2 (`TypedProducer` / `TypedConsumer`) internally —
+they never touch raw bytes or Kafka consumers directly.
 
 ## Components
 
-| Class | Pattern | Sends? | Receives? | Commits? |
-|-------|---------|--------|-----------|----------|
-| `FireAndForget` | One-way fire-and-forget | ✅ | ❌ | N/A |
-| `RequestReply` | Request → await correlated response | ✅ | ✅ | Auto per msg |
-| `EventRouter` | Typed handler dispatch by header | ❌ | ✅ | Configurable |
-| `RecoveryReader` | One-time topic replay (fresh group) | ❌ | ✅ | N/A (ephemeral) |
-| `HealthPublisher` | Periodic heartbeat (UP → DOWN) | ✅ | ❌ | N/A |
+| Class | Solves | Key API |
+|-------|--------|---------|
+| `EventRouter` | Route incoming messages to async handlers by `event_type` | `router.on(type, model, handler)` |
+| `RequestReply` | Send a typed request, await a correlated typed response | `await rr.request(req, response_type=…)` |
+| `FireAndForget` | Send a typed message, no response expected | `await faf.send(msg, event_type=…, event_id=…)` |
+| `ReplayConsumer` | Replay a topic from the beginning until a sentinel | `async for … in consumer.replay(types, until=…)` |
+| `HealthPublisher` | Emit periodic `UP` / `HEARTBEAT` / `DOWN` events | `await health.start()` / `await health.close()` |
 
 > **TypedProducer, TypedConsumer** are Layer 2 — see [typed/_README.md](../typed/_README.md).
 
----
+## When to use each
 
----
+| You want to… | Use |
+|-------------|-----|
+| Consume messages and dispatch to handlers by type | `EventRouter` |
+| Send a request and await a response (correlated by `event_id`) | `RequestReply` |
+| Fire off a message and forget about it | `FireAndForget` |
+| Rebuild in-memory state from the event log on startup | `ReplayConsumer` |
+| Let the platform know your service is alive | `HealthPublisher` |
 
-## FireAndForget — send, no response expected
+## Common patterns
 
-```python
-from tradingcz.sdk.messaging import FireAndForget
-from tradingcz.sdk.models.enums.event import EventType
-
-faf = FireAndForget(channel, service_id="my-service")
-
-# Send a typed model with auto-headers:
-await faf.send_event(
-    lifecycle_event,
-    event_type=EventType.SERVICE_LIFECYCLE,
-    event_id="evt-001",
-)
-
-# Send raw bytes with custom headers:
-await faf.send(
-    b'{"msg":"hello"}',
-    key="my-key",
-    headers={"event_type": "custom_type", "source_app": "test"},
-)
-```
-
----
-
-## RequestReply — request/response by event_id
-
-```python
-import asyncio
-from uuid import uuid4
-from tradingcz.sdk.messaging import RequestReply
-from tradingcz.sdk.models.events import DataRequest, DataReady
-from tradingcz.sdk.models.enums.event import EventType, Broker, DataRequestType, MarketDataType
-from tradingcz.sdk.models.enums.timeframe import Timeframe
-
-async with RequestReply(producer, "dev-events", settings, "my-service", group_suffix="rr") as rr:
-    # Register expected response types (otherwise they're skipped):
-    rr.register_type(EventType.DATA_READY, DataReady)
-
-    request = DataRequest(
-        event_id=uuid4(),
-        type=DataRequestType.HISTORIC,
-        broker=Broker.ALPACA,
-        symbols=["AAPL"],
-        data_type=MarketDataType.BARS,
-        timeframe=Timeframe.D1,
-    )
-
-    # Send request, await correlated response (matched by event_id):
-    response: DataReady = await rr.request(
-        request,
-        response_type=DataReady,
-        timeout=15.0,
-    )
-    print(f"Got {response.record_count} records on {response.data_topic}")
-```
-
-> **Consumer group**: `{consumer_group}-{topic}-{group_suffix}` — isolated from other consumers.
-> **Commits**: Every message is committed after processing (match or skip).
-> **Lifecycle**: Use as `async with` — listener starts on enter, cancelled on exit.
-> **group_suffix**: Required — same rules as `TypedConsumer`/`EventRouter`.
-
----
-
-## EventRouter — typed dispatch by event_type header
+### Consume + respond (ingestion, executor, risk)
 
 ```python
 from tradingcz.sdk.messaging import EventRouter
-from tradingcz.sdk.transport import KafkaSettings
-from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.kafka_message import KafkaMessage
 
-settings = KafkaSettings(consumer_group="my-service")
+router = EventRouter(topic, settings, group_suffix="worker")
 
-# Context manager (recommended) — starts background consumer, cancels on exit:
-async with EventRouter("dev-events", settings, group_suffix="alerts") as router:
+@router.on(EventType.DATA_REQUEST, DataRequest, spawn_task=True)
+async def on_request(model: DataRequest, raw: KafkaMessage) -> None:
+    result = await fetch_data(model)
+    await svc.publish_event(result, message_type=EventType.DATA_READY, event_id=model.event_id)
 
-    @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent, spawn_task=True)
-    async def on_execution(model: ExecutionRequestEvent, raw: KafkaMessage) -> None:
-        await place_order(model)
-
-    @router.on(EventType.SERVICE_REQUEST, ServiceRequestEvent)
-    async def on_service(model: ServiceRequestEvent, raw: KafkaMessage) -> None:
-        await handle_service(model)
-
-# Or manual control:
-router = EventRouter("dev-events", settings, group_suffix="alerts")
 await router.start()
-# ... service runs ...
+await svc.wait_for_shutdown()
 await router.close()
 ```
 
-### Commit modes
+### Request/response (market data clients)
 
 ```python
-# Mode 1 — Auto-commit (default): router commits after handler success
-router = EventRouter("dev-events", settings, group_suffix="alerts", auto_commit=True)
+from tradingcz.sdk.messaging import RequestReply
 
-# Mode 2 — Manual commit: handler controls when offset is committed
-router = EventRouter("dev-events", settings, group_suffix="alerts", auto_commit=False)
-
-@router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
-async def on_request(model, raw):
-    await db.save(model)      # persist first
-    await router.commit(raw)  # commit AFTER side effect succeeds
-    await submit(model)       # fire-and-forget — safe to lose
+async with RequestReply(producer, topic, settings, "my-svc", group_suffix="rr") as rr:
+    rr.register_type(EventType.DATA_READY, DataReady)
+    response = await rr.request(request, response_type=DataReady, timeout=15.0)
 ```
 
-### Offset reset
+### Fire-and-forget (signals, lifecycle events)
 
 ```python
-# Live consumer (default) — starts from latest on first deploy:
-router = EventRouter("dev-events", settings, group_suffix="alerts")
-
-# Replay history — starts from earliest available message:
-router = EventRouter("dev-events", settings, group_suffix="replay", auto_offset_reset="earliest")
-```
-
-### Error notification
-
-```python
-import logging
-
-async def log_bad_message(raw: KafkaMessage) -> None:
-    logging.error("Undispatchable: offset=%d payload=%.200r", raw.offset, raw.payload)
-
-router = EventRouter(channel, on_error=log_bad_message)
-```
-
----
-
-## RecoveryReader — one-time topic replay
-
-```python
-from tradingcz.sdk.messaging import RecoveryReader
-
-reader = RecoveryReader(events_topic, settings, idle_timeout=2.0)
-
-# Replays from beginning (auto_offset_reset="earliest" hardcoded),
-# stops after 2s of silence:
-async for msg_type, model, raw in reader.replay({
-    str(EventType.DATA_REQUEST): DataRequest,
-    str(EventType.SERVICE_LIFECYCLE): LifecycleEvent,
-}):
-    reconstruct_state(model)
-```
-
-> Uses a **unique consumer group** (UUID suffix) per recovery — always starts from `earliest`.  Consumer auto-closes when replay finishes.
-
----
-
-## HealthPublisher — service heartbeats
-
-```python
-from tradingcz.sdk.messaging import HealthPublisher
 from tradingcz.sdk.messaging import FireAndForget
 
-faf = FireAndForget(channel, service_id="my-service")
-health = HealthPublisher(faf, service_id="my-service", interval=300)
+faf = FireAndForget(producer, topic, service_id="risk")
+await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
+```
 
-await health.start()   # emits UP, heartbeat every 300s
-# ... service runs ...
-await health.close()   # emits DOWN
+### Startup recovery (ingestion, risk)
+
+```python
+from tradingcz.sdk.messaging import ReplayConsumer
+
+# 1. Publish sentinel
+await svc.publish_event(
+    LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.INITIALIZING),
+    message_type=EventType.SERVICE_LIFECYCLE,
+)
+
+# 2. Replay until sentinel
+consumer = ReplayConsumer(topic, settings)
+async for msg_type, model, raw in consumer.replay(
+    types={str(EventType.DATA_REQUEST): DataRequest, …},
+    until=lambda mt, m: mt == str(EventType.SERVICE_LIFECYCLE) and m.event == "initializing",
+):
+    reconstruct_state(msg_type, model, raw.headers)
+
+# 3. Publish READY, start live EventRouter
+await svc.publish_event(
+    LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.READY),
+    message_type=EventType.SERVICE_LIFECYCLE,
+)
 ```

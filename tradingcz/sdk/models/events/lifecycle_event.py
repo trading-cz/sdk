@@ -6,9 +6,9 @@ crashes, and trigger cleanup actions (e.g., ingestion removes streaming
 subscriptions for services that went down).
 
 Event types:
-  - ``"up"``         — emitted once on ``TradingApp.start()``
+  - ``"up"``         — emitted once on ``ServiceApp.start()``
   - ``"heartbeat"``  — emitted periodically (default every 5 minutes)
-  - ``"down"``       — emitted on ``TradingApp.close()`` (graceful shutdown)
+  - ``"down"``       — emitted on ``ServiceApp.close()`` (graceful shutdown)
 """
 
 from datetime import UTC, datetime

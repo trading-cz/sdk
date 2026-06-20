@@ -1,103 +1,144 @@
 # Application Layer — ServiceApp
 
-Top-level SDK entry point. Every service in the platform uses ``ServiceApp``.
+Top-level convenience entry point.  Every service in the platform uses
+``ServiceApp`` — it wires together Layer 3 classes so application code
+doesn't have to.
 
-## Minimal usage — Kafka transport + health only
+``ServiceApp`` is **not a real layer** — it adds no new protocols or
+messaging logic.  It's a concentrator: it creates and connects
+``FireAndForget``, ``HealthPublisher``, ``RequestReply``, and optional
+market-data / account clients.
 
-Used by ingestion, executor, risk.  No feature flags needed.
+## Architecture position
 
-```python
-from tradingcz.sdk import ServiceApp
-from tradingcz.sdk.models.enums.event import EventType
-
-async with ServiceApp(service_id="my-service", env="dev") as svc:
-    # ── Provided by ServiceApp ──────────────────────────────────────
-    # svc.events_topic       — resolved event topic name (str)
-    # svc.kafka_settings     — KafkaSettings (use with TypedConsumer/EventRouter)
-    # svc.topics             — KafkaTopicRegistry (resolved topic names)
-    # svc.source_app         — service_id (used in Kafka headers)
-
-    # ── Fire-and-forget publish ─────────────────────────────────────
-    await svc.publish_event(
-        lifecycle_model,
-        message_type=EventType.SERVICE_LIFECYCLE,
-        event_id="evt-001",
-    )
-
-    # ── TypedConsumer (topic + settings, not a channel object) ──────
-    from tradingcz.sdk.typed import TypedConsumer
-
-    consumer = TypedConsumer(
-        topic=svc.events_topic,
-        settings=svc.kafka_settings,
-        types={EventType.DATA_REQUEST: DataRequest},
-        group_suffix="my-consumer",
-    )
-
-    # ── Run until SIGTERM/SIGINT, then cancel tasks ─────────────────
-    await svc.run_until_shutdown(router_task, background_task)
-
-    # ── Or wait for shutdown manually ───────────────────────────────
-    await svc.wait_for_shutdown()
+```
+┌─────────────────────────────────────────┐
+│  ServiceApp  (+ BrokerScope)            │  ← Layer 4: THIS FILE
+├─────────────────────────────────────────┤
+│  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
+├─────────────────────────────────────────┤
+│  TypedProducer / TypedConsumer          │  ← Layer 2: Typed wrappers
+├─────────────────────────────────────────┤
+│  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
+└─────────────────────────────────────────┘
 ```
 
-**Lifecycle**: `start()` → init topics, events producer, health. `close()` → stop health (emits DOWN), close RR + producer.
+## What this layer provides
 
-**Health**: Automatically emits `UP` on start, `HEARTBEAT` every `health_interval` seconds, `DOWN` on close.
+``ServiceApp`` gives you these **without writing any Kafka code**:
 
-## Strategy usage — market data + account + signals
+| Capability | How |
+|-----------|-----|
+| Event publishing | ``await svc.publish_event(model, message_type=…, event_id=…)`` |
+| Kafka settings | ``svc.kafka_settings`` — use with EventRouter / TypedConsumer |
+| Resolved topic names | ``svc.events_topic``, ``svc.topics`` |
+| Health / heartbeat | Automatic ``UP`` → ``HEARTBEAT`` → ``DOWN`` |
+| Graceful shutdown | ``await svc.run_until_shutdown(tasks)`` or ``await svc.wait_for_shutdown()`` |
+| Market data (opt-in) | ``svc.stock.bars(…)``, ``svc.stock.stream_quotes(…)`` |
+| Account (opt-in) | ``svc.positions.get_positions()``, ``svc.balance.get_balance()`` |
+| Multi-broker | ``ibkr = svc.with_broker("ibkr")`` → ``ibkr.stock.bars(…)`` |
 
-Opt-in via feature flags.  Used by simple-strategy (ATR3, PCB Breakout).
+## Two usage profiles
+
+### Minimal — transport + health only
+
+Used by **ingestion, executor, risk**.  No feature flags needed.
 
 ```python
 from tradingcz.sdk import ServiceApp
 
+async with ServiceApp(service_id="my-service", env="dev") as svc:
+    # ── Publish events ──────────────────────────────────────────────
+    await svc.publish_event(
+        model, message_type=EventType.DATA_READY, event_id="evt-001",
+    )
+
+    # ── Build your own consumer (EventRouter or TypedConsumer) ──────
+    router = EventRouter(svc.events_topic, svc.kafka_settings, group_suffix="worker")
+    # ... register handlers ...
+    await router.start()
+
+    # ── Run until SIGTERM/SIGINT ────────────────────────────────────
+    await svc.run_until_shutdown(router_task)
+```
+
+### Full — market data + account + signals
+
+Used by **simple-strategy** (ATR3, PCB Breakout).  Opt-in via feature flags.
+
+```python
 async with ServiceApp(
-    service_id="my-strategy",
-    env="dev",
+    service_id="my-strategy", env="dev",
     enable_stock=True,
     enable_signals=True,
 ) as app:
-    # ── Historical data ─────────────────────────────────────────────
-    bars = await app.stock.bars(["AAPL", "MSFT"], days=30)
-    quotes = await app.stock.snapshots(["AAPL"])
+    # Historical data
+    bars = await app.stock.bars(["AAPL"], days=30)
 
-    # ── Streaming (context manager = guaranteed unsubscribe) ────────
+    # Streaming
     async with app.stock.stream_quotes(["AAPL"]) as stream:
         async for quote in stream:
-            if quote.bid_price > threshold:
-                break
+            ...
 
-    # ── Account state ───────────────────────────────────────────────
-    positions = await app.positions.get_positions()
-    balance = await app.balance.get_balance()
+    # Publish a signal
+    await app.signals.publish(signal, event_id="evt-001")
 
-    # ── Orders ──────────────────────────────────────────────────────
-    order = await app.orders.submit_order(...)
-
-    # ── Publish a trading signal ────────────────────────────────────
-    await app.signals.publish(signal, event_id="abc-123")
-
-    # ── Multi-broker ────────────────────────────────────────────────
+    # Multi-broker
     ibkr = app.with_broker("ibkr")
-    ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
+    ibkr_bars = await ibkr.stock.bars(["AAPL"])
 ```
 
-**Feature flags** (all default ``False`` — opt-in):
-- ``enable_stock`` → ``app.stock`` — bars, quotes, trades, streaming
-- ``enable_options`` → ``app.options`` — option snapshots
-- ``enable_corporate`` → ``app.corporate_actions`` — dividends, splits
-- ``enable_signals`` → ``app.signals`` — fire-and-forget signal publishing
-- ``enable_positions`` → ``app.positions`` — query open positions
-- ``enable_balance`` → ``app.balance`` — query account balance
-- ``enable_orders`` → ``app.orders`` — query order status
+## Lifecycle
+
+```
+ServiceApp.__aenter__()
+  └─ start()
+       ├─ KafkaTopicRegistry (resolved topic names)
+       ├─ KafkaTopicAdmin.ensure_from_config()
+       ├─ TransportProducer
+       ├─ FireAndForget
+       ├─ HealthPublisher.start()  →  emits UP, starts heartbeat
+       └─ RequestReply + BaseDataClient  (if any feature flag is on)
+           └─ Market data clients: stock, options, corporate_actions
+           └─ Account clients: positions, balance, orders
+
+... application runs ...
+
+ServiceApp.__aexit__()
+  └─ close()
+       ├─ HealthPublisher.close()  →  emits DOWN, stops heartbeat
+       ├─ RequestReply.close()  →  cancel listener, reject pending
+       └─ TransportProducer.flush()
+```
+
+## Feature flags
+
+All default ``False`` — opt in to what you need:
+
+| Flag | Property | What you get |
+|------|----------|-------------|
+| ``enable_stock`` | ``app.stock`` | Bars, quotes, trades, streaming |
+| ``enable_options`` | ``app.options`` | Option snapshots |
+| ``enable_corporate`` | ``app.corporate_actions`` | Dividends, splits |
+| ``enable_signals`` | ``app.signals`` | Publish trading signals |
+| ``enable_positions`` | ``app.positions`` | Query open positions |
+| ``enable_balance`` | ``app.balance`` | Query account balance |
+| ``enable_orders`` | ``app.orders`` | Submit / query orders |
 
 **Lazy initialization**: Clients are created on first access, not at ``start()``.
-A strategy that only does ``app.stock.bars()`` never creates options, positions,
+A strategy that only calls ``app.stock.bars()`` never creates options, positions,
 balance, or order clients.
 
-**Multi-broker**: ``app.with_broker("ibkr")`` returns a ``BrokerScope`` with its
-own ``stock``, ``options``, and ``corporate_actions`` clients scoped to that broker.
+## BrokerScope
+
+``app.with_broker("ibkr")`` returns a ``BrokerScope`` with its own
+``stock``, ``options``, and ``corporate_actions`` clients scoped to that broker.
+
+```python
+ibkr = app.with_broker("ibkr")
+ibkr_bars = await ibkr.stock.bars(["AAPL"])
+alpaca_bars = await app.stock.bars(["AAPL"])  # default broker
+```
 
 ## Constructor reference
 

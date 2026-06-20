@@ -1,8 +1,7 @@
-"""FireAndForget — send messages via TransportProducer, no response expected.
+"""FireAndForget — send typed messages via TypedProducer, no response expected.
 
-Two send methods:
-- ``send()``       — raw bytes + headers (any topic)
-- ``send_event()`` — typed model with auto EventHeader + KafkaKey (event topic)
+Builds EventHeader + KafkaKey automatically from business parameters —
+caller provides event_type, event_id; the rest is handled.
 """
 
 from __future__ import annotations
@@ -11,41 +10,44 @@ import logging
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.transport.transport_producer import TransportProducer
-from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.kafka_header import EventHeader
 from tradingcz.sdk.transport.kafka_key import KafkaKey
+from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
 
 class FireAndForget:  # pylint: disable=too-few-public-methods
-    """Send messages via TransportProducer.  No response expected."""
+    """Send typed messages via TypedProducer.  No response expected.
+
+    Auto-builds ``EventHeader`` and ``KafkaKey`` from business-level
+    parameters — the caller never touches wire-format details.
+
+    Usage::
+
+        faf = FireAndForget(producer, "dev-events", service_id="risk")
+        await faf.send(
+            lifecycle,
+            event_type=EventType.SERVICE_LIFECYCLE,
+            event_id="evt-001",
+        )
+    """
 
     def __init__(self, producer: TransportProducer, topic: str, service_id: str) -> None:
-        self._producer = producer
-        self._topic = topic
+        self._typed = TypedProducer(producer, topic)
         self._service_id = service_id
-        self._serializer: JsonSerializer = JsonSerializer()
 
-    # ------------------------------------------------------------------
-    # Raw send — any topic, caller provides headers
-    # ------------------------------------------------------------------
-
-    async def send(self, payload: bytes, *, key: str = "", headers: dict[str, str] | None = None) -> None:
-        await self._producer.send(self._topic, payload, key=key, headers=headers)
-
-    # ------------------------------------------------------------------
-    # Typed send — event topic, auto-builds EventHeader + KafkaKey
-    # ------------------------------------------------------------------
-
-    async def send_event(self, message: BaseModel, *, event_type: EventType, event_id: str, key: str = "") -> None:
-        headers = EventHeader(event_type=event_type, source_app=self._service_id, event_id=event_id).to_headers()
-        if not key:
-            key = KafkaKey(value=f"{event_type}:{self._service_id}:{event_id}").to_kafka()
-        payload = self._serializer.serialize(message)
-        await self._producer.send(self._topic, payload, key=key, headers=headers)
+    async def send(self, message: BaseModel, *, event_type: EventType, event_id: str, key: str = "") -> None:
+        kafka_key = KafkaKey(value=key or f"{event_type}:{self._service_id}:{event_id}")
+        headers = EventHeader(
+            event_type=event_type,
+            source_app=self._service_id,
+            event_id=event_id,
+        )
+        await self._typed.send(message, key=kafka_key, headers=headers)
+        await self._typed.flush()
 
 
 __all__ = ["FireAndForget"]

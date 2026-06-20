@@ -2,7 +2,7 @@
 
 Application code never references this module directly.  Use
 ``StockDataClient``, ``OptionsDataClient``, or ``CorporateActionsClient``
-via ``TradingApp``.
+via ``ServiceApp``.
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ class BaseDataClient:
     Application code never references ``BaseDataClient`` directly.
 
     One ``BaseDataClient`` is created per broker scope inside
-    ``TradingApp.start()`` and shared by all data clients that use
+    ``ServiceApp.start()`` and shared by all data clients that use
     the same broker.
     """
 

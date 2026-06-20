@@ -1,4 +1,8 @@
-"""RequestReply — typed request/response over Kafka, correlated by event_id."""
+"""RequestReply — typed request/response over Kafka, correlated by event_id.
+
+Uses :class:`TypedProducer` for sending and :class:`TypedConsumer` for
+receiving — no manual serialization or dispatch loops.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +12,13 @@ import re
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.transport.transport_producer import TransportProducer
-from tradingcz.sdk.transport.transport_consumer import TransportConsumer
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.serialization.json import JsonSerializer
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.kafka_header import EventHeader, Header
+from tradingcz.sdk.transport.kafka_header import EventHeader
 from tradingcz.sdk.transport.kafka_key import KafkaKey
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.typed_consumer import TypedConsumer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,8 @@ class RequestReply:
     """Send a typed request, await a correlated typed response.
 
     Correlation is by ``event_id`` — both request and response models
-    must have a ``event_id: str`` field (convention, not Protocol).
+    must have an ``event_id: str`` field.  Messages received on the
+    response topic that lack an ``event_id`` are logged and skipped.
 
     Flushes after each request to guarantee delivery before awaiting
     the response.
@@ -46,13 +51,12 @@ class RequestReply:
         group_suffix: str,
         message_types: dict[str, type[BaseModel]] | None = None,
     ) -> None:
-        self._producer = producer
+        self._typed_producer = TypedProducer(producer, topic)
         self._topic = topic
         self._settings = settings
         self._service_id = service_id
         self._seq = 0
-        self._serializer: JsonSerializer = JsonSerializer()
-        self._types: dict[str, type[BaseModel]] = (dict(message_types) if message_types else {})
+        self._types: dict[str, type[BaseModel]] = dict(message_types) if message_types else {}
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._skipped = 0
@@ -63,11 +67,6 @@ class RequestReply:
     # ------------------------------------------------------------------
 
     def register_type(self, message_type: str | EventType, model: type[BaseModel]) -> None:
-        """Register a message_type → model mapping for response deserialization.
-
-        Accepts both :class:`EventType` enum values and plain strings
-        (for custom response types not in the standard enum).
-        """
         self._types[str(message_type)] = model
 
     # ------------------------------------------------------------------
@@ -122,16 +121,15 @@ class RequestReply:
         mt = request_type or _infer_message_type(req)
         self._seq += 1
 
-        payload = self._serializer.serialize(req)
+        key = KafkaKey(value=f"{mt}:{self._service_id}:{event_id}")
         headers = EventHeader(
             event_type=mt,
             source_app=self._service_id,
             event_id=event_id,
-        ).to_headers()
-        key = KafkaKey(value=f"{mt}:{self._service_id}:{event_id}").to_kafka()
+        )
         # Send + flush — request delivery must be guaranteed before awaiting response
-        await self._producer.send(self._topic, payload, key=key, headers=headers)
-        await self._producer.flush()
+        await self._typed_producer.send(req, key=key, headers=headers)
+        await self._typed_producer.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_event_loop().create_future()
         self._pending[event_id] = future  # type: ignore[assignment]
@@ -151,30 +149,33 @@ class RequestReply:
     # ------------------------------------------------------------------
 
     async def _listen(self) -> None:
-        """Background task: consume channel, dispatch responses by event_id."""
-        logger.debug("RequestReply listener started on %s", self._topic)
-        session = TransportConsumer(self._topic, self._settings, self._group_suffix)
-        try:
-            async for msg in session:
-                msg_type = msg.headers.get(Header.EVENT_TYPE, "")
-                model_type = self._types.get(msg_type)
-                if model_type is None:
-                    self._skipped += 1
-                else:
-                    try:
-                        parsed = model_type.model_validate_json(msg.payload)
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        self._skipped += 1
-                    else:
-                        resp_id: str = parsed.event_id
-                        if resp_id:
-                            future = self._pending.get(resp_id)
-                            if future is not None and not future.done():
-                                future.set_result(parsed)
+        """Background task: TypedConsumer dispatches, resolve pending futures.
 
-                # Commit after processing (match or skip) so this offset
-                # is never re-read.
-                await session.commit(msg)
+        Uses :class:`TypedConsumer` for typed dispatch + auto-commit —
+        no manual header parsing or serialization.
+        """
+        logger.debug("RequestReply listener started on %s", self._topic)
+        consumer = TypedConsumer(
+            topic=self._topic,
+            settings=self._settings,
+            types=self._types,
+            group_suffix=self._group_suffix,
+            auto_commit=True,
+        )
+        try:
+            async for _msg_type, model, _raw in consumer:
+                # event_id is mandatory on the event topic — missing → skip
+                event_id: str = getattr(model, 'event_id', '')
+                if not event_id:
+                    logger.debug(
+                        "RequestReply: message has no event_id, skipping (type=%s)",
+                        _msg_type,
+                    )
+                    self._skipped += 1
+                    continue
+                future = self._pending.get(event_id)
+                if future is not None and not future.done():
+                    future.set_result(model)
         except asyncio.CancelledError:
             logger.debug("RequestReply listener cancelled")
         except Exception:  # pylint: disable=broad-exception-caught
@@ -182,7 +183,7 @@ class RequestReply:
 
     @property
     def skipped_count(self) -> int:
-        """Number of messages skipped (not matching any registered type)."""
+        """Number of messages skipped due to missing ``event_id``."""
         return self._skipped
 
 

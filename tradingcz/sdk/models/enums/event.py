@@ -149,6 +149,8 @@ class Broker(StrEnum):
 class LifecycleEventType(StrEnum):
     """``LifecycleEvent.type`` — service health/lifecycle transitions."""
 
+    INITIALIZING = "initializing"
     UP = "up"
+    READY = "ready"
     HEARTBEAT = "heartbeat"
     DOWN = "down"

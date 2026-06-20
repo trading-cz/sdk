@@ -378,7 +378,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         """Publish a typed message on the events channel (fire-and-forget)."""
         if self._faf is None:
             raise RuntimeError("Call start() before publish_event()")
-        await self._faf.send_event(message, event_type=message_type, event_id=event_id, key=key)
+        await self._faf.send(message, event_type=message_type, event_id=event_id, key=key)
 
     # ------------------------------------------------------------------
     # Shutdown
@@ -448,6 +448,3 @@ class BrokerScope:
 
 
 __all__ = ["ServiceApp", "BrokerScope"]
-
-
-__all__ = ["ServiceApp"]
