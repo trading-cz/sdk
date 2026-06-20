@@ -1,18 +1,18 @@
 # health — Service Health (Lifecycle Publisher + Monitor)
 
 | Class | Role | Key API |
-|-------|------|---------|
+| ------- | ------ | --------- |
 | `HealthPublisher` | Emit lifecycle events for **this** service | `initializing()` → `ready()` → `heartbeat()` → `down()` |
 | `HealthMonitor` | Track liveness of **other** services | `on(state, cb, *, ttl)`, `on_event(event)`, `start()`, `stop()` |
 
 ## HealthPublisher
 
-```
+```text
 initializing()  → INITIALIZING
 ready()         → READY + heartbeat loop starts
 heartbeat()     → force HEARTBEAT now + reset interval timer
 down()          → DOWN + heartbeat loop stops
-```
+```text
 
 ```python
 health = HealthPublisher(faf, "my-service", interval=300)
@@ -20,7 +20,7 @@ await health.initializing()
 await health.ready()
 await health.heartbeat()    # manual, resets timer
 await health.down()
-```
+```text
 
 ## HealthMonitor
 
@@ -47,7 +47,7 @@ router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent,
 await monitor.start()
 await router.run()
 await monitor.stop()
-```
+```text
 
 > Caller owns the EventRouter.  `on_event()` returns immediately
 > (callbacks are `create_task`'d).  No EXPIRED registration → sweep

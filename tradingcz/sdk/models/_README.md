@@ -3,13 +3,13 @@
 Canonical data models shared across all services (ingestion, executor, risk,
 strategies). The single source of truth for the Kafka wire format.
 
-```
+```text
 models/
 ├── enums/       # StrEnum definitions — wire-safe string constants
 ├── events/      # Kafka event payload DTOs (DataRequest, ExecutionRequest, etc.)
 ├── market/      # Market data DTOs (Bar, Quote, Trade, Snapshot, etc.)
 └── orders/      # Order request DTOs (MarketOrder, LimitOrder, BracketOrder, etc.)
-```
+```text
 
 ---
 

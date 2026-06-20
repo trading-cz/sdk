@@ -294,7 +294,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         """
         if not self._enable_signals:
             raise RuntimeError("Signal publisher not enabled. Set enable_signals=True.")
-        if self._faf is None:
+        if not self._health._running:
             raise RuntimeError("Call start() before accessing signal publisher.")
         if self._signals is None:
             self._signals = SignalPublisher(faf=self._faf)
@@ -373,7 +373,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
     async def publish_event(self, message: BaseModel, *, message_type: EventType, event_id: str = "", key: str = "") -> None:
         """Publish a typed message on the events channel (fire-and-forget)."""
-        if self._faf is None:
+        if not self._health._running:
             raise RuntimeError("Call start() before publish_event()")
         await self._faf.send(message, event_type=message_type, event_id=event_id, key=key)
 

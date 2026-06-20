@@ -4,13 +4,13 @@ Historical and streaming market data via request/reply over Kafka.
 
 ## Architecture
 
-```
+```text
 StockDataClient / OptionsDataClient / CorporateActionsClient
             │
      BaseDataClient          ← shared transport logic
        │        │
   RequestReply  KafkaTransport
-```
+```text
 
 ## StockDataClient
 
@@ -32,14 +32,14 @@ async with TradingApp(service_id="my-strategy") as app:
     async with app.stock.stream_bars(["AAPL"], timeframe=Timeframe.H4) as stream:
         async for bar in stream:
             ...
-```
+```text
 
 ## OptionsDataClient
 
 ```python
 async with TradingApp(service_id="my-strategy") as app:
     snapshots = await app.options.snapshots(["AAPL250620C00150000"])
-```
+```text
 
 ## CorporateActionsClient
 
@@ -47,7 +47,7 @@ async with TradingApp(service_id="my-strategy") as app:
 async with TradingApp(service_id="my-strategy") as app:
     dividends = await app.corporate_actions.dividends(["AAPL"], days=365)
     splits = await app.corporate_actions.splits(["AAPL"], days=365)
-```
+```text
 
 ## TimeKeeper — market clock
 
@@ -59,4 +59,4 @@ await clock.start_timekeeping()
 
 # Emits pre-close warning events before market close
 # Used by strategies to wind down positions
-```
+```text

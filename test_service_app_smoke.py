@@ -25,7 +25,7 @@ class TestServiceAppConstruction:
         """Pass pre-configured KafkaSettings."""
         from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
-        ks = KafkaSettings(consumer_group="custom-group")
+        ks = KafkaSettings(consumer_group="custom-group")  # type: ignore[call-arg]
         app = ServiceApp(service_id="smoke-test", env="dev", kafka_settings=ks)
         assert app.kafka_settings is ks
 
@@ -144,9 +144,9 @@ class TestServiceAppLifecycle:
 
         async def _fake_start(self: ServiceApp) -> None:
             nonlocal started
-            self.topics = None  # prevent real init
+            self.topics = None  # type: ignore[assignment]  # prevent real init
             self.events_topic = "dev-event"
-            self._faf = None
+            self._faf = None  # type: ignore[assignment]
             self._rr = None
             self._base = None
             started = True
@@ -176,12 +176,12 @@ class TestServiceAppLifecycle:
         original_start = ServiceApp.start
 
         async def _fake_start(self: ServiceApp) -> None:
-            self.topics = None
+            self.topics = None  # type: ignore[assignment]
             self.events_topic = "dev-event"
-            self._faf = None
+            self._faf = None  # type: ignore[assignment]
             self._rr = None
             self._base = None
-            self._health = None
+            self._health = None  # type: ignore[assignment]
             # Simulate what real start() does for feature check
             needs_rr = any([
                 self._enable_stock, self._enable_options, self._enable_corporate,
@@ -189,13 +189,13 @@ class TestServiceAppLifecycle:
             ])
             # We can't actually create RequestReply without Kafka,
             # but we can verify the path is taken.
-            self._rr_check = needs_rr  # pylint: disable=attribute-defined-outside-init
+            self._rr_check = needs_rr  # type: ignore[attr-defined]  # pylint: disable=attribute-defined-outside-init
 
         ServiceApp.start = _fake_start  # type: ignore[method-assign]
 
         try:
             await app.start()
-            assert app._rr_check is True  # pylint: disable=no-member
+            assert app._rr_check is True  # type: ignore[attr-defined]  # pylint: disable=no-member
         finally:
             ServiceApp.start = original_start  # type: ignore[method-assign]
 
@@ -207,23 +207,23 @@ class TestServiceAppLifecycle:
         original_start = ServiceApp.start
 
         async def _fake_start(self: ServiceApp) -> None:
-            self.topics = None
+            self.topics = None  # type: ignore[assignment]
             self.events_topic = "dev-event"
-            self._faf = None
+            self._faf = None  # type: ignore[assignment]
             self._rr = None
             self._base = None
-            self._health = None
+            self._health = None  # type: ignore[assignment]
             needs_rr = any([
                 self._enable_stock, self._enable_options, self._enable_corporate,
                 self._enable_positions, self._enable_balance, self._enable_orders,
             ])
-            self._rr_check = needs_rr  # pylint: disable=attribute-defined-outside-init
+            self._rr_check = needs_rr  # type: ignore[attr-defined]  # pylint: disable=attribute-defined-outside-init
 
         ServiceApp.start = _fake_start  # type: ignore[method-assign]
 
         try:
             await app.start()
-            assert app._rr_check is False  # pylint: disable=no-member
+            assert app._rr_check is False  # type: ignore[attr-defined]  # pylint: disable=no-member
         finally:
             ServiceApp.start = original_start  # type: ignore[method-assign]
 

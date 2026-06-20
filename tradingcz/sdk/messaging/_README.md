@@ -5,7 +5,7 @@ and [transport](../transport/_README.md) (Layer 1).
 
 ## Architecture position
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  ServiceApp                             │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
@@ -15,7 +15,7 @@ and [transport](../transport/_README.md) (Layer 1).
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
 └─────────────────────────────────────────┘
-```
+```text
 
 ## What this layer is
 
@@ -30,7 +30,7 @@ they never touch raw bytes or Kafka consumers directly.
 ## Components
 
 | Class | Solves | Key API |
-|-------|--------|---------|
+| ------- | -------- | --------- |
 | `EventRouter` | Route incoming messages to async handlers by `event_type` | `router.on(type, model, handler)` |
 | `RequestReply` | Send a typed request, await a correlated typed response | `await rr.request(req, response_type=…)` |
 | `FireAndForget` | Send a typed message, no response expected | `await faf.send(msg, event_type=…, event_id=…)` |
@@ -42,7 +42,7 @@ they never touch raw bytes or Kafka consumers directly.
 ## When to use each
 
 | You want to… | Use |
-|-------------|-----|
+| ------------- | ----- |
 | Consume messages and dispatch to handlers by type | `EventRouter` |
 | Send a request and await a response (correlated by `event_id`) | `RequestReply` |
 | Fire off a message and forget about it | `FireAndForget` |
@@ -84,12 +84,12 @@ router.on(
     on_data_request,
     spawn_task=True,                # spawn asyncio.Task → router not blocked
 )
-```
+```text
 
 **All `on()` parameters:**
 
 | Param | Required | Default | Purpose |
-|-------|----------|---------|---------|
+| ------- | ---------- | --------- | --------- |
 | `msg_type` | ✅ | — | `EventType` this handler subscribes to |
 | `model_class` | ✅ | — | Pydantic model for deserialization |
 | `handler` | ✅ | — | `async (model, raw) -> None` |
@@ -101,7 +101,7 @@ router.on(
 ```python
 async def handler_name(model: SpecificModel, raw: KafkaMessage) -> None:
     ...
-```
+```text
 
 - `model` — parsed Pydantic instance, ready to use
 - `raw` — original `KafkaMessage` with `.headers`, `.offset`, `.partition`, `.key`
@@ -115,7 +115,7 @@ def is_my_broker(model: DataRequest, raw: KafkaMessage) -> bool:
 
 router.on(EventType.DATA_REQUEST, DataRequest, on_data_request,
           filter_fn=is_my_broker, spawn_task=True)
-```
+```text
 
 **Manual commit (at-least-once with side effects):**
 
@@ -128,7 +128,7 @@ async def on_execution(model: ExecutionRequestEvent, raw: KafkaMessage) -> None:
     await submit_to_broker(model)  # fire-and-forget — safe to lose
 
 router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent, on_execution)
-```
+```text
 
 **Lifecycle:**
 
@@ -144,7 +144,7 @@ router.on(EventType.DATA_REQUEST, DataRequest, on_data_request)
 await router.start()
 await svc.wait_for_shutdown()
 await router.close()
-```
+```text
 
 > ``on()`` is chainable — returns ``self``.  To make ``@router.on(...)`` work
 > as a decorator, ``handler`` would need to become optional and return a
@@ -159,7 +159,7 @@ from tradingcz.sdk.messaging import RequestReply
 async with RequestReply(producer, topic, settings, "my-svc", group_suffix="rr") as rr:
     rr.register_type(EventType.DATA_READY, DataReady)
     response = await rr.request(request, response_type=DataReady, timeout=15.0)
-```
+```text
 
 ### Fire-and-forget (signals, lifecycle events)
 
@@ -168,7 +168,7 @@ from tradingcz.sdk.messaging import FireAndForget
 
 faf = FireAndForget(producer, topic, service_id="risk")
 await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
-```
+```text
 
 ### Startup recovery (ingestion, risk)
 
@@ -191,4 +191,4 @@ async for msg_type, model, raw in consumer.replay(
 # READY is published automatically by ServiceApp.start() after
 # _on_after_initializing() completes.  Override that hook for
 # custom init (e.g., recovery).
-```
+```text

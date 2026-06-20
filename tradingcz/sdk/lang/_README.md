@@ -5,7 +5,7 @@ Pure Python utilities — no Kafka, no I/O. Used across all layers.
 ## Components
 
 | Class/Function | Role |
-|----------------|------|
+| ---------------- | ------ |
 | `Lazy[T]` | Descriptor — init value on first access (used by `KafkaTransport._producer`) |
 | `Registry[K, V]` | Decorator-based registry — key → (class, factory) |
 | `Retry` | Async retry wrapper — call any operation with retries |
@@ -27,7 +27,7 @@ class ExpensiveClient:
     def query(self, sql: str):
         conn = self._connection  # connect_to_db() called on FIRST access only
         return conn.execute(sql)
-```
+```text
 
 ---
 
@@ -54,7 +54,7 @@ instance = factory(cls=cls, api_key="pk_live_...")
 
 cls, factory = adapters.get("ibkr")
 instance = factory(cls=cls, api_key="...")  # gateway="ib-gw" baked in
-```
+```text
 
 ---
 
@@ -70,7 +70,7 @@ result = await retry.call(lambda: app.stock.bars(["AAPL"], days=30))
 # → 6 attempts total (1 initial + 5 retries), 2s between retries
 
 print(retry.attempts)  # number of retries actually used
-```
+```text
 
 > `CancelledError` and `KeyboardInterrupt` propagate immediately — never retried.
 
@@ -90,4 +90,4 @@ async def main():
 
     await shutdown.wait()  # blocks until SIGTERM or SIGINT
     # ... graceful cleanup ...
-```
+```text

@@ -3,6 +3,7 @@
 import logging
 import queue
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from confluent_kafka import TopicPartition
 from confluent_kafka.aio import AIOConsumer
@@ -102,7 +103,7 @@ class TransportConsumer:
             await self._consumer.subscribe([self._topic])
             self._subscribed = True
 
-    async def _handle_error(self, msg: object) -> None:
+    async def _handle_error(self, msg: Any) -> None:
         """Log, invoke on_error callback, push to queue, and skip past a corrupt Kafka message."""
         partition = msg.partition() or -1
         offset = msg.offset() or -1
@@ -133,7 +134,7 @@ class TransportConsumer:
         """Commit a single offset.  Shared by ``commit()`` and ``_handle_error()``."""
         await self._consumer.commit(offsets=[TopicPartition(topic, partition, offset)])
 
-    def _build_message(self, msg: object) -> KafkaMessage:
+    def _build_message(self, msg: Any) -> KafkaMessage:
         """Convert a valid confluent-kafka message to a KafkaMessage DTO."""
         key = msg.key().decode() if msg.key() else ""
         headers = {

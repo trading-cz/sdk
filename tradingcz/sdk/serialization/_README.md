@@ -4,7 +4,7 @@ Bridge between raw bytes (Layer 1) and typed Pydantic models. Used by `TypedProd
 
 ## Architecture position
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  EventRouter / RequestReply / F&F        │  ← Layer 3: Messaging
 ├─────────────────────────────────────────┤
@@ -14,12 +14,12 @@ Bridge between raw bytes (Layer 1) and typed Pydantic models. Used by `TypedProd
 ├─────────────────────────────────────────┤
 │  KafkaChannel                            │  ← Layer 1: Raw bytes
 └─────────────────────────────────────────┘
-```
+```text
 
 ## Components
 
 | Class | Role |
-|-------|------|
+| ------- | ------ |
 | `Serializer[T]` | Abstract: typed value → bytes |
 | `Deserializer[T]` | Abstract: bytes → typed value |
 | `Codec[T]` | Combined Serializer + Deserializer |
@@ -43,7 +43,7 @@ payload: bytes = codec.serialize(bar)
 # Deserialize
 bar2: Bar = codec.deserialize(payload)
 assert bar2.symbol == "AAPL"
-```
+```text
 
 ## JsonSerializer — serialize any model (polymorphic)
 
@@ -58,7 +58,7 @@ serializer = JsonSerializer()
 bar_bytes = serializer.serialize(Bar(...))
 trade_bytes = serializer.serialize(Trade(...))
 # Both produce valid JSON bytes — no type check at serialize time
-```
+```text
 
 ## Custom codec (example)
 
@@ -75,4 +75,4 @@ class AvroSerializer[T](Serializer[T]):
 class AvroDeserializer[T](Deserializer[T]):
     def deserialize(self, payload: bytes) -> T:
         ...  # Avro decoding
-```
+```text

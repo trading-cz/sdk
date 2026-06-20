@@ -5,7 +5,7 @@ and header-based dispatch.  Sits between raw transport (L1) and messaging patter
 
 ## Architecture position
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  ServiceApp / TradingApp                │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
@@ -15,12 +15,12 @@ and header-based dispatch.  Sits between raw transport (L1) and messaging patter
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
 └─────────────────────────────────────────┘
-```
+```text
 
 ## Components
 
 | Class | Sends? | Receives? | Lifecycle |
-|-------|--------|-----------|-----------|
+| ------- | -------- | ----------- | ----------- |
 | `TypedProducer` | ✅ Pydantic models → Kafka | ❌ | `async with` (auto-flush) or manual `flush()` |
 | `TypedConsumer` | ❌ | ✅ header-based dispatch → typed models | `async for` (auto-close + auto-commit) |
 
@@ -47,7 +47,7 @@ p = TypedProducer(transport, "dev-events", auto_flush=False)
 for signal in batch:
     await p.send(signal, key=kafka_key, headers=kafka_headers)
 await p.flush()
-```
+```text
 
 ## TypedConsumer
 
@@ -77,10 +77,10 @@ async for msg_type, model, raw in consumer:
 
 # Start from beginning (replay history):
 consumer = TypedConsumer("dev-events", settings, types={...}, group_suffix="replay", auto_offset_reset="earliest")
-```
+```text
 
 | Parameter | Required | Default | Notes |
-|-----------|----------|---------|-------|
+| ----------- | ---------- | --------- | ------- |
 | `topic` | ✅ | — | Kafka topic name |
 | `settings` | ✅ | — | `KafkaSettings` instance |
 | `types` | ✅ | — | `{event_type_str: PydanticModel}` mapping |

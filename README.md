@@ -10,24 +10,24 @@ Requires **Python ≥ 3.14**.
 
 ```bash
 pip install trading-sdk
-```
+```text
 
 With optional dev tooling:
 
 ```bash
 pip install trading-sdk[dev]      # pytest, ruff, mypy
-```
+```text
 
 To uninstall:
 
 ```bash
 pip uninstall trading-sdk
-```
+```text
 
 ## What it does
 
 | Capability | Where |
-|-----------|-------|
+| ---------- | ----- |
 | **Kafka transport** — produce/consume raw bytes, manage consumer groups, commit offsets | `transport/` |
 | **Typed messaging** — serialize/deserialize Pydantic models, header-based dispatch | `typed/` |
 | **Messaging patterns** — request/reply, fire-and-forget, event routing, startup replay | `messaging/` |
@@ -39,7 +39,7 @@ pip uninstall trading-sdk
 
 Four layers, each depends only on the one below it:
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  ServiceApp  (+ BrokerScope)            │  ← Layer 4: Application wiring
 ├─────────────────────────────────────────┤
@@ -49,12 +49,12 @@ Four layers, each depends only on the one below it:
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Raw Kafka transport
 └─────────────────────────────────────────┘
-```
+```text
 
 Detailed docs live in each package:
 
 | Layer | Readme |
-|-------|--------|
+| ----- | ------ |
 | L1 — Transport | [`transport/_README.md`](tradingcz/sdk/transport/_README.md) |
 | L2 — Typed | [`typed/_README.md`](tradingcz/sdk/typed/_README.md) |
 | L3 — Messaging | [`messaging/_README.md`](tradingcz/sdk/messaging/_README.md) |
@@ -74,7 +74,7 @@ async with ServiceApp(service_id="my-app", env="dev") as svc:
     await router.start()
 
     await svc.run_until_shutdown(tasks)
-```
+```text
 
 ## Naming conventions
 
@@ -92,4 +92,4 @@ Local unit tests:
 
 ```bash
 pytest tests/ test_service_app_smoke.py -v
-```
+```text

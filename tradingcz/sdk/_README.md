@@ -11,7 +11,7 @@ market-data / account clients.
 
 ## Architecture position
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  ServiceApp  (+ BrokerScope)            │  ← Layer 4: THIS FILE
 ├─────────────────────────────────────────┤
@@ -21,14 +21,14 @@ market-data / account clients.
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
 └─────────────────────────────────────────┘
-```
+```text
 
 ## What this layer provides
 
 ``ServiceApp`` gives you these **without writing any Kafka code**:
 
 | Capability | How |
-|-----------|-----|
+| ----------- | ----- |
 | Event publishing | ``await svc.publish_event(model, message_type=…, event_id=…)`` |
 | Kafka settings | ``svc.kafka_settings`` — use with EventRouter / TypedConsumer |
 | Resolved topic names | ``svc.events_topic``, ``svc.topics`` |
@@ -60,7 +60,7 @@ async with ServiceApp(service_id="my-service", env="dev") as svc:
 
     # ── Run until SIGTERM/SIGINT ────────────────────────────────────
     await svc.run_until_shutdown(router_task)
-```
+```text
 
 ### Full — market data + account + signals
 
@@ -86,11 +86,11 @@ async with ServiceApp(
     # Multi-broker
     ibkr = app.with_broker("ibkr")
     ibkr_bars = await ibkr.stock.bars(["AAPL"])
-```
+```text
 
 ## Lifecycle
 
-```
+```text
 ServiceApp.__aenter__()
   └─ start()
        ├─ KafkaTopicRegistry (resolved topic names)
@@ -111,14 +111,14 @@ ServiceApp.__aexit__()
        ├─ HealthPublisher.down()  →  emits DOWN, stops heartbeat
        ├─ RequestReply.close()  →  cancel listener, reject pending
        └─ TransportProducer.flush()
-```
+```text
 
 ## Feature flags
 
 All default ``False`` — opt in to what you need:
 
 | Flag | Property | What you get |
-|------|----------|-------------|
+| ------ | ---------- | ------------- |
 | ``enable_stock`` | ``app.stock`` | Bars, quotes, trades, streaming |
 | ``enable_options`` | ``app.options`` | Option snapshots |
 | ``enable_corporate`` | ``app.corporate_actions`` | Dividends, splits |
@@ -140,11 +140,11 @@ balance, or order clients.
 ibkr = app.with_broker("ibkr")
 ibkr_bars = await ibkr.stock.bars(["AAPL"])
 alpaca_bars = await app.stock.bars(["AAPL"])  # default broker
-```
+```text
 
 ## Constructor reference
 
-```
+```text
 ServiceApp(
     *,
     service_id: str,               # Unique instance identifier
@@ -160,5 +160,5 @@ ServiceApp(
     enable_balance: bool = False,
     enable_orders: bool = False,
 )
-```
+```text
 
