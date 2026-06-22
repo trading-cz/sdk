@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import queue
-from collections.abc import Awaitable, Callable
 
 from confluent_kafka import Producer as SyncProducer
 
@@ -18,12 +17,9 @@ class TransportProducer:
     def __init__(
         self,
         settings: KafkaSettings,
-        *,
-        on_error: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._settings = settings
         self._producer = SyncProducer(settings.producer_config())
-        self._on_error = on_error
         self._error_queue: queue.Queue[str] = queue.Queue()
         self._closed = False
 
@@ -53,8 +49,6 @@ class TransportProducer:
                 on_delivery=self._handle_error,
             )
 
-        #loop = asyncio.get_running_loop()
-        #await loop.run_in_executor(None, _produce)
         await asyncio.to_thread(_produce)
 
     async def flush(self, timeout: float = 30.0) -> None:
@@ -65,8 +59,7 @@ class TransportProducer:
         def _flush() -> int:
             return self._producer.flush(timeout)  # type: ignore[no-any-return]
 
-        loop = asyncio.get_running_loop()
-        remaining = await loop.run_in_executor(None, _flush)
+        remaining = await asyncio.to_thread(_flush)
         if remaining > 0:
             raise RuntimeError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
 
@@ -92,6 +85,11 @@ class TransportProducer:
     # ── Delivery callback ────────────────────────────────────────────────
 
     def _handle_error(self, err: object, msg: object) -> None:
+        """Delivery callback — runs on librdkafka internal thread.
+
+        Thread-safe: only uses thread-safe ``queue.Queue.put()``.
+        Callers retrieve errors via :meth:`drain_errors`.
+        """
         if err is not None:
             logger.error(
                 "Delivery failed for %s [%d] offset=%s: %s",
@@ -100,10 +98,7 @@ class TransportProducer:
                 getattr(msg, "offset", lambda: -1)() if callable(getattr(msg, "offset", None)) else -1,
                 err,
             )
-            error_str = str(err)
-            self._error_queue.put(error_str)
-            if self._on_error is not None:
-                asyncio.ensure_future(self._on_error(error_str))
+            self._error_queue.put(str(err))
 
 
 __all__ = ["TransportProducer"]

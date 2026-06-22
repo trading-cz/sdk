@@ -68,8 +68,7 @@ class KafkaTopicAdmin:
             return
 
         admin = self._get_admin()
-        loop = asyncio.get_running_loop()
-        metadata = await loop.run_in_executor(None, lambda: admin.list_topics(timeout=10))
+        metadata = await asyncio.to_thread(lambda: admin.list_topics(timeout=10))
         for topic_name in metadata.topics:
             self._created.add(topic_name)
 

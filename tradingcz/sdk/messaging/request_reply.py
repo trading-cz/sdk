@@ -135,12 +135,10 @@ class RequestReply:
         self._pending[event_id] = future  # type: ignore[assignment]
 
         try:
-            done, _ = await asyncio.wait([future], timeout=timeout)
-            if not done:
-                raise TimeoutError(
-                    f"Request {event_id!r} timed out after {timeout:.1f}s"
-                )
-            return future.result()
+            async with asyncio.timeout(timeout):
+                return await future
+        except TimeoutError:
+            raise TimeoutError(f"Request {event_id!r} timed out after {timeout:.1f}s") from None
         finally:
             self._pending.pop(event_id, None)
 
