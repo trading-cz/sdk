@@ -21,7 +21,7 @@ market-data / account clients.
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
 └─────────────────────────────────────────┘
-```text
+```
 
 ## What this layer provides
 
@@ -34,59 +34,51 @@ market-data / account clients.
 | Resolved topic names | ``svc.events_topic``, ``svc.topics`` |
 | Health / heartbeat | Automatic ``INITIALIZING`` → ``READY`` → ``HEARTBEAT`` → ``DOWN`` |
 | Graceful shutdown | ``await svc.run_until_shutdown(tasks)`` or ``await svc.wait_for_shutdown()`` |
-| Market data (opt-in) | ``svc.stock.bars(…)``, ``svc.stock.stream_quotes(…)`` |
-| Account (opt-in) | ``svc.positions.get_positions()``, ``svc.balance.get_balance()`` |
+| Market data | ``svc.stock.bars(…)``, ``svc.stock.stream_quotes(…)``, ``svc.options.snapshots(…)`` |
+| Signals | ``svc.signals.publish(signal, event_id=…)`` |
 | Multi-broker | ``ibkr = svc.with_broker("ibkr")`` → ``ibkr.stock.bars(…)`` |
 
-## Two usage profiles
+## Usage
 
-### Minimal — transport + health only
-
-Used by **ingestion, executor, risk**.  No feature flags needed.
+All clients are created lazily on first access — no feature flags needed.
+``RequestReply`` + ``BaseDataClient`` are always started (one consumer group
+overhead is negligible at platform scale).
 
 ```python
 from tradingcz.sdk import ServiceApp
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
-async with ServiceApp(service_id="my-service", env="dev") as svc:
-    # ── Publish events ──────────────────────────────────────────────
+async with ServiceApp(
+    service_id="my-app",
+    env="dev",
+    kafka_settings=KafkaSettings(consumer_group="my-app"),
+) as svc:
+    # ── Publish events (fire-and-forget) ──────────────────────
     await svc.publish_event(
-        model, message_type=EventType.DATA_READY, event_id="evt-001",
+        model,
+        message_type=EventType.SERVICE_LIFECYCLE,
+        event_id="evt-001",
     )
 
-    # ── Build your own consumer (EventRouter or TypedConsumer) ──────
-    router = EventRouter(svc.events_topic, svc.kafka_settings, group_suffix="worker")
-    # ... register handlers ...
-    await router.start()
+    # ── Market data (lazy — created on first access) ──────────
+    bars = await svc.stock.bars(["AAPL"], days=30)
 
-    # ── Run until SIGTERM/SIGINT ────────────────────────────────────
+    # ── Signals (fire-and-forget) ─────────────────────────────
+    await svc.signals.publish(signal, event_id="evt-1")
+
+    # ── Multi-broker ──────────────────────────────────────────
+    ibkr = svc.with_broker("ibkr")
+    ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
+
+    # ── Build your own consumer (EventRouter or TypedConsumer) ─
+    router = EventRouter(
+        svc.events_topic, svc.kafka_settings, group_suffix="worker",
+    )
+    # ... register handlers, start, etc. ...
+
+    # ── Run until SIGTERM/SIGINT ──────────────────────────────
     await svc.run_until_shutdown(router_task)
-```text
-
-### Full — market data + account + signals
-
-Used by **simple-strategy** (ATR3, PCB Breakout).  Opt-in via feature flags.
-
-```python
-async with ServiceApp(
-    service_id="my-strategy", env="dev",
-    enable_stock=True,
-    enable_signals=True,
-) as app:
-    # Historical data
-    bars = await app.stock.bars(["AAPL"], days=30)
-
-    # Streaming
-    async with app.stock.stream_quotes(["AAPL"]) as stream:
-        async for quote in stream:
-            ...
-
-    # Publish a signal
-    await app.signals.publish(signal, event_id="evt-001")
-
-    # Multi-broker
-    ibkr = app.with_broker("ibkr")
-    ibkr_bars = await ibkr.stock.bars(["AAPL"])
-```text
+```
 
 ## Lifecycle
 
@@ -97,39 +89,19 @@ ServiceApp.__aenter__()
        ├─ KafkaTopicAdmin.ensure_from_config()
        ├─ TransportProducer
        ├─ FireAndForget
-       ├─ HealthPublisher.initializing()  →  emits INITIALIZING
-       ├─ RequestReply + BaseDataClient  (if any feature flag is on)
-       │    └─ Market data clients: stock, options, corporate_actions
-       │    └─ Account clients: positions, balance, orders
-       ├─ _on_after_initializing()        ←  subclass hook (recovery, etc.)
-       └─ HealthPublisher.ready()         →  emits READY, starts heartbeat
+       ├─ HealthPublisher.initializing()   →  emits INITIALIZING
+       ├─ RequestReply + BaseDataClient    (always started)
+       │    └─ Lazy clients: stock, options, corporate_actions, signals
+       └─ HealthPublisher.ready()          →  emits READY, starts heartbeat
 
 ... application runs (heartbeat every 5 min) ...
 
 ServiceApp.__aexit__()
   └─ close()
        ├─ HealthPublisher.down()  →  emits DOWN, stops heartbeat
-       ├─ RequestReply.close()  →  cancel listener, reject pending
-       └─ TransportProducer.flush()
-```text
-
-## Feature flags
-
-All default ``False`` — opt in to what you need:
-
-| Flag | Property | What you get |
-| ------ | ---------- | ------------- |
-| ``enable_stock`` | ``app.stock`` | Bars, quotes, trades, streaming |
-| ``enable_options`` | ``app.options`` | Option snapshots |
-| ``enable_corporate`` | ``app.corporate_actions`` | Dividends, splits |
-| ``enable_signals`` | ``app.signals`` | Publish trading signals |
-| ``enable_positions`` | ``app.positions`` | Query open positions |
-| ``enable_balance`` | ``app.balance`` | Query account balance |
-| ``enable_orders`` | ``app.orders`` | Submit / query orders |
-
-**Lazy initialization**: Clients are created on first access, not at ``start()``.
-A strategy that only calls ``app.stock.bars()`` never creates options, positions,
-balance, or order clients.
+       ├─ RequestReply.close()    →  cancel listener, reject pending
+       └─ TransportProducer.close()
+```
 
 ## BrokerScope
 
@@ -144,21 +116,43 @@ alpaca_bars = await app.stock.bars(["AAPL"])  # default broker
 
 ## Constructor reference
 
-```text
+```python
 ServiceApp(
     *,
-    service_id: str,               # Unique instance identifier
-    env: str,                      # dev / prd — scopes topic names
-    health_interval: float = 300,  # Seconds between heartbeats
-    kafka_settings: KafkaSettings | None = None,  # Pre-configured (reads KAFKA_* env)
-    broker: str = "alpaca",        # Default data broker
-    enable_stock: bool = False,
-    enable_options: bool = False,
-    enable_corporate: bool = False,
-    enable_signals: bool = False,
-    enable_positions: bool = False,
-    enable_balance: bool = False,
-    enable_orders: bool = False,
+    service_id: str,                     # Unique instance identifier
+    env: str,                            # dev / prd — scopes topic names
+    kafka_settings: KafkaSettings,       # Pre-configured Kafka settings (required)
+    health_interval: float = 300,        # Seconds between heartbeats
+    broker: str = "alpaca",              # Default data broker
 )
-```text
+```
+
+## Logging
+
+``ServiceApp`` uses the standard ``logging`` module with a module-level
+logger (``logger = logging.getLogger(__name__)``).  Key lifecycle events
+are logged at ``INFO`` level:
+
+| Event | Log message |
+| ------ | ------------ |
+| RequestReply + BaseDataClient ready | ``ServiceApp: RequestReply + BaseDataClient ready`` |
+| Start complete | ``ServiceApp started: id=%s env=%s`` |
+| Shutdown requested | ``Shutdown requested — cancelling %d task(s)`` |
+| Close complete | ``ServiceApp closed: id=%s`` |
+
+Set the logger level to ``DEBUG`` for per-request tracing from
+``BaseDataClient`` and ``RequestReply``.
+
+## Exceptions
+
+``ServiceApp`` raises ``RuntimeError`` for lifecycle violations:
+
+| Condition | Raised by |
+| ----------- | ---------- |
+| Accessing data client before ``start()`` | ``stock``, ``options``, ``corporate_actions`` |
+| Calling ``publish_event()`` before ``start()`` | ``publish_event()`` |
+| Calling ``with_broker()`` before ``start()`` | ``with_broker()`` |
+
+Underlying component errors (Kafka, health, RequestReply, typing)
+propagate naturally — ``ServiceApp`` adds no extra error wrapping.
 

@@ -25,9 +25,7 @@ class CorporateActionsClient:
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
-    async def dividends(
-        self, symbols: list[str], *, days: int = 365, timeout: float = 30.0,
-    ) -> dict[str, list[Dividend]]:
+    async def dividends(self, symbols: list[str], *, days: int = 365, timeout: float = 30.0) -> dict[str, list[Dividend]]:
         """Request dividend history for symbols.
 
         Returns ``{symbol: [Dividend sorted by ex_date]}``.
@@ -42,9 +40,7 @@ class CorporateActionsClient:
             timeout=timeout,
         )
 
-    async def splits(
-        self, symbols: list[str], *, days: int = 365, timeout: float = 30.0,
-    ) -> dict[str, list[StockSplit]]:
+    async def splits(self, symbols: list[str], *, days: int = 365, timeout: float = 30.0) -> dict[str, list[StockSplit]]:
         """Request stock split history for symbols.
 
         Returns ``{symbol: [StockSplit sorted by ex_date]}``.
