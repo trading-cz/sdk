@@ -48,6 +48,30 @@ class StockDataClient:
         # _request_historical returns dict[symbol, list[T]] — flatten to one per symbol
         return {sym: quotes[-1] for sym, quotes in result.items() if quotes}
 
+    async def latest_trades(self, symbols: list[str], *, timeout: float = 5.0) -> dict[str, Trade]:
+        """Request the most recent trade for each symbol."""
+        logger.info("StockDataClient: latest_trades symbols=%d", len(symbols))
+        result = await self._base._request_historical(
+            symbols=symbols,
+            asset=AssetType.STOCK,
+            data_type=MarketDataType.LATEST_TRADES,
+            model_type=Trade,
+            timeout=timeout,
+        )
+        return {sym: trades[-1] for sym, trades in result.items() if trades}
+
+    async def latest_bars(self, symbols: list[str], *, timeout: float = 5.0) -> dict[str, Bar]:
+        """Request the most recent minute bar for each symbol."""
+        logger.info("StockDataClient: latest_bars symbols=%d", len(symbols))
+        result = await self._base._request_historical(
+            symbols=symbols,
+            asset=AssetType.STOCK,
+            data_type=MarketDataType.LATEST_BARS,
+            model_type=Bar,
+            timeout=timeout,
+        )
+        return {sym: bars[-1] for sym, bars in result.items() if bars}
+
     # -- Streaming -----------------------------------------------------
 
     async def stream_quotes(self, symbols: list[str], *, timeout: float = 30.0) -> StreamHandle[StreamQuote]:
