@@ -83,18 +83,21 @@ class TransportProducer:
             raise RuntimeError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
 
     async def close(self) -> None:
-        """Flush pending messages and release the underlying producer.
+        """Flush pending messages and mark as closed.
 
         After close, any further :meth:`send` or :meth:`flush` raises
         ``RuntimeError``.
+
+        The underlying :class:`Producer` reference is intentionally kept
+        alive to avoid a segfault in ``Producer.__del__`` on Python 3.14.
+        It will be released at process exit.
         """
         if not self._closed:
             try:
                 await self.flush()
             except RuntimeError:
                 pass  # already flushed
-        self._producer = None  # type: ignore[assignment]
-        self._closed = True
+            self._closed = True
 
     def drain_errors(self) -> list[str]:
         """Pull accumulated delivery errors (clears the queue)."""

@@ -1,8 +1,10 @@
 """TransportConsumer — async Kafka consumer for a single topic."""
 
+import asyncio
 import logging
 import queue
 from collections.abc import AsyncIterator, Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from confluent_kafka import TopicPartition
@@ -39,7 +41,12 @@ class TransportConsumer:
         config = self._settings.consumer_config(group_id=group_id)
         if auto_offset_reset is not None:
             config["auto.offset.reset"] = auto_offset_reset
-        self._consumer = AIOConsumer(config)
+
+        # Own the executor so we can shut it down after consumer close.
+        # AIOConsumer creates its own ThreadPoolExecutor if none is passed,
+        # but never shuts it down — causing segfault on Python 3.14.
+        self._executor = ThreadPoolExecutor(max_workers=2)
+        self._consumer = AIOConsumer(config, executor=self._executor)
         self._subscribed = False
         self._closed = False
 
@@ -50,16 +57,26 @@ class TransportConsumer:
         if self._closed:
             raise RuntimeError("TransportConsumer is closed")
 
-        raw_msgs = await self._consumer.consume(
-            num_messages=self._batch_size if self._batch_size is not None else self._settings.consumer_batch_size,
-            timeout=(self._poll_timeout_ms if self._poll_timeout_ms is not None else self._settings.consumer_poll_timeout_ms) / 1000.0,
-        )
+        batch_size = self._batch_size if self._batch_size is not None else self._settings.consumer_batch_size
+        timeout_s = (self._poll_timeout_ms if self._poll_timeout_ms is not None else self._settings.consumer_poll_timeout_ms) / 1000.0
+
         result: list[KafkaMessage] = []
-        for msg in raw_msgs:
+        # Use poll() (single message) instead of consume() (batch) to avoid
+        # a segfault in rd_kafka_consume_batch_queue on Python 3.14 +
+        # librdkafka 2.14.x.  Individual poll() calls are safe.
+        deadline = asyncio.get_running_loop().time() + timeout_s
+        while len(result) < batch_size:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            msg = await self._consumer.poll(min(remaining, 1.0))
+            if msg is None:
+                continue
             if msg.error():
                 await self._handle_error(msg)
                 continue
             result.append(self._build_message(msg))
+
         return result
 
     async def __aiter__(self) -> AsyncIterator[KafkaMessage]:
@@ -76,6 +93,10 @@ class TransportConsumer:
         finally:
             await self._consumer.close()
             self._closed = True
+            # Non-blocking shutdown — can't wait=True from within
+            # the executor's own thread (deadlock/crash).  The executor
+            # will be fully shut down in close().
+            self._executor.shutdown(wait=False)
 
     async def commit(self, msg: KafkaMessage) -> None:
         """Commit a message's offset.  Must be called during iteration."""
@@ -85,6 +106,8 @@ class TransportConsumer:
         if not self._closed:
             await self._consumer.close()
             self._closed = True
+            self._executor.shutdown(wait=True)
+            logger.debug("TransportConsumer executor shut down")
 
     def drain_errors(self) -> list[str]:
         """Pull accumulated consume errors (clears the queue)."""

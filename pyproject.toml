@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trading-sdk"
-version = "0.1.17"
+version = "0.1.18"
 description = "Shared SDK and data models for the trading platform (namespace: tradingcz.model)"
 readme = "README.md"
 license = "MIT"
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.13",
     "pydantic-settings>=2.14",
-    "confluent-kafka>=2.14.0",
+    "confluent-kafka>=2.14.2",
 ]
 
 [project.optional-dependencies]
