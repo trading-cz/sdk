@@ -24,7 +24,8 @@ megalinter-reports/
 .venv/
 venv/
 ENV/
-docs
+docs/*
+!docs/asyncio.md
 # IDE
 .idea/
 .vscode/
