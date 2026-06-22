@@ -7,24 +7,22 @@ Historical and streaming market data via request/reply over Kafka.
 ```text
 StockDataClient / StockStreamClient / OptionsHistoricDataClient / CorporateActionsClient
             │
-     BaseDataClient          ← shared transport logic (Kafka request/reply + typed consumption)
+     _DataTransport          ← internal request/reply + typed consumption (hidden)
        │        │
   RequestReply  KafkaTransport
 ```
 
-All clients share a single ``BaseDataClient`` instance.
-``BaseDataClient`` handles the Kafka request/reply handshake and typed
-message consumption — you create it once and pass it to every client.
+All clients share a single ``_DataTransport`` instance internally when
+using the ``_transport=`` parameter.  The transport layer is an
+implementation detail — you pass raw dependencies to each client directly.
 
 ---
 
-## Setup — BaseDataClient
+## Setup — transport dependencies
 
-Every market data client takes a :class:`BaseDataClient` as its only
-constructor argument.  Set it up once:
+Every market data client needs three things to talk to Kafka:
 
 ```python
-from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
@@ -47,14 +45,6 @@ rr = RequestReply(
     group_suffix="svc-reply",
 )
 await rr.start()
-
-# BaseDataClient — shared by all market data clients
-base = BaseDataClient(
-    rr=rr,
-    settings=settings,
-    topics=topics,
-    service_id="my-service",
-)
 ```
 
 **Teardown** (when done with all clients):
@@ -70,12 +60,17 @@ await admin.close()
 ## StockDataClient — historic & latest data
 
 **File**: ``stock_historic.py``  
-**Constructor**: ``StockDataClient(base: BaseDataClient)``
+**Constructor**: ``StockDataClient(*, rr, settings, topics, service_id, broker=Broker.ALPACA)``
 
 ```python
 from tradingcz.sdk.market_data.stock_historic import StockDataClient
 
-stock = StockDataClient(base)
+stock = StockDataClient(
+    rr=rr,
+    settings=settings,
+    topics=topics,
+    service_id="my-service",
+)
 
 # ── Historical bars ──────────────────────────────────────────
 bars: dict[str, list[Bar]] = await stock.bars(
@@ -114,15 +109,20 @@ bars: dict[str, Bar] = await stock.latest_bars(
 ## StockStreamClient — live streaming data
 
 **File**: ``stock_stream.py``  
-**Constructor**: ``StockStreamClient(base: BaseDataClient)``
+**Constructor**: ``StockStreamClient(*, rr, settings, topics, service_id, broker=Broker.ALPACA)``
 
 ```python
 from tradingcz.sdk.market_data.stock_stream import StockStreamClient
 
-stream = StockStreamClient(base)
+stream = StockStreamClient(
+    rr=rr,
+    settings=settings,
+    topics=topics,
+    service_id="my-service",
+)
 ```
 
-All streaming methods return a :class:`StreamHandle[T]` which supports
+All streaming methods return a :class:`StreamHandle` which supports
 **two usage patterns**:
 
 ### Pattern 1: Context manager (recommended)
@@ -182,12 +182,17 @@ async for quote in stream.stream_quotes(["AAPL"]):
 ## OptionsHistoricDataClient — option snapshots
 
 **File**: ``option_historic.py``  
-**Constructor**: ``OptionsHistoricDataClient(base: BaseDataClient)``
+**Constructor**: ``OptionsHistoricDataClient(*, rr, settings, topics, service_id, broker=Broker.ALPACA)``
 
 ```python
 from tradingcz.sdk.market_data.option_historic import OptionsHistoricDataClient
 
-options = OptionsHistoricDataClient(base)
+options = OptionsHistoricDataClient(
+    rr=rr,
+    settings=settings,
+    topics=topics,
+    service_id="my-service",
+)
 
 snapshots: dict[str, list[OptionSnapshot]] = await options.snapshots(
     ["AAPL250620C00150000"],
@@ -207,12 +212,17 @@ for symbol, snaps in snapshots.items():
 ## CorporateActionsClient — dividends & splits
 
 **File**: ``corporate.py``  
-**Constructor**: ``CorporateActionsClient(base: BaseDataClient)``
+**Constructor**: ``CorporateActionsClient(*, rr, settings, topics, service_id, broker=Broker.ALPACA)``
 
 ```python
 from tradingcz.sdk.market_data.corporate import CorporateActionsClient
 
-corp = CorporateActionsClient(base)
+corp = CorporateActionsClient(
+    rr=rr,
+    settings=settings,
+    topics=topics,
+    service_id="my-service",
+)
 
 dividends = await corp.dividends(["AAPL"], days=365)
 splits = await corp.splits(["AAPL"], days=365)
@@ -228,7 +238,7 @@ splits = await corp.splits(["AAPL"], days=365)
 ## TimeKeeper — market clock
 
 **File**: ``clock.py``  
-**Constructor**: ``TimeKeeper(trading_client)`` — standalone, no ``BaseDataClient`` needed.
+**Constructor**: ``TimeKeeper(trading_client)`` — standalone, no transport needed.
 
 ```python
 from tradingcz.sdk.market_data import TimeKeeper

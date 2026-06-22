@@ -12,10 +12,14 @@ from __future__ import annotations
 
 import logging
 
-from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
-from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
+from tradingcz.sdk.market_data._internal._stream_handle import StreamHandle
+from tradingcz.sdk.market_data._internal._transport import _DataTransport
+from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.models.enums.event import AssetType, Broker, MarketDataType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, Quote, Trade
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -23,26 +27,44 @@ logger = logging.getLogger(__name__)
 class StockStreamClient:
     """Stream live stock market data.
 
+    Constructor args::
+
+        StockStreamClient(
+            rr=request_reply,           # RequestReply instance (started)
+            settings=kafka_settings,    # KafkaSettings
+            topics=topic_registry,      # KafkaTopicRegistry
+            service_id="my-service",    # unique service identifier
+            broker=Broker.ALPACA,       # optional, default: ALPACA
+        )
+
     All methods return a :class:`StreamHandle` that supports both
     bare ``async for`` iteration and context-manager usage (guaranteed
     unsubscribe on exit).
-
-    **Streaming** (returns :class:`StreamHandle[T]`)::
-
-        async with app.stock_stream.stream_quotes(["AAPL"]) as stream:
-            async for quote in stream:
-                if quote.bid_price > threshold:
-                    break
     """
 
-    def __init__(self, base: BaseDataClient) -> None:
-        self._base = base
+    def __init__(
+        self,
+        *,
+        rr: RequestReply,
+        settings: KafkaSettings,
+        topics: KafkaTopicRegistry,
+        service_id: str,
+        broker: Broker = Broker.ALPACA,
+        _transport: _DataTransport | None = None,
+    ) -> None:
+        if _transport is not None:
+            self._transport = _transport
+        else:
+            self._transport = _DataTransport(
+                rr=rr, settings=settings, topics=topics,
+                service_id=service_id, broker=broker,
+            )
 
     async def stream_quotes(
         self, symbols: list[str], *, timeout: float = 30.0
     ) -> StreamHandle[Quote]:
         """Stream live bid/ask quotes."""
-        return await self._base._stream(
+        return await self._transport.stream(
             symbols=symbols,
             asset=AssetType.STOCK,
             data_type=MarketDataType.QUOTES,
@@ -62,7 +84,7 @@ class StockStreamClient:
             "StockStreamClient: stream_bars symbols=%d timeframe=%s",
             len(symbols), timeframe,
         )
-        return await self._base._stream(
+        return await self._transport.stream(
             symbols=symbols,
             asset=AssetType.STOCK,
             data_type=MarketDataType.BARS,
@@ -75,7 +97,7 @@ class StockStreamClient:
         self, symbols: list[str], *, timeout: float = 30.0
     ) -> StreamHandle[Trade]:
         """Stream live trade ticks."""
-        return await self._base._stream(
+        return await self._transport.stream(
             symbols=symbols,
             asset=AssetType.STOCK,
             data_type=MarketDataType.TRADES,

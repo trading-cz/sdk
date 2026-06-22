@@ -15,7 +15,7 @@ from tradingcz.sdk.account.signals import SignalPublisher
 # Account clients (positions/balance/orders) disabled until executor supports them.
 from tradingcz.sdk.health.publisher import HealthPublisher
 from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
-from tradingcz.sdk.market_data._base import BaseDataClient
+from tradingcz.sdk.market_data._internal._transport import _DataTransport
 from tradingcz.sdk.market_data.corporate import CorporateActionsClient
 from tradingcz.sdk.market_data.option_historic import OptionsHistoricDataClient
 from tradingcz.sdk.market_data.stock_historic import StockDataClient
@@ -62,7 +62,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._topic_admin = KafkaTopicAdmin(self._kafka)
 
         self._rr: RequestReply | None = None
-        self._base: BaseDataClient | None = None
+        self._transport: _DataTransport | None = None
         self._stock: StockDataClient | None = None
         self._stock_stream: StockStreamClient | None = None
         self._options: OptionsHistoricDataClient | None = None
@@ -87,14 +87,14 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
             group_suffix="svc-reply",
         )
         await self._rr.start()
-        self._base = BaseDataClient(
+        self._transport = _DataTransport(
             rr=self._rr,
             settings=self._kafka,
             topics=self.topics,
             service_id=self.service_id,
             broker=self._broker,  # type: ignore[arg-type]
         )
-        logger.info("ServiceApp: RequestReply + BaseDataClient ready")
+        logger.info("ServiceApp: RequestReply + _DataTransport ready")
 
         await self._health.ready()
         setup_shutdown_handlers(self._shutdown)
@@ -143,37 +143,37 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
     @property
     def stock(self) -> StockDataClient:
         """Stock data client (bars, latest quotes).  Lazy — requires ``start()`` first."""
-        if self._base is None:
+        if self._transport is None:
             raise RuntimeError("Call start() before accessing stock client.")
         if self._stock is None:
-            self._stock = StockDataClient(self._base)
+            self._stock = StockDataClient(_transport=self._transport)
         return self._stock
 
     @property
     def stock_stream(self) -> StockStreamClient:
         """Stock streaming client (quotes, bars, trades).  Lazy — requires ``start()`` first."""
-        if self._base is None:
+        if self._transport is None:
             raise RuntimeError("Call start() before accessing stock stream client.")
         if self._stock_stream is None:
-            self._stock_stream = StockStreamClient(self._base)
+            self._stock_stream = StockStreamClient(_transport=self._transport)
         return self._stock_stream
 
     @property
     def options(self) -> OptionsHistoricDataClient:
         """Options data client (snapshots).  Lazy — requires ``start()`` first."""
-        if self._base is None:
+        if self._transport is None:
             raise RuntimeError("Call start() before accessing options client.")
         if self._options is None:
-            self._options = OptionsHistoricDataClient(self._base)
+            self._options = OptionsHistoricDataClient(_transport=self._transport)
         return self._options
 
     @property
     def corporate_actions(self) -> CorporateActionsClient:
         """Corporate actions client (dividends, splits).  Lazy — requires ``start()`` first."""
-        if self._base is None:
+        if self._transport is None:
             raise RuntimeError("Call start() before accessing corporate actions client.")
         if self._corporate is None:
-            self._corporate = CorporateActionsClient(self._base)
+            self._corporate = CorporateActionsClient(_transport=self._transport)
         return self._corporate
 
     # -- Account clients (lazy) --
@@ -241,8 +241,8 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 class BrokerScope:
     """Broker-scoped client factory returned by ``ServiceApp.with_broker()``."""
 
-    def __init__(self, base: BaseDataClient) -> None:
-        self._base = base
+    def __init__(self, transport: _DataTransport) -> None:
+        self._transport = transport
         self._stock: StockDataClient | None = None
         self._stock_stream: StockStreamClient | None = None
         self._options: OptionsHistoricDataClient | None = None
@@ -252,28 +252,28 @@ class BrokerScope:
     def stock(self) -> StockDataClient:
         """Stock data client scoped to this broker."""
         if self._stock is None:
-            self._stock = StockDataClient(self._base)
+            self._stock = StockDataClient(_transport=self._transport)
         return self._stock
 
     @property
     def stock_stream(self) -> StockStreamClient:
         """Stock streaming client scoped to this broker."""
         if self._stock_stream is None:
-            self._stock_stream = StockStreamClient(self._base)
+            self._stock_stream = StockStreamClient(_transport=self._transport)
         return self._stock_stream
 
     @property
     def options(self) -> OptionsHistoricDataClient:
         """Options data client scoped to this broker."""
         if self._options is None:
-            self._options = OptionsHistoricDataClient(self._base)
+            self._options = OptionsHistoricDataClient(_transport=self._transport)
         return self._options
 
     @property
     def corporate_actions(self) -> CorporateActionsClient:
         """Corporate actions client scoped to this broker."""
         if self._corporate is None:
-            self._corporate = CorporateActionsClient(self._base)
+            self._corporate = CorporateActionsClient(_transport=self._transport)
         return self._corporate
 
 

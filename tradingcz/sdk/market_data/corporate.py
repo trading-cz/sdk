@@ -7,31 +7,55 @@ One-time (returns ``dict``):
 
 from __future__ import annotations
 
-from tradingcz.sdk.market_data._base import BaseDataClient
-from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
+from tradingcz.sdk.market_data._internal._transport import _DataTransport
+from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.models.enums.event import AssetType, Broker, MarketDataType
 from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicRegistry
 
 
 class CorporateActionsClient:
     """Request corporate actions (dividends, splits, etc.).
 
-    Usage::
+    Constructor args::
 
-        async with ServiceApp(service_id="risk-checker", env="dev", kafka_settings=KafkaSettings(consumer_group="risk-checker")) as app:
-            divs = await app.corporate_actions.dividends(["AAPL"], days=365)
-            splits = await app.corporate_actions.splits(["AAPL"], days=365)
+        CorporateActionsClient(
+            rr=request_reply,           # RequestReply instance (started)
+            settings=kafka_settings,    # KafkaSettings
+            topics=topic_registry,      # KafkaTopicRegistry
+            service_id="my-service",    # unique service identifier
+            broker=Broker.ALPACA,       # optional, default: ALPACA
+        )
     """
 
-    def __init__(self, base: BaseDataClient) -> None:
-        self._base = base
+    def __init__(
+        self,
+        *,
+        rr: RequestReply,
+        settings: KafkaSettings,
+        topics: KafkaTopicRegistry,
+        service_id: str,
+        broker: Broker = Broker.ALPACA,
+        _transport: _DataTransport | None = None,
+    ) -> None:
+        if _transport is not None:
+            self._transport = _transport
+        else:
+            self._transport = _DataTransport(
+                rr=rr, settings=settings, topics=topics,
+                service_id=service_id, broker=broker,
+            )
 
-    async def dividends(self, symbols: list[str], *, days: int = 365, timeout: float = 30.0) -> dict[str, list[Dividend]]:
+    async def dividends(
+        self, symbols: list[str], *, days: int = 365, timeout: float = 30.0
+    ) -> dict[str, list[Dividend]]:
         """Request dividend history for symbols.
 
         Returns ``{symbol: [Dividend sorted by ex_date]}``.
         """
         # pylint: disable=protected-access
-        return await self._base._request_historical(
+        return await self._transport.request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
             data_type=MarketDataType.DIVIDENDS,
@@ -40,13 +64,15 @@ class CorporateActionsClient:
             timeout=timeout,
         )
 
-    async def splits(self, symbols: list[str], *, days: int = 365, timeout: float = 30.0) -> dict[str, list[StockSplit]]:
+    async def splits(
+        self, symbols: list[str], *, days: int = 365, timeout: float = 30.0
+    ) -> dict[str, list[StockSplit]]:
         """Request stock split history for symbols.
 
         Returns ``{symbol: [StockSplit sorted by ex_date]}``.
         """
         # pylint: disable=protected-access
-        return await self._base._request_historical(
+        return await self._transport.request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
             data_type=MarketDataType.SPLITS,

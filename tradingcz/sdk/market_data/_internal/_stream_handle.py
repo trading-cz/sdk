@@ -1,0 +1,122 @@
+"""StreamHandle — async context manager for guaranteed unsubscribe."""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncIterator
+from types import TracebackType
+
+from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.models.enums.event import (
+    AssetType,
+    Broker,
+    DataRequestType,
+    EventType,
+    MarketDataType,
+)
+from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
+
+logger = logging.getLogger(__name__)
+
+
+class StreamHandle[T](AsyncIterator[T]):
+    """Handle to a live data stream with automatic cleanup.
+
+    Returned by streaming methods like ``stream_quotes()`` and
+    ``stream_trades()``.  Supports two usage patterns:
+
+    **Bare iteration** (cleanup on loop exit)::
+
+        async for quote in stream.stream_quotes(["AAPL"]):
+            if done:
+                break  # channel is closed automatically
+
+    **Context manager** (guaranteed unsubscribe via DataRequest)::
+
+        async with stream.stream_quotes(["AAPL"]) as quotes:
+            async for quote in quotes:
+                ...
+        # unsubscribe sent here, even if exception raised
+    """
+
+    def __init__(
+        self,
+        iterator: AsyncIterator[T],
+        unsubscribe: _Unsubscribe | None = None,
+    ) -> None:
+        self._iterator = iterator
+        self._unsubscribe = unsubscribe
+        self._exited = False
+
+    def __aiter__(self) -> StreamHandle[T]:
+        return self
+
+    async def __anext__(self) -> T:
+        try:
+            return await self._iterator.__anext__()
+        except StopAsyncIteration:
+            self._exited = True
+            raise
+
+    async def __aenter__(self) -> StreamHandle[T]:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self._exited = True
+        if self._unsubscribe is not None:
+            try:
+                await self._unsubscribe()
+            except Exception:
+                logger.debug("Unsubscribe failed (non-critical)", exc_info=True)
+        if hasattr(self._iterator, "aclose"):
+            await self._iterator.aclose()  # type: ignore[union-attr]
+
+
+class _Unsubscribe:
+    """Callable that sends an unsubscribe DataRequest."""
+
+    def __init__(
+        self,
+        rr: RequestReply,
+        broker: Broker,
+        symbols: list[str],
+        data_kind: MarketDataType,
+        asset: AssetType,
+    ) -> None:
+        self._rr = rr
+        self._broker = broker
+        self._symbols = symbols
+        self._data_type = data_kind
+        self._asset = asset
+
+    async def __call__(self) -> None:
+        """Send unsubscribe DataRequest (fire-and-forget)."""
+        req = DataRequest(
+            type=DataRequestType.UNSUBSCRIBE,
+            asset=self._asset,
+            broker=self._broker,
+            symbols=self._symbols,
+            data_type=self._data_type,
+        )
+        self._rr.register_type(EventType.DATA_READY, DataReady)
+        self._rr.register_type(EventType.DATA_ERROR, DataError)
+        try:
+            await self._rr.request(
+                req,
+                response_type=DataReady,
+                request_type=EventType.DATA_REQUEST,
+                timeout=5.0,
+            )
+        except Exception:
+            logger.debug(
+                "Unsubscribe request failed for %s (data_kind=%s)",
+                self._symbols, self._data_type, exc_info=True,
+            )
+
+
+__all__ = ["StreamHandle"]

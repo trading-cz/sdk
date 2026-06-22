@@ -1,17 +1,17 @@
-"""BaseDataClient — internal shared transport logic for all market data clients.
+"""Internal transport layer — request/reply + typed consumption.
 
-Application code never references this module directly.  Use
-``StockDataClient``, ``StockStreamClient``, ``OptionsHistoricDataClient``,
-or ``CorporateActionsClient`` via ``ServiceApp``.
+Application code never references this module directly.
 """
+
+# pylint: disable=protected-access
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from types import TracebackType
 
+from tradingcz.sdk.market_data._internal._stream_handle import StreamHandle, _Unsubscribe
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import (
     AssetType,
@@ -31,127 +31,11 @@ from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
-# StreamHandle — async context manager for guaranteed unsubscribe
-# ------------------------------------------------------------------
+class _DataTransport:
+    """Internal: shared request/reply + typed consumption for market data clients.
 
-
-class StreamHandle[T](AsyncIterator[T]):
-    """Handle to a live data stream with automatic cleanup.
-
-    A :class:`StreamHandle` is returned by streaming methods like
-    ``app.stock.stream_quotes()`` and ``app.stock.stream_trades()``.  It can be used
-    in two ways:
-
-    **Bare iteration** (cleanup on loop exit)::
-
-        async for quote in app.stock.stream_quotes(["AAPL"]):
-            if done:
-                break  # channel is closed automatically
-
-    **Context manager** (guaranteed unsubscribe via DataRequest)::
-
-        async with app.stock.stream_quotes(["AAPL"]) as stream:
-            async for quote in stream:
-                ...
-        # unsubscribe sent here, even if exception raised
-
-    The context-manager form sends an explicit ``unsubscribe``
-    ``DataRequest`` on exit, allowing the ingestion service to stop
-    pushing data for these symbols.
-    """
-
-    def __init__(self, iterator: AsyncIterator[T], unsubscribe: _Unsubscribe | None = None, ) -> None:
-        self._iterator = iterator
-        self._unsubscribe = unsubscribe
-        self._exited = False
-
-    def __aiter__(self) -> StreamHandle[T]:
-        return self
-
-    async def __anext__(self) -> T:
-        try:
-            return await self._iterator.__anext__()
-        except StopAsyncIteration:
-            self._exited = True
-            raise
-
-    async def __aenter__(self) -> StreamHandle[T]:
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        self._exited = True
-        if self._unsubscribe is not None:
-            try:
-                await self._unsubscribe()
-            except Exception:
-                logger.debug("Unsubscribe failed (non-critical)", exc_info=True)
-        # Close the underlying async generator
-        if hasattr(self._iterator, "aclose"):
-            await self._iterator.aclose()  # type: ignore[union-attr]
-
-
-class _Unsubscribe:
-    """Callable that sends an unsubscribe DataRequest."""
-
-    def __init__(
-        self,
-        rr: RequestReply,
-        broker: Broker,
-        symbols: list[str],
-        data_kind: MarketDataType,
-        asset: AssetType,
-    ) -> None:
-        self._rr = rr
-        self._broker = broker
-        self._symbols = symbols
-        self._data_type = data_kind
-        self._asset = asset
-
-    async def __call__(self) -> None:
-        """Send unsubscribe DataRequest (fire-and-forget)."""
-        req = DataRequest(
-            type=DataRequestType.UNSUBSCRIBE,
-            asset=self._asset,
-            broker=self._broker,
-            symbols=self._symbols,
-            data_type=self._data_type,
-        )
-        # Fire-and-forget — no response expected for unsubscribe
-        self._rr.register_type(EventType.DATA_READY, DataReady)
-        self._rr.register_type(EventType.DATA_ERROR, DataError)
-        try:
-            await self._rr.request(
-                req,
-                response_type=DataReady,
-                request_type=EventType.DATA_REQUEST,
-                timeout=5.0,
-            )
-        except Exception:
-            logger.debug( "Unsubscribe request failed for %s (data_kind=%s)", self._symbols, self._data_type, exc_info=True, )
-
-
-# ------------------------------------------------------------------
-# BaseDataClient — shared transport logic
-# ------------------------------------------------------------------
-
-
-class BaseDataClient:
-    """Internal: shared request/reply + typed consumption for all data clients.
-
-    Concrete clients (``StockDataClient``, ``StockStreamClient``,
-    ``OptionsHistoricDataClient``, etc.)
-    receive an instance of this class and call its internal methods.
-    Application code never references ``BaseDataClient`` directly.
-
-    One ``BaseDataClient`` is created per broker scope inside
-    ``ServiceApp.start()`` and shared by all data clients that use
-    the same broker.
+    One ``_DataTransport`` is created per broker scope and shared by all
+    data clients that use the same broker.
     """
 
     def __init__(
@@ -182,11 +66,13 @@ class BaseDataClient:
         if resp.event_type == EventType.DATA_ERROR:
             raise RuntimeError(f"DataError from ingestion: {resp.error}")
         if resp.type != expected_type:
-            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
+            raise RuntimeError(
+                f"Expected {expected_type} DataReady, got type={resp.type}"
+            )
 
     # -- Historical (request → consume → return dict) ------------------
 
-    async def _request_historical[
+    async def request_historical[
         T
     ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -234,7 +120,10 @@ class BaseDataClient:
 
         self._validate_response(resp, DataRequestType.HISTORIC)
 
-        logger.info( "DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count, )
+        logger.info(
+            "DataReady(historic): topic=%s record_count=%s",
+            resp.data_topic, resp.record_count,
+        )
 
         await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
@@ -247,7 +136,13 @@ class BaseDataClient:
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
-                if seq and self._dedup.is_duplicate(msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),seq):
+                if seq and self._dedup.is_duplicate(
+                    msg.headers.get(
+                        Header.SOURCE,
+                        msg.headers.get(Header.SOURCE_APP, ""),
+                    ),
+                    seq,
+                ):
                     continue
                 try:
                     item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
@@ -268,7 +163,7 @@ class BaseDataClient:
 
     # -- Streaming (subscribe → yield indefinitely → unsubscribe) ------
 
-    async def _stream[
+    async def stream[
         T
     ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -312,7 +207,10 @@ class BaseDataClient:
                 async for msg in consumer:
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
-                        msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                        msg.headers.get(
+                            Header.SOURCE,
+                            msg.headers.get(Header.SOURCE_APP, ""),
+                        ),
                         seq,
                     ):
                         continue
@@ -335,5 +233,4 @@ class BaseDataClient:
         return StreamHandle(iterator=_consume(), unsubscribe=unsubscribe)
 
 
-__all__ = ["BaseDataClient", "StreamHandle"]
-
+__all__ = ["_DataTransport"]
