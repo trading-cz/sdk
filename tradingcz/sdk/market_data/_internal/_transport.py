@@ -26,8 +26,9 @@ from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.kafka_header import Header
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
-from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.single_type_consumer import SingleTypeConsumer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
@@ -69,21 +70,51 @@ class _DataTransport:
         if resp.event_type == EventType.DATA_ERROR:
             raise RuntimeError(f"DataError from ingestion: {resp.error}")
         if resp.type != expected_type:
-            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}"
-            )
+            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
+
+    # -- Shared data-topic consumer -----------------------------------
+
+    async def _consume_typed[T](
+        self, topic: str, model_type: type[T], group: str, *, event_id: str = "",
+    ) -> AsyncIterator[T]:
+        """Iterate typed, deduped messages from a single-type data topic.
+
+        Uses :class:`SingleTypeConsumer` for JSON parsing and event_id
+        filtering.  Dedup is applied in the caller loop via raw headers.
+        """
+        consumer = SingleTypeConsumer(
+            topic=topic,
+            settings=self._settings,
+            model_type=model_type,
+            group_suffix=group,
+            auto_commit=False,
+            header_filter=lambda h: h.get(Header.EVENT_ID) == event_id
+            if event_id
+            else True,
+        )
+        async for _event_type, model, raw in consumer:
+            # ── Dedup (transport-layer concern) ──
+            seq = raw.headers.get(Header.SEQUENCE, "")
+            if seq and self._dedup.is_duplicate(
+                raw.headers.get(
+                    Header.SOURCE,
+                    raw.headers.get(Header.SOURCE_APP, ""),
+                ),
+                seq,
+            ):
+                continue
+            yield model
 
     # -- Historical (request → consume → return dict) ------------------
 
-    async def request_historical[
-        T
-    ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def request_historical[T](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         symbols: list[str],
         asset: AssetType,
         data_type: MarketDataType,
         model_type: type[T],
+        timeframe: Timeframe,
         *,
-        timeframe: Timeframe | None = None,
         days: int | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -109,55 +140,28 @@ class _DataTransport:
             broker=self._broker,
             symbols=symbols,
             data_type=data_type,
-            timeframe=timeframe or Timeframe.D1,
+            timeframe=timeframe,
             start_time=start,
             end_time=end,
         )
 
-        resp = await self._rr.request(
-            req,
-            response_type=DataReady,
-            request_type=EventType.DATA_REQUEST,
-            timeout=timeout,
-        )
+        resp = await self._rr.request(req, response_type=DataReady, request_type=EventType.DATA_REQUEST, timeout=timeout)
 
         self._validate_response(resp, DataRequestType.HISTORIC)
-
-        logger.info(
-            "DataReady(historic): topic=%s record_count=%s",
-            resp.data_topic, resp.record_count,
-        )
+        logger.info("DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count)
 
         await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
 
-        consumer = TransportConsumer(resp.data_topic, self._settings, "data")
-        try:
-            async for msg in consumer:
-                if msg.headers.get(Header.EVENT_ID) != req.event_id:
-                    continue
-                seq = msg.headers.get(Header.SEQUENCE, "")
-                if seq and self._dedup.is_duplicate(
-                    msg.headers.get(
-                        Header.SOURCE,
-                        msg.headers.get(Header.SOURCE_APP, ""),
-                    ),
-                    seq,
-                ):
-                    continue
-                try:
-                    item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.debug("Skipping unparseable %s", data_type, exc_info=True)
-                    continue
-                results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
-                count += 1
-                if expected and count >= expected:
-                    break
-        finally:
-            await consumer.close()
+        async for item in self._consume_typed(
+            resp.data_topic, model_type, "data", event_id=str(req.event_id),
+        ):
+            results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
+            count += 1
+            if expected and count >= expected:
+                break
 
         for symbol_items in results.values():
             symbol_items.sort(key=lambda b: b.timestamp)  # type: ignore[attr-defined]
@@ -204,31 +208,13 @@ class _DataTransport:
         self._validate_response(resp, DataRequestType.STREAM)
 
         await self._topic_admin.ensure(resp.data_topic)
-        consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
 
         async def _consume() -> AsyncIterator[T]:
-            try:
-                async for msg in consumer:
-                    seq = msg.headers.get(Header.SEQUENCE, "")
-                    if seq and self._dedup.is_duplicate(
-                        msg.headers.get(
-                            Header.SOURCE,
-                            msg.headers.get(Header.SOURCE_APP, ""),
-                        ),
-                        seq,
-                    ):
-                        continue
-                    try:
-                        parsed = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
-                    except Exception:
-                        continue
-                    yield parsed
-            finally:
-                await consumer.close()
+            async for item in self._consume_typed(resp.data_topic, model_type, "stream"):
+                yield item
 
         unsubscribe = _Unsubscribe(
-            producer=self._producer,
-            topic=self._topics.events.name,
+            producer=TypedProducer(self._producer, self._topics.events.name),
             service_id=self._service_id,
             broker=self._broker,
             symbols=symbols,

@@ -24,6 +24,16 @@ logger = logging.getLogger(__name__)
 
 
 class TypedConsumer:
+    """Iterate typed Pydantic models from a shared multi-type Kafka topic.
+
+    Dispatches by ``event_type`` header → registered model class.
+    Optional ``key_filter`` and ``header_filter`` run **before** dispatch
+    and parsing, saving CPU on high-volume topics.
+
+    Yields ``(event_type_str, model, raw_message)`` triples — same shape
+    as :class:`SingleTypeConsumer`.
+    """
+
     def __init__(
         self,
         topic: str,
@@ -36,6 +46,8 @@ class TypedConsumer:
         auto_offset_reset: str | None = None,
         poll_timeout_ms: int | None = None,
         batch_size: int | None = None,
+        key_filter: Callable[[str], bool] | None = None,
+        header_filter: Callable[[dict[str, str]], bool] | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -46,6 +58,8 @@ class TypedConsumer:
         self._auto_offset_reset = auto_offset_reset
         self._poll_timeout_ms = poll_timeout_ms
         self._batch_size = batch_size
+        self._key_filter = key_filter
+        self._header_filter = header_filter
         self._session: TransportConsumer | None = None
         self._deserializer = JsonDeserializer()
 
@@ -65,6 +79,12 @@ class TypedConsumer:
             batch_size=self._batch_size,
         )
         async for msg in self._session:
+            # ── Pre-dispatch filters (skip before parse, saves CPU) ──
+            if self._key_filter is not None and not self._key_filter(msg.key):
+                continue
+            if self._header_filter is not None and not self._header_filter(msg.headers):
+                continue
+            # ── Dispatch ──
             try:
                 event_type, model = self._dispatch(msg)
             except SdkError:
