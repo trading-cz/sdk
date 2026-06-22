@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
 from pydantic import BaseModel
 
 from tradingcz.sdk.models.enums.event import EventType
-from tradingcz.sdk.transport.kafka_header import EventHeader
+from tradingcz.sdk.transport.kafka_header import EventHeader, Header
 from tradingcz.sdk.transport.kafka_key import KafkaKey
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
-from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
 from tradingcz.sdk.typed.typed_producer import TypedProducer
 
@@ -29,34 +27,24 @@ logger = logging.getLogger(__name__)
 
 
 class RequestReply:
-    """Send a typed request, await a correlated typed response.
-
-    Correlation is by ``event_id`` — both request and response models
-    must have an ``event_id: str`` field.  Messages received on the
-    response topic that lack an ``event_id`` are logged and skipped.
-
-    Flushes after each request to guarantee delivery before awaiting
-    the response.
-
-    Used internally by: BaseDataClient, PositionClient, BalanceClient, OrderClient.
-    """
+    """Send a typed request, await a correlated typed response."""
 
     def __init__(
         self,
-        producer: TransportProducer,
+        producer: TypedProducer,
         topic: str,
         settings: KafkaSettings,
         service_id: str,
         *,
         group_suffix: str,
-        message_types: dict[str, type[BaseModel]] | None = None,
+        message_types: dict[EventType, type[BaseModel]] | None = None,
     ) -> None:
-        self._typed_producer = TypedProducer(producer, topic)
+        self._typed_producer = producer
         self._topic = topic
         self._settings = settings
         self._service_id = service_id
         self._seq = 0
-        self._types: dict[str, type[BaseModel]] = dict(message_types) if message_types else {}
+        self._types: dict[EventType, type[BaseModel]] = dict(message_types) if message_types else {}
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._skipped = 0
@@ -66,8 +54,8 @@ class RequestReply:
     # Type registry
     # ------------------------------------------------------------------
 
-    def register_type(self, message_type: str | EventType, model: type[BaseModel]) -> None:
-        self._types[str(message_type)] = model
+    def register_type(self, message_type: EventType, model: type[BaseModel]) -> None:
+        self._types[message_type] = model
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -110,7 +98,7 @@ class RequestReply:
         req: BaseModel,
         *,
         response_type: type[Resp],  # type-checker only, not used at runtime
-        request_type: EventType | None = None,
+        request_type: EventType,
         timeout: float = 30.0,
     ) -> Resp:
         event_id: str = str(req.event_id)
@@ -118,12 +106,11 @@ class RequestReply:
             raise ValueError(f"Request model {type(req).__name__} has no event_id")
 
         _ = response_type  # used only for type-checker generic binding
-        mt = request_type or _infer_message_type(req)
         self._seq += 1
 
-        key = KafkaKey(value=f"{mt}:{self._service_id}:{event_id}")
+        key = KafkaKey(value=f"{request_type}:{self._service_id}:{event_id}")
         headers = EventHeader(
-            event_type=mt,
+            event_type=request_type,
             source_app=self._service_id,
             event_id=event_id,
         )
@@ -162,13 +149,10 @@ class RequestReply:
         )
         try:
             async for _msg_type, model, _raw in consumer:
-                # event_id is mandatory on the event topic — missing → skip
-                event_id: str = getattr(model, 'event_id', '')
+                # event_id is mandatory in Kafka headers — missing → skip
+                event_id: str = _raw.headers.get(Header.EVENT_ID, "")
                 if not event_id:
-                    logger.debug(
-                        "RequestReply: message has no event_id, skipping (type=%s)",
-                        _msg_type,
-                    )
+                    logger.debug("RequestReply: message has no event_id header, skipping (type=%s)", _msg_type)
                     self._skipped += 1
                     continue
                 future = self._pending.get(event_id)
@@ -185,22 +169,4 @@ class RequestReply:
         return self._skipped
 
 
-def _infer_message_type(model: BaseModel) -> EventType:
-    """Infer EventType from model class name: DataRequest → DATA_REQUEST.
-
-    Converts CamelCase class name to snake_case and looks up the
-    corresponding :class:`EventType` enum member.
-
-    Raises:
-        ValueError: If no EventType matches the inferred name.
-            Pass an explicit ``request_type`` to avoid inference.
-    """
-    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", type(model).__name__).lower()
-    try:
-        return EventType(snake)
-    except ValueError:
-        raise ValueError(
-            f"Cannot infer EventType from class {type(model).__name__!r}: "
-            f"'{snake}' is not a known EventType. "
-            f"Pass an explicit 'request_type' to RequestReply.request()."
-        ) from None
+__all__ = ["RequestReply"]

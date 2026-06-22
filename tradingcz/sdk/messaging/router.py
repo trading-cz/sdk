@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class _Registration[T: BaseModel]:
     """Internal record for a single registered handler."""
 
-    msg_type: str
+    msg_type: EventType
     model_class: type[T]
     handler: Callable[[T, KafkaMessage], Awaitable[None]]
     filter_fn: Callable[[T, KafkaMessage], bool] | None
@@ -130,7 +130,7 @@ class EventRouter:
         """
         self._handlers.append(
             _Registration(
-                msg_type=str(msg_type),
+                msg_type=msg_type,
                 model_class=model_class,
                 handler=handler,
                 filter_fn=filter_fn,
@@ -152,7 +152,7 @@ class EventRouter:
         if not self._handlers:
             logger.warning("EventRouter.run() started with no handlers registered")
 
-        types: dict[str, type[BaseModel]] = {
+        types: dict[EventType, type[BaseModel]] = {
             reg.msg_type: reg.model_class for reg in self._handlers
         }
         self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)

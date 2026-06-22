@@ -1,10 +1,4 @@
-"""TypedConsumer — header-based typed dispatch from a TransportConsumer (Layer 2).
-
-Iterate typed Pydantic models from a shared multi-type Kafka topic.
-Dispatches by ``event_type`` header → registered model class.
-
-See ``typed/_README.md`` for usage examples.
-"""
+"""TypedConsumer — header-based typed dispatch from a TransportConsumer."""
 
 from __future__ import annotations
 
@@ -14,6 +8,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from pydantic import BaseModel
 
 from tradingcz.sdk.exceptions import MessageTypeError, SdkError
+from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.serialization.json import JsonDeserializer
 from tradingcz.sdk.transport.kafka_header import Header
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
@@ -24,21 +19,17 @@ logger = logging.getLogger(__name__)
 
 
 class TypedConsumer:
-    """Iterate typed Pydantic models from a shared multi-type Kafka topic.
+    """Dispatch by ``event_type`` header → registered model.
 
-    Dispatches by ``event_type`` header → registered model class.
-    Optional ``key_filter`` and ``header_filter`` run **before** dispatch
-    and parsing, saving CPU on high-volume topics.
-
-    Yields ``(event_type_str, model, raw_message)`` triples — same shape
-    as :class:`SingleTypeConsumer`.
+    ``key_filter`` and ``header_filter`` run before dispatch/parse.
+    See ``typed/_README.md`` for usage.
     """
 
     def __init__(
         self,
         topic: str,
         settings: KafkaSettings,
-        types: dict[str, type[BaseModel]],
+        types: dict[EventType, type[BaseModel]],
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
@@ -69,7 +60,7 @@ class TypedConsumer:
             raise RuntimeError("commit() called outside iteration")
         await self._session.commit(msg)
 
-    async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
+    async def __aiter__(self) -> AsyncIterator[tuple[EventType, BaseModel, KafkaMessage]]:
         self._session = TransportConsumer(
             self._topic,
             self._settings,
@@ -95,14 +86,18 @@ class TypedConsumer:
 
     # ── Dispatch ─────────────────────────────────────────────────────────
 
-    def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel]:
-        event_type = msg.headers.get(Header.EVENT_TYPE, "")
-        if not event_type:
+    def _dispatch(self, msg: KafkaMessage) -> tuple[EventType, BaseModel]:
+        event_type_str = msg.headers.get(Header.EVENT_TYPE, "")
+        if not event_type_str:
             raise MessageTypeError(f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})")
+        try:
+            event_type = EventType(event_type_str)
+        except ValueError:
+            raise MessageTypeError(f"Unknown event_type {event_type_str!r} on {self._topic} (offset={msg.offset} key={msg.key!r})") from None
 
         model_type = self._types.get(event_type)
         if model_type is None:
-            raise MessageTypeError(f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})")
+            raise MessageTypeError(f"Unregistered event_type {event_type_str!r} on {self._topic} (offset={msg.offset} key={msg.key!r})")
         return event_type, self._deserializer.deserialize(msg.payload, model_type=model_type)
 
     # ── Internals ────────────────────────────────────────────────────────

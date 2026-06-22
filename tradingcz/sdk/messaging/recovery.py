@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable
 
 from pydantic import BaseModel
 
+from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
@@ -24,10 +25,10 @@ class ReplayConsumer:
 
     async def replay(
         self,
-        types: dict[str, type[BaseModel]],
+        types: dict[EventType, type[BaseModel]],
         *,
-        until: Callable[[str, BaseModel], bool],
-    ) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
+        until: Callable[[EventType, BaseModel], bool],
+    ) -> AsyncIterator[tuple[EventType, BaseModel, KafkaMessage]]:
 
         group_suffix = uuid.uuid4().hex
         logger.info("ReplayConsumer: replaying %s (group_suffix=%s)", self._topic, group_suffix)
