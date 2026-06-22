@@ -1,46 +1,4 @@
-"""ReplayConsumer — typed topic replay for startup state reconstruction.
-
-Replays a Kafka topic from the beginning, yielding typed Pydantic models
-until a caller-defined sentinel event is seen.  Built on
-:class:`TypedConsumer` (L2) — no manual header parsing or dispatch loops.
-
-Uses a **unique consumer group** (UUID suffix) per replay so every
-restart starts from ``earliest``.  Ephemeral groups are auto-cleaned
-by Kafka after ``offsets.retention.minutes`` (default 7 days).
-
-The caller publishes a sentinel (e.g. ``LifecycleEventType.INITIALIZING``)
-BEFORE starting replay.  The replay stops when it sees that sentinel —
-deterministic, no idle-timeout guesswork.
-
-After replay the live :class:`EventRouter` takes over with its own
-standard consumer group — no gap: the live group's committed offset
-(pre-crash position) is before any messages that arrived during replay.
-
-Usage::
-
-    # 1. Publish sentinel
-    await svc.publish_event(
-        LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.INITIALIZING),
-        message_type=EventType.SERVICE_LIFECYCLE,
-    )
-
-    # 2. Replay until our own INITIALIZING
-    consumer = ReplayConsumer(topic, settings)
-    async for msg_type, model, raw in consumer.replay(
-        types={str(EventType.DATA_REQUEST): DataRequest, ...},
-        until=lambda mt, m: (
-            mt == str(EventType.SERVICE_LIFECYCLE)
-            and m.event == LifecycleEventType.INITIALIZING
-        ),
-    ):
-        reconstruct_state(msg_type, model, raw.headers)
-
-    # 3. Publish READY, start live EventRouter
-    await svc.publish_event(
-        LifecycleEvent(service_id=svc.service_id, event=LifecycleEventType.READY),
-        message_type=EventType.SERVICE_LIFECYCLE,
-    )
-"""
+"""ReplayConsumer — typed topic replay for startup state reconstruction."""
 
 from __future__ import annotations
 
@@ -58,17 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReplayConsumer:
-    """Replay a topic from the beginning, stopping at a sentinel event.
-
-    Uses a unique consumer group (UUID suffix) with
-    ``auto_offset_reset=earliest`` — clean replay on every restart.
-
-    Built on :class:`TypedConsumer` (L2) — typed dispatch +
-    deserialization, no manual header parsing.
-
-    Offsets are never committed — the ephemeral group is discarded
-    after replay.
-    """
+    """Replay a topic from the beginning, stopping at a sentinel event."""
 
     def __init__(self, topic: str, settings: KafkaSettings) -> None:
         self._topic = topic

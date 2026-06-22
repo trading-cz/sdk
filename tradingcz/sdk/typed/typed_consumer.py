@@ -78,15 +78,11 @@ class TypedConsumer:
     def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel]:
         event_type = msg.headers.get(Header.EVENT_TYPE, "")
         if not event_type:
-            raise MessageTypeError(
-                f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})"
-            )
+            raise MessageTypeError(f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})")
 
         model_type = self._types.get(event_type)
         if model_type is None:
-            raise MessageTypeError(
-                f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})"
-            )
+            raise MessageTypeError(f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})")
         return event_type, self._deserializer.deserialize(msg.payload, model_type=model_type)
 
     # ── Internals ────────────────────────────────────────────────────────
