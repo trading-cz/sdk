@@ -138,9 +138,7 @@ class RequestReply:
             async with asyncio.timeout(timeout):
                 return await future
         except TimeoutError:
-            raise TimeoutError(
-                f"Request {event_id!r} timed out after {timeout:.1f}s"
-            ) from None
+            raise TimeoutError(f"Request {event_id!r} timed out after {timeout:.1f}s") from None
         finally:
             self._pending.pop(event_id, None)
 
