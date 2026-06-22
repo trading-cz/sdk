@@ -69,8 +69,7 @@ class _DataTransport:
         if resp.event_type == EventType.DATA_ERROR:
             raise RuntimeError(f"DataError from ingestion: {resp.error}")
         if resp.type != expected_type:
-            raise RuntimeError(
-                f"Expected {expected_type} DataReady, got type={resp.type}"
+            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}"
             )
 
     # -- Historical (request → consume → return dict) ------------------

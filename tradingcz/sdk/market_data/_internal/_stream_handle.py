@@ -43,7 +43,7 @@ class StreamHandle[T](AsyncIterator[T]):
     def __init__(
         self,
         iterator: AsyncIterator[T],
-        unsubscribe: _Unsubscribe | None = None,
+        unsubscribe: _Unsubscribe,
     ) -> None:
         self._iterator = iterator
         self._unsubscribe = unsubscribe
@@ -69,22 +69,16 @@ class StreamHandle[T](AsyncIterator[T]):
         exc_tb: TracebackType | None,
     ) -> None:
         self._exited = True
-        if self._unsubscribe is not None:
-            try:
-                await self._unsubscribe()
-            except Exception:
-                logger.debug("Unsubscribe failed (non-critical)", exc_info=True)
+        try:
+            await self._unsubscribe()
+        except Exception:
+            logger.debug("Unsubscribe failed (non-critical)", exc_info=True)
         if hasattr(self._iterator, "aclose"):
             await self._iterator.aclose()  # type: ignore[union-attr]
 
 
 class _Unsubscribe:
-    """Fire-and-forget unsubscribe — sends a DataRequest, no response expected.
-
-    Unsubscribe is best-effort: if the ingestion service receives it,
-    it stops pushing data for these symbols.  If not, the consumer
-    disconnect will eventually trigger cleanup on the ingestion side.
-    """
+    """Fire-and-forget unsubscribe — sends a DataRequest, no response expected."""
 
     def __init__(
         self,
@@ -97,7 +91,6 @@ class _Unsubscribe:
         asset: AssetType,
     ) -> None:
         self._faf = FireAndForget(producer, topic, service_id)
-        self._service_id = service_id
         self._broker = broker
         self._symbols = symbols
         self._data_type = data_kind
@@ -107,23 +100,15 @@ class _Unsubscribe:
         """Send unsubscribe DataRequest (fire-and-forget)."""
         req = DataRequest(
             type=DataRequestType.UNSUBSCRIBE,
-            source_app=self._service_id,
             asset=self._asset,
             broker=self._broker,
             symbols=self._symbols,
             data_type=self._data_type,
         )
         try:
-            await self._faf.send(
-                req,
-                event_type=EventType.DATA_REQUEST,
-                event_id=str(req.event_id),
-            )
+            await self._faf.send(req, event_type=EventType.DATA_REQUEST, event_id=str(req.event_id))
         except Exception:
-            logger.debug(
-                "Unsubscribe request failed for %s (data_kind=%s)",
-                self._symbols, self._data_type, exc_info=True,
-            )
+            logger.info("Unsubscribe request failed for %s (data_kind=%s)", self._symbols, self._data_type, exc_info=True)
 
 
 __all__ = ["StreamHandle"]
