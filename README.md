@@ -10,19 +10,19 @@ Requires **Python ≥ 3.14**.
 
 ```bash
 pip install trading-sdk
-```text
+```
 
 With optional dev tooling:
 
 ```bash
 pip install trading-sdk[dev]      # pytest, ruff, mypy
-```text
+```
 
 To uninstall:
 
 ```bash
 pip uninstall trading-sdk
-```text
+```
 
 ## What it does
 
@@ -49,7 +49,7 @@ Four layers, each depends only on the one below it:
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Raw Kafka transport
 └─────────────────────────────────────────┘
-```text
+```
 
 Detailed docs live in each package:
 
@@ -74,7 +74,7 @@ async with ServiceApp(service_id="my-app", env="dev") as svc:
     await router.start()
 
     await svc.run_until_shutdown(tasks)
-```text
+```
 
 ## Naming conventions
 
@@ -92,4 +92,4 @@ Local unit tests:
 
 ```bash
 pytest tests/ test_service_app_smoke.py -v
-```text
+```

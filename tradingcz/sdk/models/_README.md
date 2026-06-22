@@ -9,7 +9,7 @@ models/
 ├── events/      # Kafka event payload DTOs (DataRequest, ExecutionRequest, etc.)
 ├── market/      # Market data DTOs (Bar, Quote, Trade, Snapshot, etc.)
 └── orders/      # Order request DTOs (MarketOrder, LimitOrder, BracketOrder, etc.)
-```text
+```
 
 ---
 

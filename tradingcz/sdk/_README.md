@@ -112,7 +112,7 @@ ServiceApp.__aexit__()
 ibkr = app.with_broker("ibkr")
 ibkr_bars = await ibkr.stock.bars(["AAPL"])
 alpaca_bars = await app.stock.bars(["AAPL"])  # default broker
-```text
+```
 
 ## Constructor reference
 

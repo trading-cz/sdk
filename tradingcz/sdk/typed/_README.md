@@ -15,7 +15,7 @@ and header-based dispatch.  Sits between raw transport (L1) and messaging patter
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: Transport
 └─────────────────────────────────────────┘
-```text
+```
 
 ## Components
 
@@ -47,7 +47,7 @@ p = TypedProducer(transport, "dev-events", auto_flush=False)
 for signal in batch:
     await p.send(signal, key=kafka_key, headers=kafka_headers)
 await p.flush()
-```text
+```
 
 ## TypedConsumer
 
@@ -77,7 +77,7 @@ async for msg_type, model, raw in consumer:
 
 # Start from beginning (replay history):
 consumer = TypedConsumer("dev-events", settings, types={...}, group_suffix="replay", auto_offset_reset="earliest")
-```text
+```
 
 | Parameter | Required | Default | Notes |
 | ----------- | ---------- | --------- | ------- |

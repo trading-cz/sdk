@@ -14,7 +14,7 @@ Direct Kafka communication primitives. Bytes in, bytes out. No typing, no serial
 ├─────────────────────────────────────────┤
 │  TransportProducer / TransportConsumer  │  ← Layer 1: THIS PACKAGE
 └─────────────────────────────────────────┘
-```text
+```
 
 ## TransportConsumer
 
@@ -54,7 +54,7 @@ async for msg in consumer:
 
 # Drain accumulated errors
 errors: list[str] = consumer.drain_errors()
-```text
+```
 
 **Key points:**
 - One `TransportConsumer` = one `AIOConsumer` = one consumer group
@@ -94,7 +94,7 @@ producer = TransportProducer(settings, on_error=on_error)
 
 # Drain accumulated delivery errors
 errors: list[str] = producer.drain_errors()
-```text
+```
 
 **Key points:**
 - Wraps `confluent_kafka.Producer` (sync) with `run_in_executor` for async
@@ -126,7 +126,7 @@ async with KafkaTopicAdmin(settings) as admin:
     config = KafkaTopicConfig(name="dev-event", partitions=1)
     await admin.ensure_from_config(config)
 # auto-closed on exit
-```text
+```
 
 **Key points:**
 - Lazy `AdminClient` — created on first `ensure()` call, reused thereafter
