@@ -28,53 +28,7 @@ class _Registration[T: BaseModel]:
 
 
 class EventRouter:
-    """Single Kafka consumer.  Route messages to registered async handlers.
-
-    One instance per topic/consumer-group.  All handlers share the same
-    consumer — no duplicate Kafka connections.
-
-    Args:
-        topic: Kafka topic to consume from.
-        settings: Kafka connection settings.
-        auto_commit: When ``True`` (default), the router commits each
-            message's offset after the handler completes successfully.
-            When ``False``, the handler is responsible for calling
-            ``await router.commit(raw)`` explicitly.
-        on_error: Optional async callback for undispatchable messages.
-        group_suffix: Appended to consumer group id for isolation.
-        auto_offset_reset: Override :attr:`KafkaSettings.auto_offset_reset`
-            for this consumer only.  ``None`` (default) uses the global setting.
-        poll_timeout_ms: Override :attr:`KafkaSettings.consumer_poll_timeout_ms`
-            for this consumer only.  ``None`` uses the global setting.
-        batch_size: Override :attr:`KafkaSettings.consumer_batch_size`
-            for this consumer only.  ``None`` uses the global setting.
-
-    **Offset Commit — Two Modes**
-
-    *Mode 1 — Router auto-commit (default)*::
-
-        router = EventRouter(topic, settings, group_suffix="signals", auto_commit=True)
-
-        @router.on(EventType.TRADING_SIGNAL, TradingSignal, spawn_task=True)
-        async def on_signal(model, raw):
-            await place_order(model)
-        # Router commits offset after handler returns successfully.
-        # Handler raises → offset NOT committed → re-delivered.
-
-    *Mode 2 — Manual commit (handler controls when)*::
-
-        router = EventRouter(topic, settings, group_suffix="executor", auto_commit=False)
-
-        @router.on(EventType.EXECUTION_REQUEST, ExecutionRequestEvent)
-        async def on_request(model, raw):
-            await db.save(model)          # persist first
-            await router.commit(raw)      # commit offset via router
-            await submit_to_broker(model) # fire-and-forget
-
-    Commit is owned by the router (via :class:`TypedConsumer` →
-    :class:`TransportConsumer`).  Use :meth:`EventRouter.commit`, not
-    :class:`KafkaMessage` (which is a pure-data DTO with no commit capability).
-    """
+    """Single Kafka consumer.  Route messages to registered async handlers."""
 
     def __init__(
         self,

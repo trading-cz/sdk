@@ -105,6 +105,3 @@ def _handle_exception(
 
 
 __all__ = ["LokiJSONFormatter", "setup_logging"]
-
-
-__all__ = ["LokiJSONFormatter", "setup_logging"]

@@ -13,20 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class TransportProducer:
-    """Async producer — send, flush, error tracking. One per process.
-
-    Creates the underlying :class:`confluent_kafka.Producer` from
-    :class:`KafkaSettings` — no external producer needed.
-
-    Usage::
-
-        producer = TransportProducer(settings)
-        try:
-            await producer.send("topic", b"payload", key="k", headers={"h": "v"})
-            await producer.flush()
-        finally:
-            await producer.close()
-    """
+    """Async producer — send, flush, error tracking. One per process."""
 
     def __init__(
         self,
@@ -66,8 +53,9 @@ class TransportProducer:
                 on_delivery=self._handle_error,
             )
 
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _produce)
+        #loop = asyncio.get_running_loop()
+        #await loop.run_in_executor(None, _produce)
+        await asyncio.to_thread(_produce)
 
     async def flush(self, timeout: float = 30.0) -> None:
         """Wait for all queued messages to be delivered to Kafka."""
@@ -83,15 +71,7 @@ class TransportProducer:
             raise RuntimeError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
 
     async def close(self) -> None:
-        """Flush pending messages and mark as closed.
-
-        After close, any further :meth:`send` or :meth:`flush` raises
-        ``RuntimeError``.
-
-        The underlying :class:`Producer` reference is intentionally kept
-        alive to avoid a segfault in ``Producer.__del__`` on Python 3.14.
-        It will be released at process exit.
-        """
+        """Flush pending messages and mark as closed."""
         if not self._closed:
             try:
                 await self.flush()

@@ -80,11 +80,7 @@ class TransportConsumer:
         return result
 
     async def __aiter__(self) -> AsyncIterator[KafkaMessage]:
-        """Iterate messages forever — polls batches, yields each message.
-
-        Stops only when the caller ``break``s or the task is cancelled.
-        Consumer is closed automatically via ``finally`` on exit.
-        """
+        """Iterate messages forever — polls batches, yields each message."""
         await self._ensure_subscribed()
         try:
             while True:

@@ -13,6 +13,7 @@ from tradingcz.sdk.models.market.quote import Quote
 
 
 # TODO: move to ingestion ??
+# TODO: vymenit za Quote
 class StreamQuote(BaseModel):
     """A streaming quote from a broker.
 
