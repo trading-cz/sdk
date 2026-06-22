@@ -2,7 +2,8 @@
 
 > **Context**: SDK targets `requires-python = ">=3.14"` (see `pyproject.toml`).  
 > All Python 3.9–3.14 asyncio features are available.  
-> The SDK runs on **k3s** (lightweight Kubernetes) with Kafka — correctness and non-blocking behavior are critical.
+> The SDK runs on **k3s** (lightweight Kubernetes) with Kafka — correctness and non-blocking behavior are critical.  
+> **📖 Companion guide**: [`docs/asyncio.md`](docs/asyncio.md) — comprehensive asyncio best practices for the entire trading system.
 
 ---
 

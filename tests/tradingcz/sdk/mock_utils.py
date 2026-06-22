@@ -19,9 +19,8 @@ Usage::
 
 from __future__ import annotations
 
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
-
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 # ── Settings factory ────────────────────────────────────────────────────────
 

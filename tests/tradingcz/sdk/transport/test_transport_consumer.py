@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.transport_consumer import TransportConsumer
 
 # ── Helpers ──────────────────────────────────────────────────────────────
