@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from types import TracebackType
 
-from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.models.enums.event import (
     AssetType,
     Broker,
@@ -14,7 +14,8 @@ from tradingcz.sdk.models.enums.event import (
     EventType,
     MarketDataType,
 )
-from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
+from tradingcz.sdk.models.events import DataRequest
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 
@@ -78,17 +79,25 @@ class StreamHandle[T](AsyncIterator[T]):
 
 
 class _Unsubscribe:
-    """Callable that sends an unsubscribe DataRequest."""
+    """Fire-and-forget unsubscribe — sends a DataRequest, no response expected.
+
+    Unsubscribe is best-effort: if the ingestion service receives it,
+    it stops pushing data for these symbols.  If not, the consumer
+    disconnect will eventually trigger cleanup on the ingestion side.
+    """
 
     def __init__(
         self,
-        rr: RequestReply,
+        producer: TransportProducer,
+        topic: str,
+        service_id: str,
         broker: Broker,
         symbols: list[str],
         data_kind: MarketDataType,
         asset: AssetType,
     ) -> None:
-        self._rr = rr
+        self._faf = FireAndForget(producer, topic, service_id)
+        self._service_id = service_id
         self._broker = broker
         self._symbols = symbols
         self._data_type = data_kind
@@ -98,19 +107,17 @@ class _Unsubscribe:
         """Send unsubscribe DataRequest (fire-and-forget)."""
         req = DataRequest(
             type=DataRequestType.UNSUBSCRIBE,
+            source_app=self._service_id,
             asset=self._asset,
             broker=self._broker,
             symbols=self._symbols,
             data_type=self._data_type,
         )
-        self._rr.register_type(EventType.DATA_READY, DataReady)
-        self._rr.register_type(EventType.DATA_ERROR, DataError)
         try:
-            await self._rr.request(
+            await self._faf.send(
                 req,
-                response_type=DataReady,
-                request_type=EventType.DATA_REQUEST,
-                timeout=5.0,
+                event_type=EventType.DATA_REQUEST,
+                event_id=str(req.event_id),
             )
         except Exception:
             logger.debug(

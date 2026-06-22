@@ -20,6 +20,7 @@ from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.market import Bar, Quote, Trade
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicRegistry
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class StockStreamClient:
 
         StockStreamClient(
             rr=request_reply,           # RequestReply instance (started)
+            producer=transport_producer, # TransportProducer for fire-and-forget
             settings=kafka_settings,    # KafkaSettings
             topics=topic_registry,      # KafkaTopicRegistry
             service_id="my-service",    # unique service identifier
@@ -46,6 +48,7 @@ class StockStreamClient:
         self,
         *,
         rr: RequestReply,
+        producer: TransportProducer,
         settings: KafkaSettings,
         topics: KafkaTopicRegistry,
         service_id: str,
@@ -56,7 +59,7 @@ class StockStreamClient:
             self._transport = _transport
         else:
             self._transport = _DataTransport(
-                rr=rr, settings=settings, topics=topics,
+                rr=rr, producer=producer, settings=settings, topics=topics,
                 service_id=service_id, broker=broker,
             )
 

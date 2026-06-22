@@ -89,6 +89,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         await self._rr.start()
         self._transport = _DataTransport(
             rr=self._rr,
+            producer=self.events_producer,
             settings=self._kafka,
             topics=self.topics,
             service_id=self.service_id,

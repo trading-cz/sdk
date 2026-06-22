@@ -16,6 +16,7 @@ from tradingcz.sdk.models.enums.event import AssetType, Broker, MarketDataType
 from tradingcz.sdk.models.market import OptionSnapshot
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicRegistry
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class OptionsHistoricDataClient:
 
         OptionsHistoricDataClient(
             rr=request_reply,           # RequestReply instance (started)
+            producer=transport_producer, # TransportProducer for fire-and-forget
             settings=kafka_settings,    # KafkaSettings
             topics=topic_registry,      # KafkaTopicRegistry
             service_id="my-service",    # unique service identifier
@@ -41,6 +43,7 @@ class OptionsHistoricDataClient:
         self,
         *,
         rr: RequestReply,
+        producer: TransportProducer,
         settings: KafkaSettings,
         topics: KafkaTopicRegistry,
         service_id: str,
@@ -51,7 +54,7 @@ class OptionsHistoricDataClient:
             self._transport = _transport
         else:
             self._transport = _DataTransport(
-                rr=rr, settings=settings, topics=topics,
+                rr=rr, producer=producer, settings=settings, topics=topics,
                 service_id=service_id, broker=broker,
             )
 

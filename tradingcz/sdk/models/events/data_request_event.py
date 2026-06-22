@@ -35,6 +35,7 @@ class DataRequest(BaseModel):
 
     event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for data request")
     type: DataRequestType = Field(..., description="Request type: historical or streaming")
+    source_app: str = Field(default="", description="Service identity of the requester (set by transport layer)")
     asset: AssetType = Field(default=AssetType.STOCK, description="Asset class: stock, option, etc.")
     broker: Broker | None = Field(default=Broker.ALPACA, description="Data provider broker")
     symbols: list[str] = Field(..., description="List of ticker symbols to request")

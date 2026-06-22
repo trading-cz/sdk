@@ -27,6 +27,7 @@ from tradingcz.sdk.transport.kafka_header import Header
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
 from tradingcz.sdk.transport.transport_consumer import TransportConsumer
+from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class _DataTransport:
     def __init__(
         self,
         rr: RequestReply,
+        producer: TransportProducer,
         settings: KafkaSettings,
         topics: KafkaTopicRegistry,
         service_id: str,
@@ -49,6 +51,7 @@ class _DataTransport:
         dedup_max_size: int = 100_000,
     ) -> None:
         self._rr = rr
+        self._producer = producer
         self._settings = settings
         self._topics = topics
         self._service_id = service_id
@@ -102,6 +105,7 @@ class _DataTransport:
 
         req = DataRequest(
             type=DataRequestType.HISTORIC,
+            source_app=self._service_id,
             asset=asset,
             broker=self._broker,
             symbols=symbols,
@@ -183,6 +187,7 @@ class _DataTransport:
         """
         req = DataRequest(
             type=DataRequestType.STREAM,
+            source_app=self._service_id,
             asset=asset,
             broker=self._broker,
             symbols=symbols,
@@ -223,7 +228,9 @@ class _DataTransport:
                 await consumer.close()
 
         unsubscribe = _Unsubscribe(
-            rr=self._rr,
+            producer=self._producer,
+            topic=self._topics.events.name,
+            service_id=self._service_id,
             broker=self._broker,
             symbols=symbols,
             data_kind=data_type,
