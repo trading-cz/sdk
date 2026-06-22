@@ -111,7 +111,51 @@ done, _ = await asyncio.wait([future], timeout=...)
 **Status**: SDK ✅ done (`request_reply.py` uses `asyncio.timeout()`). Executor
 ✅ correct (uses `asyncio.wait()` only for multi-future races).
 
-### 2.5 Always handle `asyncio.CancelledError` in background tasks 🔴
+### 2.5 Bound all concurrency — backpressure first 🔴
+
+Never spawn unbounded work. Always cap concurrency with one of:
+
+| Mechanism | When to use |
+|-----------|------------|
+| `asyncio.Semaphore` | Limit concurrent API calls, DB queries |
+| `asyncio.Queue(maxsize=N)` | Worker pool feeding from a bounded queue |
+| Fixed-size task set | Known number of parallel operations |
+
+```python
+# ✅ Bounded worker pool
+queue: asyncio.Queue[Work] = asyncio.Queue(maxsize=100)
+workers = [asyncio.create_task(_worker(queue)) for _ in range(5)]
+
+# ❌ Unbounded fan-out — memory risk under load
+results = await asyncio.gather(*(process(r) for r in huge_list))
+```
+
+**Why**: In trading, market data spikes can produce thousands of messages per
+second. Unbounded fan-out causes memory exhaustion and cascading failures.
+Bounded queues provide natural backpressure.
+
+### 2.6 Shutdown must be idempotent 🔴
+
+Shutdown paths must be safe to call multiple times. Always drain before close:
+
+1. **Cancel** background tasks
+2. **Drain** pending work (flush producers, await cancelled tasks)
+3. **Close** transports and connections
+
+```python
+# ✅ Idempotent — safe to call twice
+async def close(self) -> None:
+    if self._closed:
+        return
+    self._closed = True
+    await self._producer.flush()
+    # ... close connections ...
+```
+
+**Our pattern**: `ServiceApp.close()` is already idempotent. All transport
+producers/consumers guard against double-close.
+
+### 2.7 Always handle `asyncio.CancelledError` in background tasks 🔴
 
 Every task spawned with `asyncio.create_task()` must handle `CancelledError` or be
 cancelled gracefully during shutdown.
@@ -130,7 +174,7 @@ async def _loop() -> None:
 `except asyncio.CancelledError` at the top level. All shutdown sequences cancel
 tasks, then `await` them to ensure cleanup completes.
 
-### 2.6 `asyncio.gather()` with `return_exceptions=True` for cleanup 🟡
+### 2.8 `asyncio.gather()` with `return_exceptions=True` for cleanup 🟡
 
 When cancelling multiple tasks during shutdown, use `asyncio.gather()` with
 `return_exceptions=True` to avoid one failed cancellation blocking others.
@@ -144,7 +188,7 @@ await asyncio.gather(*pending, return_exceptions=True)
 
 **Status**: Both ingestion and executor already do this correctly.
 
-### 2.7 Named tasks for debugging 🟢
+### 2.9 Named tasks for debugging 🟢
 
 Always pass `name=` to `asyncio.create_task()` for observability. Python 3.14's
 `python -m asyncio ps PID` and `pstree PID` display task names.
@@ -281,6 +325,27 @@ market_close_task = asyncio.create_task(self.exit_event.wait())
 **Why good**: `asyncio.Event` is the cheapest signaling mechanism in asyncio.
 No polling, no queue overhead. Used correctly as a one-shot signal.
 
+### 3.7 Retry with Bounded Attempts and Jitter
+
+**Where**: SDK `retry.py`, various strategy handlers
+
+```python
+async def _retry(fn: Callable[[], Awaitable[T]], *, attempts: int = 3) -> T:
+    for i in range(attempts):
+        try:
+            return await fn()
+        except TransientError:
+            if i == attempts - 1:
+                raise
+            await asyncio.sleep(2 ** i + random.uniform(0, 1))  # jitter
+```
+
+**Rules**:
+- Never retry `CancelledError` or `KeyboardInterrupt` — these are shutdown signals
+- Always bound retry attempts (3 is a good default)
+- Always add jitter to avoid thundering herd on recovery
+- Prefer explicit retry wrappers over hidden implicit loops
+
 ---
 
 ## 4. Anti-Patterns (What We Avoid)
@@ -323,6 +388,57 @@ For dynamically-spawned tasks (e.g., per-request handlers), use manual
 Pick one. All our entry points currently use `asyncio.run(main())`. That's fine
 for single-loop applications. Don't introduce `asyncio.Runner` unless you have a
 specific need for multi-loop or sequential coroutine execution.
+
+### 4.6 ⛔ Unbounded `asyncio.gather()` on dynamic input
+
+```python
+# ❌ Memory risk — 10K requests = 10K concurrent tasks
+results = await asyncio.gather(*(handle(r) for r in all_requests))
+
+# ✅ Use a semaphore or bounded queue
+sem = asyncio.Semaphore(20)
+async def _bounded(r):
+    async with sem:
+        return await handle(r)
+results = await asyncio.gather(*(_bounded(r) for r in all_requests))
+```
+
+### 4.7 ⛔ `except Exception` that swallows `CancelledError`
+
+```python
+# ❌ CancelledError is a BaseException subclass, but this pattern
+#    is dangerous — future Python versions may change this
+try:
+    await work()
+except Exception:              # Doesn't catch CancelledError today,
+    pass                        # but hides unexpected failures
+
+# ✅ Always re-raise or log cancellation
+try:
+    await work()
+except asyncio.CancelledError:
+    raise                       # Must propagate
+except Exception:
+    logger.exception("Work failed")
+```
+
+### 4.8 ⛔ Fire-and-forget for critical state transitions
+
+Never use fire-and-forget (`create_task` without tracking) for:
+- Order lifecycle events (submit, fill, cancel)
+- Risk checks or position updates
+- Any state transition requiring confirmation
+
+```python
+# ❌ If the task silently fails, the order is lost
+asyncio.create_task(submit_order(order))
+
+# ✅ Track the task and handle failure
+order_task = asyncio.create_task(submit_order(order), name=f"order_{order.id}")
+order_task.add_done_callback(_handle_order_result)
+```
+
+Use fire-and-forget only for best-effort notifications (telemetry, non-critical logging).
 
 ---
 
@@ -460,6 +576,20 @@ works correctly and changing it adds risk without benefit.
 | **Free-threading** | Parallel event loops (when needed) | 🔮 Future (k3s) |
 | **`capture_call_graph()`** | Debugging complex task trees | 🔮 Future |
 | **`asyncio.timeout()` (3.11+)** | Preferred over `wait_for` for blocks | 🟢 Use now |
+| **Exception groups in TaskGroup** | When TaskGroup raises grouped failures, classify transient vs permanent before retry | 🟡 Adopt with TaskGroup |
+| **Cancellation observability** | Log cancellation with context (service, topic, correlation ID) for incident analysis | 🟡 Adopt now |
+
+### Cancellation observability example
+
+```python
+try:
+    await do_work()
+except asyncio.CancelledError:
+    logger.info(
+        "Task cancelled: service=%s topic=%s corr_id=%s",
+        self.service_id, self._topic, getattr(ctx, 'event_id', '?'),
+    )
+    raise  # Always propagate
 
 ### Deprecated (removal in Python 3.16) — we don't use these
 
@@ -472,7 +602,22 @@ works correctly and changing it adds risk without benefit.
 
 ---
 
-## 8. Quick Checklist for Code Review
+## 8. Trading-System Defaults
+
+Use these defaults unless there is a documented reason to diverge.
+
+| Concern | Default | Rationale |
+|---------|---------|-----------|
+| **Timeouts** | Always set; no unbounded network await | Fail fast under market stress |
+| **Concurrency** | Bounded by semaphore or queue capacity | Prevent memory exhaustion from spikes |
+| **Reliability** | Request/reply for critical state changes | Order lifecycle, risk, position updates |
+| **Best-effort** | Fire-and-forget only for non-critical events | Telemetry, non-critical logging |
+| **Shutdown** | Graceful stop tested under in-flight load | Drain → flush → close, idempotent |
+| **Observability** | Include service ID, topic, message type, correlation ID in async error logs | Production incident analysis |
+
+---
+
+## 9. Quick Checklist for Code Review
 
 When reviewing async code in any repo, check:
 
@@ -482,7 +627,12 @@ When reviewing async code in any repo, check:
 - [ ] `asyncio.wait()` only used for multi-future races
 - [ ] All `create_task()` call sites have CancelledError handling
 - [ ] Tasks are named (`name=...`) for observability
+- [ ] Concurrency is bounded (semaphore or bounded queue) — no unbounded `gather()`
+- [ ] Shutdown path is idempotent (safe to call twice)
 - [ ] `asyncio.gather()` with `return_exceptions=True` during shutdown
 - [ ] Cross-thread callbacks use `queue.Queue` or `run_coroutine_threadsafe`
 - [ ] No `asyncio.as_completed()` (anti-pattern for our use cases)
+- [ ] Fire-and-forget only for best-effort; critical state uses request/reply
+- [ ] Retry has bounded attempts + jitter; `CancelledError` never retried
+- [ ] Cancellation is logged with context for observability
 - [ ] `asyncio.run()` at entry point; no mixing with `Runner` unnecessarily
