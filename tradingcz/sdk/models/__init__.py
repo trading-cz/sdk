@@ -18,7 +18,6 @@ from tradingcz.sdk.models.market import (
     Bar,
     Quote,
     Snapshot,
-    StreamQuote,
     Trade,
     market_item_message_type,
 )
@@ -40,7 +39,6 @@ __all__ = [
     "Quote",
     "Trade",
     "Snapshot",
-    "StreamQuote",
     # Market helpers
     "market_item_message_type",
     # Health/Lifecycle

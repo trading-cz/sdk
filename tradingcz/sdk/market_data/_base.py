@@ -1,8 +1,8 @@
 """BaseDataClient — internal shared transport logic for all market data clients.
 
 Application code never references this module directly.  Use
-``StockDataClient``, ``OptionsDataClient``, or ``CorporateActionsClient``
-via ``ServiceApp``.
+``StockDataClient``, ``StockStreamClient``, ``OptionsHistoricDataClient``,
+or ``CorporateActionsClient`` via ``ServiceApp``.
 """
 
 from __future__ import annotations
@@ -144,7 +144,8 @@ class _Unsubscribe:
 class BaseDataClient:
     """Internal: shared request/reply + typed consumption for all data clients.
 
-    Concrete clients (``StockDataClient``, ``OptionsDataClient``, etc.)
+    Concrete clients (``StockDataClient``, ``StockStreamClient``,
+    ``OptionsHistoricDataClient``, etc.)
     receive an instance of this class and call its internal methods.
     Application code never references ``BaseDataClient`` directly.
 

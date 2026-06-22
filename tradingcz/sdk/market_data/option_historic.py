@@ -1,4 +1,4 @@
-"""OptionsDataClient — option snapshots and bars.
+"""OptionsHistoricDataClient — option snapshots (one-time requests).
 
 One-time (returns ``dict``):
   - ``snapshots()`` — latest trade, quote, greeks, IV for given symbols
@@ -17,7 +17,7 @@ from tradingcz.sdk.models.market import OptionSnapshot
 logger = logging.getLogger(__name__)
 
 
-class OptionsDataClient:
+class OptionsHistoricDataClient:
     """Request and consume options market data.
 
     All methods are async and return typed domain objects.
@@ -32,12 +32,14 @@ class OptionsDataClient:
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
-    async def snapshots(self, symbols: list[str], *, timeout: float = 30.0) -> dict[str, list[OptionSnapshot]]:
+    async def snapshots(
+        self, symbols: list[str], *, timeout: float = 30.0
+    ) -> dict[str, list[OptionSnapshot]]:
         """Request option snapshots (trade, quote, greeks, IV).
 
         Returns ``{symbol: [OptionSnapshot]}``.
         """
-        logger.info("OptionsDataClient: snapshots symbols=%d", len(symbols))
+        logger.info("OptionsHistoricDataClient: snapshots symbols=%d", len(symbols))
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.OPTION,
@@ -47,4 +49,4 @@ class OptionsDataClient:
         )
 
 
-__all__ = ["OptionsDataClient"]
+__all__ = ["OptionsHistoricDataClient"]

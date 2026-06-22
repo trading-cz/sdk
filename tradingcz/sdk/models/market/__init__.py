@@ -16,13 +16,12 @@ from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
 from tradingcz.sdk.models.market.option_snapshot import OptionSnapshot
 from tradingcz.sdk.models.market.quote import Quote
 from tradingcz.sdk.models.market.snapshot import Snapshot
-from tradingcz.sdk.models.market.stream_quote import StreamQuote
 from tradingcz.sdk.models.market.trade import Trade
 
 # Union of all market data types — use as the type parameter for TypedProducer
 # when the channel carries heterogeneous market data (Trade, Bar, Quote, etc.).
 # All members share ``symbol: str`` and ``timestamp: datetime``.
-MarketItem = Trade | Bar | Quote | StreamQuote | Snapshot | OptionSnapshot
+MarketItem = Trade | Bar | Quote | Snapshot | OptionSnapshot
 
 # TODO SMAZAT
 def market_item_message_type(item: MarketItem) -> EventType:
@@ -33,7 +32,7 @@ def market_item_message_type(item: MarketItem) -> EventType:
 
         >>> market_item_message_type(Bar(...))       # → EventType.BAR
         >>> market_item_message_type(Trade(...))     # → EventType.TRADE
-        >>> market_item_message_type(StreamQuote(...))  # → EventType.STREAM_QUOTE
+        >>> market_item_message_type(Quote(...))     # → EventType.QUOTE
 
     This is the canonical mapping for all market data types.
     Apps should use this instead of manually computing the
@@ -58,5 +57,4 @@ __all__ = [
     "StockSplit",
     "Trade",
     "Snapshot",
-    "StreamQuote",
 ]

@@ -5,14 +5,14 @@ Historical and streaming market data via request/reply over Kafka.
 ## Architecture
 
 ```text
-StockDataClient / OptionsDataClient / CorporateActionsClient
+StockDataClient / StockStreamClient / OptionsHistoricDataClient / CorporateActionsClient
             │
      BaseDataClient          ← shared transport logic
        │        │
   RequestReply  KafkaTransport
 ```
 
-## StockDataClient
+## StockDataClient (historic)
 
 ```python
 from tradingcz.sdk.market_data import StockDataClient
@@ -20,21 +20,30 @@ from tradingcz.sdk.market_data import StockDataClient
 # Created via TradingApp (recommended):
 async with TradingApp(service_id="my-strategy") as app:
     # ── Historical ───────────────────────────────────────────────
-    bars = await app.stock.bars(["AAPL", "MSFT"], days=30)
-    quotes = await app.stock.snapshots(["AAPL"])
+    bars = await app.stock.bars(["AAPL", "MSFT"], days=30, timeframe="1Hour")
+    quotes = await app.stock.latest_quotes(["AAPL"])
+    trades = await app.stock.latest_trades(["AAPL"])
+    latest = await app.stock.latest_bars(["AAPL"])
+```
 
+## StockStreamClient (streaming)
+
+```python
+from tradingcz.sdk.market_data import StockStreamClient
+
+async with TradingApp(service_id="my-strategy") as app:
     # ── Streaming (context manager = guaranteed unsubscribe) ─────
-    async with app.stock.stream_quotes(["AAPL"]) as stream:
+    async with app.stock_stream.stream_quotes(["AAPL"]) as stream:
         async for quote in stream:
             if quote.bid_price > threshold:
                 break
 
-    async with app.stock.stream_bars(["AAPL"], timeframe=Timeframe.H4) as stream:
+    async with app.stock_stream.stream_bars(["AAPL"], timeframe=Timeframe.H4) as stream:
         async for bar in stream:
             ...
 ```
 
-## OptionsDataClient
+## OptionsHistoricDataClient
 
 ```python
 async with TradingApp(service_id="my-strategy") as app:

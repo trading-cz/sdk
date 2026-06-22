@@ -17,8 +17,9 @@ from tradingcz.sdk.health.publisher import HealthPublisher
 from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
 from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.market_data.corporate import CorporateActionsClient
-from tradingcz.sdk.market_data.options import OptionsDataClient
-from tradingcz.sdk.market_data.stock import StockDataClient
+from tradingcz.sdk.market_data.option_historic import OptionsHistoricDataClient
+from tradingcz.sdk.market_data.stock_historic import StockDataClient
+from tradingcz.sdk.market_data.stock_stream import StockStreamClient
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
@@ -63,7 +64,8 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         self._rr: RequestReply | None = None
         self._base: BaseDataClient | None = None
         self._stock: StockDataClient | None = None
-        self._options: OptionsDataClient | None = None
+        self._stock_stream: StockStreamClient | None = None
+        self._options: OptionsHistoricDataClient | None = None
         self._corporate: CorporateActionsClient | None = None
         self._signals: SignalPublisher | None = None
 
@@ -140,7 +142,7 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
 
     @property
     def stock(self) -> StockDataClient:
-        """Stock data client (bars, quotes, streaming).  Lazy — requires ``start()`` first."""
+        """Stock data client (bars, latest quotes).  Lazy — requires ``start()`` first."""
         if self._base is None:
             raise RuntimeError("Call start() before accessing stock client.")
         if self._stock is None:
@@ -148,12 +150,21 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         return self._stock
 
     @property
-    def options(self) -> OptionsDataClient:
+    def stock_stream(self) -> StockStreamClient:
+        """Stock streaming client (quotes, bars, trades).  Lazy — requires ``start()`` first."""
+        if self._base is None:
+            raise RuntimeError("Call start() before accessing stock stream client.")
+        if self._stock_stream is None:
+            self._stock_stream = StockStreamClient(self._base)
+        return self._stock_stream
+
+    @property
+    def options(self) -> OptionsHistoricDataClient:
         """Options data client (snapshots).  Lazy — requires ``start()`` first."""
         if self._base is None:
             raise RuntimeError("Call start() before accessing options client.")
         if self._options is None:
-            self._options = OptionsDataClient(self._base)
+            self._options = OptionsHistoricDataClient(self._base)
         return self._options
 
     @property
@@ -233,7 +244,8 @@ class BrokerScope:
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
         self._stock: StockDataClient | None = None
-        self._options: OptionsDataClient | None = None
+        self._stock_stream: StockStreamClient | None = None
+        self._options: OptionsHistoricDataClient | None = None
         self._corporate: CorporateActionsClient | None = None
 
     @property
@@ -244,10 +256,17 @@ class BrokerScope:
         return self._stock
 
     @property
-    def options(self) -> OptionsDataClient:
+    def stock_stream(self) -> StockStreamClient:
+        """Stock streaming client scoped to this broker."""
+        if self._stock_stream is None:
+            self._stock_stream = StockStreamClient(self._base)
+        return self._stock_stream
+
+    @property
+    def options(self) -> OptionsHistoricDataClient:
         """Options data client scoped to this broker."""
         if self._options is None:
-            self._options = OptionsDataClient(self._base)
+            self._options = OptionsHistoricDataClient(self._base)
         return self._options
 
     @property

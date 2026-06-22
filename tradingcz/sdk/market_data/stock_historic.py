@@ -1,4 +1,11 @@
-"""StockDataClient — historical bars + latest quotes + streaming."""
+"""StockDataClient — historical bars + latest quotes (one-time requests).
+
+One-time (returns ``dict``):
+  - ``bars()`` — historical OHLCV bars
+  - ``latest_quotes()`` — most recent quote per symbol
+  - ``latest_trades()`` — most recent trade per symbol
+  - ``latest_bars()`` — most recent minute bar per symbol
+"""
 
 # pylint: disable=protected-access
 
@@ -6,23 +13,34 @@ from __future__ import annotations
 
 import logging
 
-from tradingcz.sdk.market_data._base import BaseDataClient, StreamHandle
+from tradingcz.sdk.market_data._base import BaseDataClient
 from tradingcz.sdk.models.enums.event import AssetType, MarketDataType
 from tradingcz.sdk.models.enums.timeframe import Timeframe
-from tradingcz.sdk.models.market import Bar, Quote, StreamQuote, Trade
+from tradingcz.sdk.models.market import Bar, Quote, Trade
 
 logger = logging.getLogger(__name__)
 
 
 class StockDataClient:
+    """Request historical and latest stock market data.
+
+    All methods are async and return typed domain objects.
+    No Kafka knowledge required.
+    """
+
     def __init__(self, base: BaseDataClient) -> None:
         self._base = base
 
-    # -- One-time ------------------------------------------------------
+    # -- Historical ----------------------------------------------------
 
-    async def bars(self, symbols: list[str], *, days: int, timeframe: str, timeout: float = 30.0) -> dict[str, list[Bar]]:
+    async def bars(
+        self, symbols: list[str], *, days: int, timeframe: str, timeout: float = 30.0
+    ) -> dict[str, list[Bar]]:
         """Request historical OHLCV bars."""
-        logger.info("StockDataClient: bars symbols=%d days=%d timeframe=%s", len(symbols), days, timeframe)
+        logger.info(
+            "StockDataClient: bars symbols=%d days=%d timeframe=%s",
+            len(symbols), days, timeframe,
+        )
         return await self._base._request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
@@ -45,7 +63,6 @@ class StockDataClient:
             model_type=Quote,
             timeout=timeout,
         )
-        # _request_historical returns dict[symbol, list[T]] — flatten to one per symbol
         return {sym: quotes[-1] for sym, quotes in result.items() if quotes}
 
     async def latest_trades(self, symbols: list[str], *, timeout: float = 5.0) -> dict[str, Trade]:
@@ -71,40 +88,6 @@ class StockDataClient:
             timeout=timeout,
         )
         return {sym: bars[-1] for sym, bars in result.items() if bars}
-
-    # -- Streaming -----------------------------------------------------
-
-    async def stream_quotes(self, symbols: list[str], *, timeout: float = 30.0) -> StreamHandle[StreamQuote]:
-        """Stream live bid/ask quotes."""
-        return await self._base._stream(
-            symbols=symbols,
-            asset=AssetType.STOCK,
-            data_type=MarketDataType.QUOTES,
-            model_type=StreamQuote,
-            timeout=timeout,
-        )
-
-    async def stream_bars(self, symbols: list[str], *, timeframe: Timeframe = Timeframe.H4, timeout: float = 30.0) -> StreamHandle[Bar]:
-        """Stream live bar closes (OHLCV aggregates)."""
-        logger.info("StockDataClient: stream_bars symbols=%d timeframe=%s", len(symbols), timeframe)
-        return await self._base._stream(
-            symbols=symbols,
-            asset=AssetType.STOCK,
-            data_type=MarketDataType.BARS,
-            model_type=Bar,
-            timeframe=timeframe,
-            timeout=timeout,
-        )
-
-    async def stream_trades(self, symbols: list[str], *, timeout: float = 30.0) -> StreamHandle[Trade]:
-        """Stream live trade ticks."""
-        return await self._base._stream(
-            symbols=symbols,
-            asset=AssetType.STOCK,
-            data_type=MarketDataType.TRADES,
-            model_type=Trade,
-            timeout=timeout,
-        )
 
 
 __all__ = ["StockDataClient"]
