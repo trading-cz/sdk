@@ -9,12 +9,13 @@ For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegi
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pydantic import BaseModel
 
 from tradingcz.sdk.exceptions import RegistryError
 from tradingcz.sdk.lang.model_registry import ModelRegistry
 from tradingcz.sdk.models.enums.event import EventType, MarketDataType
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # EventRegistry — wire-protocol dispatch
@@ -29,7 +30,7 @@ class EventRegistry(ModelRegistry["EventType"]):
     """
 
     @classmethod
-    def event_type_for(cls, model: type[BaseModel] | BaseModel) -> "EventType":
+    def event_type_for(cls, model: type[BaseModel] | BaseModel) -> EventType:
         """Return the EventType for *model*, or raise RegistryError."""
         result = cls.key_for(model)
         if result is None:
@@ -41,7 +42,7 @@ class EventRegistry(ModelRegistry["EventType"]):
         return result
 
     @classmethod
-    def as_types_dict(cls) -> dict["EventType", type[BaseModel]]:
+    def as_types_dict(cls) -> dict[EventType, type[BaseModel]]:
         """Alias for :meth:`as_dict`."""
         return cls.as_dict()
 
@@ -54,7 +55,7 @@ class MarketDataRegistry(ModelRegistry["MarketDataType"]):
     """
 
     @classmethod
-    def data_type_for(cls, model: type[BaseModel] | BaseModel) -> "MarketDataType":
+    def data_type_for(cls, model: type[BaseModel] | BaseModel) -> MarketDataType:
         """Return the MarketDataType for *model*, or raise RegistryError."""
         result = cls.key_for(model)
         if result is None:
@@ -71,7 +72,7 @@ class MarketDataRegistry(ModelRegistry["MarketDataType"]):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def register_event(event_type: "EventType"):
+def register_event(event_type: EventType) -> Callable[[type[BaseModel]], type[BaseModel]]:
     """Decorator: register a model under an EventType.
 
         @register_event(EventType.BAR)
@@ -83,7 +84,7 @@ def register_event(event_type: "EventType"):
     return decorator
 
 
-def register_market_data(data_type: "MarketDataType"):
+def register_market_data(data_type: MarketDataType) -> Callable[[type[BaseModel]], type[BaseModel]]:
     """Decorator: register a model under a MarketDataType.
 
         @register_market_data(MarketDataType.BARS)

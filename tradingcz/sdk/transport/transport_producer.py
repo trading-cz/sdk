@@ -5,7 +5,8 @@ import logging
 from collections.abc import Callable
 from typing import cast
 
-from confluent_kafka import Message, Producer as SyncProducer
+from confluent_kafka import Message
+from confluent_kafka import Producer as SyncProducer
 
 from tradingcz.sdk.exceptions import TransportConnectionError, TransportError
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings

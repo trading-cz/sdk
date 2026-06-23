@@ -31,7 +31,7 @@ class StockStreamProvider(ABC):
         """Yield live market data items continuously until ``close()``."""
         # async generator stub — subclasses must yield
         return
-        yield  # pragma: no cover  # noqa: unreachable
+        yield  # pragma: no cover  # noqa: B909
 
     @abstractmethod
     async def close(self) -> None:

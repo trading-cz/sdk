@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
+from tradingcz.sdk.models.enums.event import LifecycleEventType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_key import KafkaKey
