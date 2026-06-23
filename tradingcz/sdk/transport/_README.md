@@ -51,9 +51,6 @@ consumer = TransportConsumer("dev-event", settings, "w1", on_error=on_error)
 async for msg in consumer:
     # corrupt messages are auto-skipped (offset committed +1)
     await consumer.commit(msg)
-
-# Drain accumulated errors
-errors: list[str] = consumer.drain_errors()
 ```
 
 **Key points:**
@@ -86,21 +83,18 @@ await producer.flush(timeout=30.0)
 # Close when done — flushes pending messages and releases the producer
 await producer.close()
 
-# On delivery failure — optional error callback
-async def on_error(error: str) -> None:
-    print(f"Delivery failed: {error}")
+# On delivery failure — optional synchronous error callback
+def on_error(topic: str, partition: int, offset: int, error_str: str) -> None:
+    print(f"Delivery failed for {topic} [{partition}] offset={offset}: {error_str}")
 
 producer = TransportProducer(settings, on_error=on_error)
-
-# Drain accumulated delivery errors
-errors: list[str] = producer.drain_errors()
 ```
 
 **Key points:**
 - Wraps `confluent_kafka.Producer` (sync) with `run_in_executor` for async
 - `flush()` blocks until all messages are delivered or timeout
 - `close()` flushes pending messages then releases the producer; use-after-close raises `RuntimeError`
-- Delivery errors are queued and accessible via `drain_errors()`
+- Delivery errors are reported synchronously via the ``on_error`` callback (runs on librdkafka thread)
 - One `TransportProducer` per process (shared across all channels)
 
 ## KafkaTopicAdmin

@@ -1,4 +1,10 @@
-"""StockStreamClient — streaming stock market data."""
+"""StockStreamClient — streaming stock market data.
+
+Streaming (returns ``StreamHandle[T]``):
+  - ``stream_quotes()`` — live bid/ask quotes
+  - ``stream_bars()`` — live bar closes (OHLCV aggregates)
+  - ``stream_trades()`` — live trade ticks
+"""
 
 # pylint: disable=protected-access
 
@@ -20,28 +26,26 @@ logger = logging.getLogger(__name__)
 
 
 class StockStreamClient:
-    """Stream live stock market data via RequestReply."""
+    """Stream live stock market data."""
 
     def __init__(
         self,
         *,
-        rr: RequestReply | None = None,
-        producer: TransportProducer | None = None,
-        settings: KafkaSettings | None = None,
-        topics: KafkaTopicRegistry | None = None,
-        service_id: str = "",
+        rr: RequestReply,
+        producer: TransportProducer,
+        settings: KafkaSettings,
+        topics: KafkaTopicRegistry,
+        service_id: str,
         broker: Broker = Broker.ALPACA,
         _transport: _DataTransport | None = None,
     ) -> None:
         if _transport is not None:
             self._transport = _transport
-        elif rr is not None and producer is not None and settings is not None and topics is not None:
+        else:
             self._transport = _DataTransport(
                 rr=rr, producer=producer, settings=settings, topics=topics,
                 service_id=service_id, broker=broker,
             )
-        else:
-            raise ValueError("Provide _transport or (rr, producer, settings, topics, service_id)")
 
     async def stream_quotes(
         self, symbols: list[str], *, timeout: float = 30.0

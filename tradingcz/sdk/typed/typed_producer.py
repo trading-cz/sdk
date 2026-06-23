@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -26,10 +27,12 @@ class TypedProducer:
         topic: str,
         *,
         auto_flush: bool = True,
+        on_error: Callable[[str, int, int, str], None] | None = None,
     ) -> None:
         self._producer = producer
         self._topic = topic
         self._auto_flush = auto_flush
+        self._on_error = on_error
         self._serializer: JsonSerializer = JsonSerializer()
 
     @property

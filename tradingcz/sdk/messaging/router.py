@@ -8,7 +8,9 @@ from types import TracebackType
 
 from pydantic import BaseModel
 
+from tradingcz.sdk.exceptions import ServiceNotReadyError
 from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
@@ -98,19 +100,22 @@ class EventRouter:
         control over when the offset is committed.
         """
         if self._consumer is None:
-            raise RuntimeError("commit() called outside run()")
+            raise ServiceNotReadyError("commit() called outside run()")
         await self._consumer.commit(msg)
 
     def on[T: BaseModel](
         self,
-        msg_type: EventType,
         model_class: type[T],
         handler: Callable[[T, KafkaMessage], Awaitable[None]],
         *,
         filter_fn: Callable[[T, KafkaMessage], bool] | None = None,
         spawn_task: bool = False,
     ) -> EventRouter:
-        """Register a typed handler for *msg_type*.  Chainable"""
+        """Register a typed handler for *model_class*.  Chainable.
+
+        The ``EventType`` is derived from ``EventRegistry``.
+        """
+        msg_type = EventRegistry.event_type_for(model_class)
         self._handlers.append(
             _Registration(
                 msg_type=msg_type,
@@ -146,13 +151,7 @@ class EventRouter:
                 else:
                     await self._dispatch(reg, model, raw)
 
-    async def _dispatch(
-        self,
-        reg: _Registration[BaseModel],
-        model: BaseModel,
-        raw: KafkaMessage,
-    ) -> None:
-        """Invoke a handler and optionally commit the offset. """
+    async def _dispatch(self, reg: _Registration[BaseModel], model: BaseModel, raw: KafkaMessage) -> None:
         try:
             await reg.handler(model, raw)  # type: ignore[arg-type]
         except Exception:

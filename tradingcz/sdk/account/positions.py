@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import AssetType, EventType
 from tradingcz.sdk.models.events import ServiceRequestEvent
+from tradingcz.sdk.registry import register_event
 
 
 class Position(BaseModel):
@@ -24,6 +25,7 @@ class Position(BaseModel):
     asset_type: AssetType = AssetType.STOCK
 
 
+@register_event(EventType.POSITION_RESPONSE)
 class PositionList(BaseModel):
     """Response to a get_positions request."""
 
@@ -40,7 +42,7 @@ class PositionClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(EventType.POSITION_RESPONSE, PositionList)
+        self._rr.register_type(PositionList)
 
     async def get_positions(self, *, timeout: float = 30.0) -> list[Position]:
         """Return all currently open positions."""
@@ -49,7 +51,6 @@ class PositionClient:
             req,
             response_type=PositionList,
             timeout=timeout,
-            request_type=EventType.SERVICE_REQUEST,
         )
         return resp.positions
 

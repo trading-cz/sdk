@@ -9,10 +9,15 @@ For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegi
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel
 
+from tradingcz.sdk.exceptions import RegistryError
 from tradingcz.sdk.lang.model_registry import ModelRegistry
-from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+
+if TYPE_CHECKING:
+    from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -20,7 +25,7 @@ from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class EventRegistry(ModelRegistry[EventType]):
+class EventRegistry(ModelRegistry["EventType"]):
     """EventType ↔ Pydantic model.
 
     Every model that travels over Kafka with an ``event_type`` header
@@ -28,24 +33,24 @@ class EventRegistry(ModelRegistry[EventType]):
     """
 
     @classmethod
-    def event_type_for(cls, model: type[BaseModel] | BaseModel) -> EventType:
-        """Return the EventType for *model*, or raise KeyError."""
+    def event_type_for(cls, model: type[BaseModel] | BaseModel) -> "EventType":
+        """Return the EventType for *model*, or raise RegistryError."""
         result = cls.key_for(model)
         if result is None:
             cls_ = model if isinstance(model, type) else type(model)
-            raise KeyError(
+            raise RegistryError(
                 f"Model {cls_.__name__} is not registered in EventRegistry. "
                 f"Add @register_event(EventType.XXX) to the class."
             )
         return result
 
     @classmethod
-    def as_types_dict(cls) -> dict[EventType, type[BaseModel]]:
+    def as_types_dict(cls) -> dict["EventType", type[BaseModel]]:
         """Alias for :meth:`as_dict`."""
         return cls.as_dict()
 
 
-class MarketDataRegistry(ModelRegistry[MarketDataType]):
+class MarketDataRegistry(ModelRegistry["MarketDataType"]):
     """MarketDataType ↔ Pydantic model.
 
     Only market-data models (Bar, Quote, Trade, etc.) are registered here.
@@ -53,9 +58,16 @@ class MarketDataRegistry(ModelRegistry[MarketDataType]):
     """
 
     @classmethod
-    def data_type_for(cls, model: type[BaseModel] | BaseModel) -> MarketDataType | None:
-        """Return the MarketDataType for *model*, or None."""
-        return cls.key_for(model)
+    def data_type_for(cls, model: type[BaseModel] | BaseModel) -> "MarketDataType":
+        """Return the MarketDataType for *model*, or raise RegistryError."""
+        result = cls.key_for(model)
+        if result is None:
+            cls_ = model if isinstance(model, type) else type(model)
+            raise RegistryError(
+                f"Model {cls_.__name__} is not registered in MarketDataRegistry. "
+                f"Add @register_market_data(MarketDataType.XXX) to the class."
+            )
+        return result
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -63,7 +75,7 @@ class MarketDataRegistry(ModelRegistry[MarketDataType]):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def register_event(event_type: EventType):
+def register_event(event_type: "EventType"):
     """Decorator: register a model under an EventType.
 
         @register_event(EventType.BAR)
@@ -75,7 +87,7 @@ def register_event(event_type: EventType):
     return decorator
 
 
-def register_market_data(data_type: MarketDataType):
+def register_market_data(data_type: "MarketDataType"):
     """Decorator: register a model under a MarketDataType.
 
         @register_market_data(MarketDataType.BARS)

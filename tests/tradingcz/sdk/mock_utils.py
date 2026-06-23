@@ -8,7 +8,7 @@ Usage::
     from tests.tradingcz.sdk.mock_utils import MockConsumer, KafkaSettings, kafka_settings
 
     consumer = MockConsumer(
-        KafkaMessage(payload=b'{"x":1}', key="", headers={"event_type": "svc.lifecycle"}, offset=0, partition=0, topic="events"),
+        KafkaMessage(payload=b'{"x":1}', key="", headers={"event_type": EventType.SERVICE_LIFECYCLE.value}, offset=0, partition=0, topic="events"),
     )
     # Use consumer as a fake async-iterable TransportConsumer/TypedConsumer
     async for msg in consumer:

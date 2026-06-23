@@ -5,11 +5,6 @@ Frozen models with no vendor dependencies or I/O.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from tradingcz.sdk.models.enums.event import EventType
-
 from tradingcz.sdk.models.market.bar import Bar
 from tradingcz.sdk.models.market.corporate import Dividend, StockSplit
 from tradingcz.sdk.models.market.option_snapshot import OptionSnapshot
@@ -24,7 +19,7 @@ from tradingcz.sdk.registry import EventRegistry
 MarketItem = Trade | Bar | Quote | Snapshot | OptionSnapshot
 
 
-def market_item_message_type(item: MarketItem) -> EventType:
+def market_item_message_type(item: MarketItem) -> "EventType":
     """Infer the ``EventType`` from a market data item via EventRegistry.
 
     .. deprecated::

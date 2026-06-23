@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import queue
 from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 from confluent_kafka import TopicPartition
 from confluent_kafka.aio import AIOConsumer
 
+from tradingcz.sdk.exceptions import TransportError
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
@@ -28,12 +28,13 @@ class TransportConsumer:
         auto_offset_reset: str | None = None,
         poll_timeout_ms: int | None = None,
         batch_size: int | None = None,
+        auto_commit: bool = True,
         on_error: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
         self._on_error = on_error
-        self._error_queue: queue.Queue[str] = queue.Queue()
+        self._auto_commit = auto_commit
         self._poll_timeout_ms = poll_timeout_ms
         self._batch_size = batch_size
 
@@ -55,7 +56,7 @@ class TransportConsumer:
     async def poll(self) -> list[KafkaMessage]:
         await self._ensure_subscribed()
         if self._closed:
-            raise RuntimeError("TransportConsumer is closed")
+            raise TransportError("TransportConsumer is closed")
 
         batch_size = self._batch_size if self._batch_size is not None else self._settings.consumer_batch_size
         timeout_s = (self._poll_timeout_ms if self._poll_timeout_ms is not None else self._settings.consumer_poll_timeout_ms) / 1000.0
@@ -89,10 +90,9 @@ class TransportConsumer:
         finally:
             await self._consumer.close()
             self._closed = True
-            # Non-blocking shutdown — can't wait=True from within
-            # the executor's own thread (deadlock/crash).  The executor
-            # will be fully shut down in close().
-            self._executor.shutdown(wait=False)
+            # Executor shutdown is handled by close() (wait=True).
+            # Calling shutdown(wait=False) here crashes on Python 3.14 +
+            # librdkafka 2.14.x (SIGABRT in ThreadPoolExecutor).
 
     async def commit(self, msg: KafkaMessage) -> None:
         """Commit a message's offset.  Must be called during iteration."""
@@ -105,16 +105,6 @@ class TransportConsumer:
             self._executor.shutdown(wait=True)
             logger.debug("TransportConsumer executor shut down")
 
-    def drain_errors(self) -> list[str]:
-        """Pull accumulated consume errors (clears the queue)."""
-        errors: list[str] = []
-        while True:
-            try:
-                errors.append(self._error_queue.get_nowait())
-            except queue.Empty:
-                break
-        return errors
-
     # ── Internal ─────────────────────────────────────────────────────────
 
     async def _ensure_subscribed(self) -> None:
@@ -123,31 +113,22 @@ class TransportConsumer:
             self._subscribed = True
 
     async def _handle_error(self, msg: Any) -> None:
-        """Log, invoke on_error callback, push to queue, and skip past a corrupt Kafka message."""
-        partition = msg.partition() or -1
-        offset = msg.offset() or -1
+        """Log, invoke on_error callback, and conditionally skip past a corrupt Kafka message."""
+        topic = msg.topic() or self._topic
+        partition = msg.partition() or 0
+        offset = msg.offset() or 0
         error_str = str(msg.error())
-        logger.error(
-            "Kafka consumer error on %s [%d] offset %s: %s",
-            self._topic,
-            partition,
-            offset,
-            error_str,
-        )
-        self._error_queue.put(error_str)
+        logger.error("Kafka consumer error on %s [%d] offset %s: %s", topic, partition, offset, error_str)
         if self._on_error is not None:
             try:
                 await self._on_error(partition, offset, error_str)
             except Exception:
                 logger.exception("on_error callback raised for %s", self._topic)
-        try:
-            await self._commit_offset(
-                msg.topic() or self._topic,
-                msg.partition() or 0,
-                (msg.offset() or 0) + 1,
-            )
-        except Exception:
-            logger.exception("Failed to skip corrupt message on %s", self._topic)
+        if self._auto_commit:
+            try:
+                await self._commit_offset(topic, partition, offset + 1)
+            except Exception:
+                logger.exception("Failed to skip corrupt message on %s", self._topic)
 
     async def _commit_offset(self, topic: str, partition: int, offset: int) -> None:
         """Commit a single offset.  Shared by ``commit()`` and ``_handle_error()``."""

@@ -22,6 +22,7 @@ from tradingcz.sdk.models.enums.order import (
     TimeInForce,
 )
 from tradingcz.sdk.models.events import ServiceRequestEvent
+from tradingcz.sdk.registry import register_event
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class OrderSummary(BaseModel):
     legs: list[OrderSummary] | None = None
 
 
+@register_event(EventType.ORDER_RESPONSE)
 class OrderResponse(BaseModel):
     """Single order confirmation — published by executor after execution."""
 
@@ -96,7 +98,7 @@ class OrderClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(EventType.ORDER_RESPONSE, OrderList)
+        self._rr.register_type(OrderList)
 
     async def get_orders(
         self,
@@ -116,7 +118,6 @@ class OrderClient:
             req,
             response_type=OrderList,
             timeout=timeout,
-            request_type=EventType.SERVICE_REQUEST,
         )
         return resp.orders
 

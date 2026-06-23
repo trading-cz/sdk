@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.exceptions import MessageTypeError, SdkError
+from tradingcz.sdk.exceptions import MessageTypeError, SdkError, ServiceNotReadyError
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.serialization.json import JsonDeserializer
 from tradingcz.sdk.transport.kafka_header import Header
@@ -53,7 +53,7 @@ class TypedConsumer:
     async def commit(self, msg: KafkaMessage) -> None:
         """Commit a message's offset. Call during iteration when ``auto_commit=False``."""
         if self._session is None:
-            raise RuntimeError("commit() called outside iteration")
+            raise ServiceNotReadyError("commit() called outside iteration")
         await self._session.commit(msg)
 
     async def __aiter__(self) -> AsyncIterator[tuple[EventType, BaseModel, KafkaMessage]]:
@@ -64,6 +64,7 @@ class TypedConsumer:
             auto_offset_reset=self._auto_offset_reset,
             poll_timeout_ms=self._poll_timeout_ms,
             batch_size=self._batch_size,
+            auto_commit=self._auto_commit,
         )
         async for msg in self._session:
             # ── Pre-dispatch filters (skip before parse, saves CPU) ──

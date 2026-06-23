@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from tradingcz.sdk.exceptions import TransportError
 from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
@@ -45,19 +46,10 @@ class KafkaTopicAdmin:
         self._closed = False
 
     # ── Public API ──────────────────────────────────────────────────────
-    # TODO: use KafkaTopicConfig
-    async def ensure(
-        self,
-        name: str,
-        *,
-        num_partitions: int | None = None,
-        replication_factor: int | None = None,
-        retention_ms: int | None = None,
-        cleanup_policy: str | None = None,
-    ) -> None:
+    async def ensure(self, name: str, *, num_partitions: int | None = None, replication_factor: int | None = None, retention_ms: int | None = None, cleanup_policy: str | None = None) -> None:
         """Create a topic if it doesn't already exist."""
         if self._closed:
-            raise RuntimeError("KafkaTopicAdmin is closed")
+            raise TransportError("KafkaTopicAdmin is closed")
         if name in self._created:
             return
 
@@ -119,11 +111,9 @@ class KafkaTopicAdmin:
     async def __aexit__(self, *args: object) -> None:
         await self.close()
 
-    # ── Internal ─────────────────────────────────────────────────────────
-
     def _get_admin(self) -> AdminClient:
         if self._closed:
-            raise RuntimeError("KafkaTopicAdmin is closed")
+            raise TransportError("KafkaTopicAdmin is closed")
         if self._admin is None:
             self._admin = AdminClient({"bootstrap.servers": self._settings.bootstrap_servers})
         return self._admin

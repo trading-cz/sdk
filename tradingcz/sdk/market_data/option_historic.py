@@ -22,28 +22,41 @@ logger = logging.getLogger(__name__)
 
 
 class OptionsHistoricDataClient:
-    """Request and consume options market data via RequestReply."""
+    """Request and consume options market data.
+
+    Constructor args::
+
+        OptionsHistoricDataClient(
+            rr=request_reply,           # RequestReply instance (started)
+            producer=transport_producer, # TransportProducer for fire-and-forget
+            settings=kafka_settings,    # KafkaSettings
+            topics=topic_registry,      # KafkaTopicRegistry
+            service_id="my-service",    # unique service identifier
+            broker=Broker.ALPACA,       # optional, default: ALPACA
+        )
+
+    All methods are async and return typed domain objects.
+    No Kafka knowledge required beyond the constructor.
+    """
 
     def __init__(
         self,
         *,
-        rr: RequestReply | None = None,
-        producer: TransportProducer | None = None,
-        settings: KafkaSettings | None = None,
-        topics: KafkaTopicRegistry | None = None,
-        service_id: str = "",
+        rr: RequestReply,
+        producer: TransportProducer,
+        settings: KafkaSettings,
+        topics: KafkaTopicRegistry,
+        service_id: str,
         broker: Broker = Broker.ALPACA,
         _transport: _DataTransport | None = None,
     ) -> None:
         if _transport is not None:
             self._transport = _transport
-        elif rr is not None and producer is not None and settings is not None and topics is not None:
+        else:
             self._transport = _DataTransport(
                 rr=rr, producer=producer, settings=settings, topics=topics,
                 service_id=service_id, broker=broker,
             )
-        else:
-            raise ValueError("Provide _transport or (rr, producer, settings, topics, service_id)")
 
     async def snapshots(
         self, symbols: list[str], *, timeout: float = 30.0

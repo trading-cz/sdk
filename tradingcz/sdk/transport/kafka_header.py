@@ -42,6 +42,7 @@ class KafkaHeader(BaseModel):
 
 class EventHeader(KafkaHeader):
     """Headers for event-topic messages — no sequence field."""
+
     event_id: str
 
 

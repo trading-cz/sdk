@@ -11,7 +11,9 @@ import logging
 
 from pydantic import BaseModel
 
+from tradingcz.sdk.exceptions import MessageTypeError
 from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_header import EventHeader, Header
 from tradingcz.sdk.transport.kafka_key import KafkaKey
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
@@ -54,7 +56,12 @@ class RequestReply:
     # Type registry
     # ------------------------------------------------------------------
 
-    def register_type(self, message_type: EventType, model: type[BaseModel]) -> None:
+    def register_type(self, model: type[BaseModel]) -> None:
+        """Register *model* for response dispatch.
+
+        The ``EventType`` is derived from :class:`EventRegistry`.
+        """
+        message_type = EventRegistry.event_type_for(model)
         self._types[message_type] = model
 
     # ------------------------------------------------------------------
@@ -98,17 +105,17 @@ class RequestReply:
         req: BaseModel,
         *,
         response_type: type[Resp],  # type-checker only, not used at runtime
-        request_type: EventType,
         timeout: float = 30.0,
     ) -> Resp:
         event_id: str = str(req.event_id)
         if not event_id:
-            raise ValueError(f"Request model {type(req).__name__} has no event_id")
+            raise MessageTypeError(f"Request model {type(req).__name__} has no event_id")
 
+        request_type = EventRegistry.event_type_for(req)
         _ = response_type  # used only for type-checker generic binding
         self._seq += 1
 
-        key = KafkaKey(value=f"{request_type}:{self._service_id}:{event_id}")
+        key = KafkaKey(value=f"{request_type.value}:{self._service_id}:{event_id}")
         headers = EventHeader(
             event_type=request_type,
             source_app=self._service_id,

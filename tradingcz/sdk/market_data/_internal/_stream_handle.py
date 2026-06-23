@@ -11,7 +11,6 @@ from tradingcz.sdk.models.enums.event import (
     AssetType,
     Broker,
     DataRequestType,
-    EventType,
     MarketDataType,
 )
 from tradingcz.sdk.models.events import DataRequest
@@ -79,7 +78,7 @@ class _Unsubscribe:
             data_type=self._data_type,
         )
         try:
-            await self._faf.send(req, event_type=EventType.DATA_REQUEST, event_id=str(req.event_id))
+            await self._faf.send(req, event_id=str(req.event_id))
         except Exception:
             logger.info("Unsubscribe request failed for %s (data_kind=%s)", self._symbols, self._data_type, exc_info=True)
 
