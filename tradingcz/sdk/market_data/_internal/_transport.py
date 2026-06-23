@@ -86,12 +86,14 @@ class _DataTransport:
         days: int | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        latest_only: bool = False,
         timeout: float = 30.0,
     ) -> dict[str, list[T]]:
         """Send DataRequest for historical data, consume typed results.
 
         Returns ``{symbol: [T sorted by timestamp]}``.
+
+        When *start_time* and *end_time* are both ``None`` (and *days*
+        is also ``None``), the request is interpreted as latest-only.
         """
         start: datetime | None
         end: datetime | None
@@ -110,7 +112,6 @@ class _DataTransport:
             symbols=symbols,
             data_type=data_type,
             timeframe=timeframe or Timeframe.D1,
-            latest_only=latest_only,
             start_time=start,
             end_time=end,
         )

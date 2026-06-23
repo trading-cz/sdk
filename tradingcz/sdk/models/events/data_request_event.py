@@ -43,9 +43,8 @@ class DataRequest(BaseModel):
     symbols: list[str] = Field(..., description="List of ticker symbols to request")
     data_type: MarketDataType = Field(default=MarketDataType.BARS, description="Data type: bars, quotes, trades")
     timeframe: Timeframe = Field(default=Timeframe.D1, description="Candle timeframe (1d, 4h, etc.)")
-    latest_only: bool = Field(default=False, description="When True, fetch only the latest record per symbol (no time range needed)")
-    start_time: datetime | None = Field(default=None, description="Start time for historical data")
-    end_time: datetime | None = Field(default=None, description="End time for historical data")
+    start_time: datetime | None = Field(default=None, description="Start time for historical data; omit both start_time+end_time for latest-only")
+    end_time: datetime | None = Field(default=None, description="End time for historical data; omit both start_time+end_time for latest-only")
 
 
 @register_event(EventType.DATA_READY)
