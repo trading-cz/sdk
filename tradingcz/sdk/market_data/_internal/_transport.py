@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 from tradingcz.sdk.market_data._internal._stream_handle import StreamHandle, _Unsubscribe
-from tradingcz.sdk.exceptions import DataError as _DataErrorExc
+from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import (
     AssetType,
@@ -67,11 +67,11 @@ class _DataTransport:
 
     @staticmethod
     def _validate_response(resp: DataReady, expected_type: DataRequestType) -> None:
-        """Validate DataReady response — raise _DataErrorExc on failure or wrong type."""
+        """Validate DataReady response — raise on DataError or wrong type."""
         if resp.event_type == EventType.DATA_ERROR:
-            raise _DataErrorExc(f"DataError from ingestion: {resp.error}")
+            raise RuntimeError(f"DataError from ingestion: {resp.error}")
         if resp.type != expected_type:
-            raise _DataErrorExc(f"Expected {expected_type} DataReady, got type={resp.type}")
+            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
 
     # -- Historical (request → consume → return dict) ------------------
 
@@ -91,9 +91,6 @@ class _DataTransport:
         """Send DataRequest for historical data, consume typed results.
 
         Returns ``{symbol: [T sorted by timestamp]}``.
-
-        When *start_time* and *end_time* are both ``None`` (and *days*
-        is also ``None``), the request is interpreted as latest-only.
         """
         start: datetime | None
         end: datetime | None
@@ -227,8 +224,10 @@ class _DataTransport:
                 await consumer.close()
 
         unsubscribe = _Unsubscribe(
-            producer=TypedProducer(self._producer, self._topics.events.name),
-            service_id=self._service_id,
+            faf=FireAndForget(
+                TypedProducer(self._producer, self._topics.events.name),
+                self._service_id,
+            ),
             broker=self._broker,
             symbols=symbols,
             data_kind=data_type,

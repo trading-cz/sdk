@@ -12,5 +12,9 @@ from tradingcz.sdk.market_data._internal._stream_handle import StreamHandle
 from tradingcz.sdk.market_data._internal._transport import _DataTransport
 from tradingcz.sdk.market_data._internal.option_data_provider import OptionDataProvider
 from tradingcz.sdk.market_data._internal.stock_data_provider import StockDataProvider
+from tradingcz.sdk.market_data._internal.stock_stream_provider import StockStreamProvider
 
-__all__ = ["StreamHandle", "_DataTransport", "StockDataProvider", "OptionDataProvider"]
+__all__ = [
+    "StreamHandle", "_DataTransport",
+    "StockDataProvider", "OptionDataProvider", "StockStreamProvider",
+]

@@ -15,6 +15,7 @@ Provider contracts (for implementors like ingestion adapters):
 
 from tradingcz.sdk.market_data._internal.option_data_provider import OptionDataProvider
 from tradingcz.sdk.market_data._internal.stock_data_provider import StockDataProvider
+from tradingcz.sdk.market_data._internal.stock_stream_provider import StockStreamProvider
 from tradingcz.sdk.market_data.clock import MarketClockProvider, TimeKeeper
 from tradingcz.sdk.market_data.corporate import CorporateActionsClient
 from tradingcz.sdk.market_data.option_historic import OptionsHistoricDataClient
@@ -30,4 +31,5 @@ __all__ = [
     "MarketClockProvider",
     "StockDataProvider",
     "OptionDataProvider",
+    "StockStreamProvider",
 ]

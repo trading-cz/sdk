@@ -15,7 +15,6 @@ from tradingcz.sdk.models.enums.event import (
     MarketDataType,
 )
 from tradingcz.sdk.models.events import DataRequest
-from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
@@ -65,18 +64,17 @@ class StreamHandle[T](AsyncIterator[T]):
 
 
 class _Unsubscribe:
-    """Fire-and-forget unsubscribe — sends a DataRequest, no response expected."""
+    """Fire-and-forget unsubscribe — sends a DataRequest via FireAndForget, no response expected."""
 
     def __init__(
         self,
-        producer: TypedProducer,
-        service_id: str,
+        faf: FireAndForget,
         broker: Broker,
         symbols: list[str],
         data_kind: MarketDataType,
         asset: AssetType,
     ) -> None:
-        self._faf = FireAndForget(producer, service_id)
+        self._faf = faf
         self._broker = broker
         self._symbols = symbols
         self._data_type = data_kind
