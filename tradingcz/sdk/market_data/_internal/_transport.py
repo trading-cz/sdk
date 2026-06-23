@@ -19,7 +19,6 @@ from tradingcz.sdk.models.enums.event import (
     AssetType,
     Broker,
     DataRequestType,
-    EventType,
     MarketDataType,
 )
 from tradingcz.sdk.models.enums.timeframe import Timeframe
@@ -68,9 +67,11 @@ class _DataTransport:
 
     @staticmethod
     def _validate_response(resp: DataReady, expected_type: DataRequestType) -> None:
-        """Validate DataReady response — raise on DataError or wrong type."""
-        if resp.event_type == EventType.DATA_ERROR:
-            raise RuntimeError(f"DataError from ingestion: {resp.error}")
+        """Validate DataReady response — raise on wrong request type.
+
+        Note: ``event_type`` lives in the Kafka header, not the payload.
+        The transport layer (RequestReply) already routes by EventType header.
+        """
         if resp.type != expected_type:
             raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
 
@@ -114,18 +115,9 @@ class _DataTransport:
             end_time=end,
         )
 
-        resp = await self._rr.request(
-            req,
-            response_type=DataReady,
-            timeout=timeout,
-        )
-
+        resp = await self._rr.request(req, response_type=DataReady, timeout=timeout)
         self._validate_response(resp, DataRequestType.HISTORIC)
-
-        logger.info(
-            "DataReady(historic): topic=%s record_count=%s",
-            resp.data_topic, resp.record_count,
-        )
+        logger.info("DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count)
 
         await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
@@ -165,9 +157,7 @@ class _DataTransport:
 
     # -- Streaming (subscribe → yield indefinitely → unsubscribe) ------
 
-    async def stream[
-        T
-    ](  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def stream[T](  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         symbols: list[str],
         asset: AssetType,
@@ -193,12 +183,7 @@ class _DataTransport:
             timeframe=timeframe or Timeframe.D1,
         )
 
-        resp = await self._rr.request(
-            req,
-            response_type=DataReady,
-            timeout=timeout,
-        )
-
+        resp = await self._rr.request(req, response_type=DataReady, timeout=timeout)
         self._validate_response(resp, DataRequestType.STREAM)
 
         await self._topic_admin.ensure(resp.data_topic)
@@ -209,10 +194,7 @@ class _DataTransport:
                 async for msg in consumer:
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
-                        msg.headers.get(
-                            Header.SOURCE,
-                            msg.headers.get(Header.SOURCE_APP, ""),
-                        ),
+                        msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
                         seq,
                     ):
                         continue
@@ -225,10 +207,7 @@ class _DataTransport:
                 await consumer.close()
 
         unsubscribe = _Unsubscribe(
-            faf=FireAndForget(
-                TypedProducer(self._producer, self._topics.events.name),
-                self._service_id,
-            ),
+            faf=FireAndForget(TypedProducer(self._producer, self._topics.events.name), self._service_id),
             broker=self._broker,
             symbols=symbols,
             data_kind=data_type,

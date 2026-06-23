@@ -107,7 +107,10 @@ class RequestReply:
         response_type: type[Resp],  # type-checker only, not used at runtime
         timeout: float = 30.0,
     ) -> Resp:
-        event_id: str = str(req.event_id)
+        # Every registered event model has event_id (UUID | str).
+        # mypy can't verify this because Protocol + Union variance
+        # rejects UUID as subtype of Union[UUID, str].
+        event_id: str = str(req.event_id)  # type: ignore[attr-defined]
         if not event_id:
             raise MessageTypeError(f"Request model {type(req).__name__} has no event_id")
 
