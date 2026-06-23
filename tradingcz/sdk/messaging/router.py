@@ -55,6 +55,7 @@ class EventRouter:
         auto_offset_reset: str | None = None,
         poll_timeout_ms: int | None = None,
         batch_size: int | None = None,
+        max_concurrency: int | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -68,6 +69,9 @@ class EventRouter:
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
         self._spawned_tasks: set[asyncio.Task[None]] = set()
+        self._semaphore: asyncio.Semaphore | None = (
+            asyncio.Semaphore(max_concurrency) if max_concurrency else None
+        )
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
@@ -82,21 +86,42 @@ class EventRouter:
         self._run_task = asyncio.create_task(self.run(), name=f"router-{self._topic}")
 
     async def close(self) -> None:
-        """Cancel the background consumer task and all spawned handlers."""
+        """Cancel the background consumer task and all spawned handlers.
+
+        Spawned handlers get *cancel_timeout* seconds to finish after
+        cancellation; the consumer loop gets *cancel_timeout* seconds
+        after that.  If either deadline is exceeded, a warning is logged
+        and shutdown proceeds (the pod may be SIGKILL'd by Kubernetes).
+        """
+        cancel_timeout = 10.0
         # Cancel spawned tasks first, then the consumer loop
         for task in list(self._spawned_tasks):
             if not task.done():
                 task.cancel()
         if self._spawned_tasks:
-            await asyncio.gather(*self._spawned_tasks, return_exceptions=True)
+            try:
+                async with asyncio.timeout(cancel_timeout):
+                    await asyncio.gather(*self._spawned_tasks, return_exceptions=True)
+            except TimeoutError:
+                logger.warning(
+                    "Timed out after %.0fs waiting for %d spawned tasks to cancel",
+                    cancel_timeout,
+                    len([t for t in self._spawned_tasks if not t.done()]),
+                )
             self._spawned_tasks.clear()
 
         if self._run_task and not self._run_task.done():
             self._run_task.cancel()
             try:
-                await self._run_task
+                async with asyncio.timeout(cancel_timeout):
+                    await self._run_task
             except asyncio.CancelledError:
                 pass
+            except TimeoutError:
+                logger.warning(
+                    "Timed out after %.0fs waiting for consumer loop to cancel",
+                    cancel_timeout,
+                )
         self._run_task = None
         self._consumer = None
 
@@ -180,12 +205,16 @@ class EventRouter:
                 if reg.filter_fn is not None and not reg.filter_fn(model, raw):
                     continue
                 if reg.spawn_task:
+                    if self._semaphore:
+                        await self._semaphore.acquire()
                     task = asyncio.create_task(
                         self._dispatch(reg, model, raw),
                         name=f"router-{msg_type}",
                     )
                     self._spawned_tasks.add(task)
                     task.add_done_callback(self._spawned_tasks.discard)
+                    if self._semaphore:
+                        task.add_done_callback(lambda _: self._semaphore.release())  # type: ignore[union-attr]
                 else:
                     await self._dispatch(reg, model, raw)
 

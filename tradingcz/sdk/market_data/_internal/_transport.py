@@ -8,6 +8,7 @@ Application code never references this module directly.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
@@ -131,7 +132,7 @@ class _DataTransport:
         count = 0
         expected = resp.record_count or 0
 
-        consumer = TransportConsumer(resp.data_topic, self._settings, "data")
+        consumer = TransportConsumer(resp.data_topic, self._settings, f"data-{uuid.uuid4().hex[:8]}")
         try:
             async for msg in consumer:
                 if msg.headers.get(Header.EVENT_ID) != req.event_id:
@@ -201,7 +202,7 @@ class _DataTransport:
         self._validate_response(resp, DataRequestType.STREAM)
 
         await self._topic_admin.ensure(resp.data_topic)
-        consumer = TransportConsumer(resp.data_topic, self._settings, "stream")
+        consumer = TransportConsumer(resp.data_topic, self._settings, f"stream-{uuid.uuid4().hex[:8]}")
 
         async def _consume() -> AsyncIterator[T]:
             try:
