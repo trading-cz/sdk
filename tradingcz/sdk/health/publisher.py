@@ -1,6 +1,6 @@
 """HealthPublisher — emit lifecycle events for THIS service.
 
-Used internally by ServiceApp.  Full API docs: health/_README.md
+Full API docs: health/_README.md
 """
 
 from __future__ import annotations

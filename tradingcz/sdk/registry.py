@@ -9,15 +9,11 @@ For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegi
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel
 
 from tradingcz.sdk.exceptions import RegistryError
 from tradingcz.sdk.lang.model_registry import ModelRegistry
-
-if TYPE_CHECKING:
-    from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 
 
 # ═══════════════════════════════════════════════════════════════════════

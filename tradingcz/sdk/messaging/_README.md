@@ -7,7 +7,7 @@ and [transport](../transport/_README.md) (Layer 1).
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp (+ composition)             │  ← Layer 4: Application
+│  Your App (direct wiring)               │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: THIS PACKAGE
 ├─────────────────────────────────────────┤
@@ -181,7 +181,7 @@ await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
 ```python
 from tradingcz.sdk.messaging import ReplayConsumer
 
-# INITIALIZING sentinel is published automatically by ServiceApp.
+# INITIALIZING sentinel is published automatically by HealthPublisher.
 # Replay until your own INITIALIZING:
 consumer = ReplayConsumer(topic, settings)
 async for msg_type, model, raw in consumer.replay(
@@ -194,6 +194,6 @@ async for msg_type, model, raw in consumer.replay(
 ):
     reconstruct_state(msg_type, model, raw.headers)
 
-# READY is published automatically by ServiceApp after
+# READY is published automatically by HealthPublisher after
 # health.ready().  Run recovery before calling start().
 ```

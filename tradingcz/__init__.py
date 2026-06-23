@@ -17,7 +17,6 @@ Public SDK API (``tradingcz.sdk``):
     - tradingcz.sdk.models.market   — Bar, Quote, Trade, etc.
     - tradingcz.sdk.models.events   — TradingSignal, DataRequest, etc.
     - tradingcz.sdk.indicators      — ATR, SMA, etc.
-    - tradingcz.sdk.service_app     — ServiceApp (application facade)
 """
 
 from pathlib import Path

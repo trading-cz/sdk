@@ -90,7 +90,7 @@ class HealthMonitor:
         self._seen.clear()
 
     async def close(self) -> None:
-        """Alias for :meth:`stop` — conforms to ServiceApp/EventRouter convention."""
+        """Alias for :meth:`stop` — conforms to EventRouter convention."""
         await self.stop()
 
     async def _sweep(self) -> None:

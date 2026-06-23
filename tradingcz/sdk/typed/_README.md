@@ -7,7 +7,7 @@ and header-based dispatch.  Sits between raw transport (L1) and messaging patter
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp (+ composition)             │  ← Layer 4: Application
+│  Your App (direct wiring)               │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
 ├─────────────────────────────────────────┤
