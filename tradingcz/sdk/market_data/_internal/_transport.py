@@ -66,9 +66,7 @@ class _DataTransport:
 
     @staticmethod
     def _validate_response(resp: DataReady, expected_type: DataRequestType) -> None:
-        """Validate DataReady response — raise on DataError or wrong type."""
-        if resp.event_type == EventType.DATA_ERROR:
-            raise RuntimeError(f"DataError from ingestion: {resp.error}")
+        """Validate DataReady response — raise on wrong type."""
         if resp.type != expected_type:
             raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
 

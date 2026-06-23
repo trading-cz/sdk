@@ -6,7 +6,7 @@ Direct Kafka communication primitives. Bytes in, bytes out. No typing, no serial
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp / TradingApp                │  ← Layer 4: Application
+│  ServiceApp (+ composition)             │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
 ├─────────────────────────────────────────┤

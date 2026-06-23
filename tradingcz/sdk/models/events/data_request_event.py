@@ -27,8 +27,10 @@ from tradingcz.sdk.models.enums.event import (
     MarketDataType,
 )
 from tradingcz.sdk.models.enums.timeframe import Timeframe
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.DATA_REQUEST)
 class DataRequest(BaseModel):
     """Request for historical or streaming market data.
     """
@@ -45,6 +47,7 @@ class DataRequest(BaseModel):
     end_time: datetime | None = Field(default=None, description="End time for historical data")
 
 
+@register_event(EventType.DATA_READY)
 class DataReady(BaseModel):
     """Acknowledgement: data is available on data_topic.
 
@@ -52,7 +55,6 @@ class DataReady(BaseModel):
     ``record_count`` is set only when ``type=DataRequestType.HISTORIC``.
     """
 
-    event_type: EventType = Field(default=EventType.DATA_READY, description="Event type (always DATA_READY)")
     event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     data_topic: str = Field(..., description="Kafka topic where data is published")
@@ -60,10 +62,10 @@ class DataReady(BaseModel):
     record_count: int | None = Field(default=None, description="Number of records published (historic only)")
 
 
+@register_event(EventType.DATA_ERROR)
 class DataError(BaseModel):
     """Error response to a DataRequest."""
 
-    event_type: EventType = Field(default=EventType.DATA_ERROR, description="Event type (always DATA_ERROR)")
     event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     error: str = Field(..., description="Error message describing the failure")

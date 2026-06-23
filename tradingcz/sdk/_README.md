@@ -1,19 +1,15 @@
 # Application Layer — ServiceApp
 
-Top-level convenience entry point.  Every service in the platform uses
-``ServiceApp`` — it wires together Layer 3 classes so application code
-doesn't have to.
-
-``ServiceApp`` is **not a real layer** — it adds no new protocols or
-messaging logic.  It's a concentrator: it creates and connects
-``FireAndForget``, ``HealthPublisher``, ``RequestReply``, and optional
-market-data / account clients.
+Minimal Kafka transport + health + shutdown wiring shared by every
+service in the platform.  ``ServiceApp`` provides ONLY the universal
+boilerplate.  Apps compose their own market‑data, messaging, and domain
+clients on top — no forced lazy-loading, no monolithic wiring.
 
 ## Architecture position
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp  (+ BrokerScope)            │  ← Layer 4: THIS FILE
+│  YOUR APP  (ServiceApp + composition)   │  ← Layer 4: THIS FILE
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
 ├─────────────────────────────────────────┤
@@ -29,55 +25,67 @@ market-data / account clients.
 
 | Capability | How |
 | ----------- | ----- |
-| Event publishing | ``await svc.publish_event(model, message_type=…, event_id=…)`` |
-| Kafka settings | ``svc.kafka_settings`` — use with EventRouter / TypedConsumer |
-| Resolved topic names | ``svc.events_topic``, ``svc.topics`` |
+| Event publishing | ``await app.publish_event(model, message_type=…, event_id=…)`` |
+| Fire-and-forget transport | ``app.faf`` — compose ``SignalPublisher(faf=app.faf)`` etc. |
+| Kafka settings | ``app.kafka_settings`` — use with EventRouter / TypedConsumer |
+| Resolved topic names | ``app.events_topic``, ``app.topics`` |
 | Health / heartbeat | Automatic ``INITIALIZING`` → ``READY`` → ``HEARTBEAT`` → ``DOWN`` |
-| Graceful shutdown | ``await svc.run_until_shutdown(tasks)`` or ``await svc.wait_for_shutdown()`` |
-| Market data | ``svc.stock.bars(…)``, ``svc.stock.stream_quotes(…)``, ``svc.options.snapshots(…)`` |
-| Signals | ``svc.signals.publish(signal, event_id=…)`` |
-| Multi-broker | ``ibkr = svc.with_broker("ibkr")`` → ``ibkr.stock.bars(…)`` |
+| Graceful shutdown | ``await app.run_until_shutdown(tasks)`` or ``await app.wait_for_shutdown()`` |
 
 ## Usage
 
-All clients are created lazily on first access — no feature flags needed.
-``RequestReply`` + ``BaseDataClient`` are always started (one consumer group
-overhead is negligible at platform scale).
+Compose your own clients on top of ``ServiceApp`` — no lazy loading,
+no feature flags, no lifecycle surprises:
 
 ```python
 from tradingcz.sdk import ServiceApp
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.messaging.request_reply import RequestReply
+from tradingcz.sdk.market_data._internal._transport import _DataTransport
+from tradingcz.sdk.market_data.stock_historic import StockDataClient
+from tradingcz.sdk.market_data.stock_stream import StockStreamClient
+from tradingcz.sdk.account.signals import SignalPublisher
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 async with ServiceApp(
     service_id="my-app",
     env="dev",
     kafka_settings=KafkaSettings(consumer_group="my-app"),
-) as svc:
-    # ── Publish events (fire-and-forget) ──────────────────────
-    await svc.publish_event(
-        model,
-        message_type=EventType.SERVICE_LIFECYCLE,
-        event_id="evt-001",
+) as app:
+    # ── Compose what you need ────────────────────────────────
+    rr = RequestReply(
+        producer=TypedProducer(app.events_producer, app.events_topic),
+        topic=app.events_topic,
+        settings=app.kafka_settings,
+        service_id=app.service_id,
+        group_suffix="svc-reply",
     )
+    await rr.start()
 
-    # ── Market data (lazy — created on first access) ──────────
-    bars = await svc.stock.bars(["AAPL"], days=30)
+    transport = _DataTransport(
+        rr=rr,
+        producer=app.events_producer,
+        settings=app.kafka_settings,
+        topics=app.topics,
+        service_id=app.service_id,
+    )
+    stock = StockDataClient(_transport=transport)
+    stock_stream = StockStreamClient(_transport=transport)
 
-    # ── Signals (fire-and-forget) ─────────────────────────────
-    await svc.signals.publish(signal, event_id="evt-1")
+    signals = SignalPublisher(faf=app.faf)
 
-    # ── Multi-broker ──────────────────────────────────────────
-    ibkr = svc.with_broker("ibkr")
-    ibkr_bars = await ibkr.stock.bars(["AAPL"], days=30)
+    # ── Use your clients ─────────────────────────────────────
+    bars = await stock.bars(["AAPL"], days=30)
+    await signals.publish(signal, event_id="evt-1")
 
     # ── Build your own consumer (EventRouter or TypedConsumer) ─
     router = EventRouter(
-        svc.events_topic, svc.kafka_settings, group_suffix="worker",
+        app.events_topic, app.kafka_settings, group_suffix="worker",
     )
     # ... register handlers, start, etc. ...
 
-    # ── Run until SIGTERM/SIGINT ──────────────────────────────
-    await svc.run_until_shutdown(router_task)
+    # ── Run until SIGTERM/SIGINT ─────────────────────────────
+    await app.run_until_shutdown(router_task)
 ```
 
 ## Lifecycle
@@ -90,8 +98,6 @@ ServiceApp.__aenter__()
        ├─ TransportProducer
        ├─ FireAndForget
        ├─ HealthPublisher.initializing()   →  emits INITIALIZING
-       ├─ RequestReply + BaseDataClient    (always started)
-       │    └─ Lazy clients: stock, options, corporate_actions, signals
        └─ HealthPublisher.ready()          →  emits READY, starts heartbeat
 
 ... application runs (heartbeat every 5 min) ...
@@ -99,19 +105,7 @@ ServiceApp.__aenter__()
 ServiceApp.__aexit__()
   └─ close()
        ├─ HealthPublisher.down()  →  emits DOWN, stops heartbeat
-       ├─ RequestReply.close()    →  cancel listener, reject pending
        └─ TransportProducer.close()
-```
-
-## BrokerScope
-
-``app.with_broker("ibkr")`` returns a ``BrokerScope`` with its own
-``stock``, ``options``, and ``corporate_actions`` clients scoped to that broker.
-
-```python
-ibkr = app.with_broker("ibkr")
-ibkr_bars = await ibkr.stock.bars(["AAPL"])
-alpaca_bars = await app.stock.bars(["AAPL"])  # default broker
 ```
 
 ## Constructor reference
@@ -123,7 +117,6 @@ ServiceApp(
     env: str,                            # dev / prd — scopes topic names
     kafka_settings: KafkaSettings,       # Pre-configured Kafka settings (required)
     health_interval: float = 300,        # Seconds between heartbeats
-    broker: str = "alpaca",              # Default data broker
 )
 ```
 
@@ -135,24 +128,31 @@ are logged at ``INFO`` level:
 
 | Event | Log message |
 | ------ | ------------ |
-| RequestReply + BaseDataClient ready | ``ServiceApp: RequestReply + BaseDataClient ready`` |
 | Start complete | ``ServiceApp started: id=%s env=%s`` |
 | Shutdown requested | ``Shutdown requested — cancelling %d task(s)`` |
 | Close complete | ``ServiceApp closed: id=%s`` |
 
-Set the logger level to ``DEBUG`` for per-request tracing from
-``BaseDataClient`` and ``RequestReply``.
-
 ## Exceptions
 
-``ServiceApp`` raises ``RuntimeError`` for lifecycle violations:
+``ServiceApp`` propagates errors from underlying components (Kafka,
+health) naturally — it adds no extra error wrapping.  There are no
+lazy-loading lifecycle violations (no pre-start guard checks).
 
-| Condition | Raised by |
-| ----------- | ---------- |
-| Accessing data client before ``start()`` | ``stock``, ``options``, ``corporate_actions`` |
-| Calling ``publish_event()`` before ``start()`` | ``publish_event()`` |
-| Calling ``with_broker()`` before ``start()`` | ``with_broker()`` |
+## What changed from the old ServiceApp
 
-Underlying component errors (Kafka, health, RequestReply, typing)
-propagate naturally — ``ServiceApp`` adds no extra error wrapping.
+The old ``ServiceApp`` auto-wired ``RequestReply``, market-data clients,
+``SignalPublisher``, and ``BrokerScope``.  The new ``ServiceApp`` is
+**minimal** — only transport, health, and shutdown.  Compose what you
+need explicitly:
+
+| Old (monolithic) | New (compose) |
+|---|---|
+| ``app.stock`` | ``StockDataClient(_transport=transport)`` |
+| ``app.stock_stream`` | ``StockStreamClient(_transport=transport)`` |
+| ``app.options`` | ``OptionsHistoricDataClient(_transport=transport)`` |
+| ``app.signals`` | ``SignalPublisher(faf=app.faf)`` |
+| ``app.with_broker()`` | Create a second transport with different broker |
+| ``app.publish_event()`` | ``app.publish_event()`` (unchanged) |
+| ``app.kafka_settings`` | ``app.kafka_settings`` (unchanged) |
+| ``app.events_topic`` | ``app.events_topic`` (unchanged) |
 

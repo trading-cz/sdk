@@ -4,7 +4,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+from tradingcz.sdk.registry import register_event, register_market_data
 
+
+@register_event(EventType.BAR)
+@register_market_data(MarketDataType.BARS)
 class Bar(BaseModel):
     model_config = ConfigDict(frozen=True)
 

@@ -1,11 +1,4 @@
-"""TypedProducer — publish typed Pydantic models via TransportProducer (Layer 2).
-
-Layer 2 does pure type conversion: ``BaseModel``↔``bytes``,
-``KafkaKey``↔``str``, ``KafkaHeader``↔``dict[str, str]``.
-No business logic — key and headers are mandatory, built by the caller (Layer 3).
-
-See ``typed/_README.md`` for usage examples.
-"""
+"""TypedProducer — publish Pydantic models via TransportProducer."""
 
 from __future__ import annotations
 
@@ -22,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class TypedProducer:
+    """Publish typed models to a Kafka topic.
+
+    One ``TransportProducer`` per process — ``TypedProducer`` instances
+    share it.  See ``typed/_README.md`` for usage.
+    """
     def __init__(
         self,
         producer: TransportProducer,
@@ -37,6 +35,11 @@ class TypedProducer:
     @property
     def producer(self) -> TransportProducer:
         return self._producer
+
+    @property
+    def topic(self) -> str:
+        """Topic this producer sends to."""
+        return self._topic
 
     async def send(self, value: BaseModel, *, key: KafkaKey, headers: KafkaHeader) -> None:
         payload = self._serializer.serialize(value)

@@ -10,9 +10,9 @@ Core building blocks for all trading-cz services:
 from pathlib import Path
 from pkgutil import extend_path
 
-from tradingcz.sdk.service_app import BrokerScope, ServiceApp
+from tradingcz.sdk.service_app import ServiceApp
 
-__all__ = ["ServiceApp", "BrokerScope"]
+__all__ = ["ServiceApp"]
 
 # Allow `tradingcz.sdk.*` portions from multiple distributions.
 __path__ = extend_path(__path__, __name__)

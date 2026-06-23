@@ -19,9 +19,11 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from tradingcz.sdk.models.enums.event import LifecycleEventType
+from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.SERVICE_LIFECYCLE)
 class LifecycleEvent(BaseModel):
     """Service health and lifecycle event.
 

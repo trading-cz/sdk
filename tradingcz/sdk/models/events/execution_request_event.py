@@ -2,9 +2,11 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from tradingcz.sdk.models.enums.event import OrderRequest, StrategyType
+from tradingcz.sdk.models.enums.event import EventType, OrderRequest, StrategyType
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.EXECUTION_REQUEST)
 class ExecutionRequestEvent(BaseModel):
     """Represents an execution & strategy request event received."""
 

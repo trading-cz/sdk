@@ -17,38 +17,28 @@ from tradingcz.sdk.transport.transport_producer import TransportProducer
 
 
 class CorporateActionsClient:
-    """Request corporate actions (dividends, splits, etc.).
-
-    Constructor args::
-
-        CorporateActionsClient(
-            rr=request_reply,           # RequestReply instance (started)
-            producer=transport_producer, # TransportProducer for fire-and-forget
-            settings=kafka_settings,    # KafkaSettings
-            topics=topic_registry,      # KafkaTopicRegistry
-            service_id="my-service",    # unique service identifier
-            broker=Broker.ALPACA,       # optional, default: ALPACA
-        )
-    """
+    """Request corporate actions (dividends, splits) via RequestReply."""
 
     def __init__(
         self,
         *,
-        rr: RequestReply,
-        producer: TransportProducer,
-        settings: KafkaSettings,
-        topics: KafkaTopicRegistry,
-        service_id: str,
+        rr: RequestReply | None = None,
+        producer: TransportProducer | None = None,
+        settings: KafkaSettings | None = None,
+        topics: KafkaTopicRegistry | None = None,
+        service_id: str = "",
         broker: Broker = Broker.ALPACA,
         _transport: _DataTransport | None = None,
     ) -> None:
         if _transport is not None:
             self._transport = _transport
-        else:
+        elif rr is not None and producer is not None and settings is not None and topics is not None:
             self._transport = _DataTransport(
                 rr=rr, producer=producer, settings=settings, topics=topics,
                 service_id=service_id, broker=broker,
             )
+        else:
+            raise ValueError("Provide _transport or (rr, producer, settings, topics, service_id)")
 
     async def dividends(
         self, symbols: list[str], *, days: int = 365, timeout: float = 30.0

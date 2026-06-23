@@ -10,17 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Retry:
-    """Call an async operation with retries on transient failure.
-
-    Args:
-        max_retries: Maximum retry attempts (total calls = max_retries + 1).
-        delay: Seconds between retries.
-
-    Example::
-
-        retry = Retry(max_retries=5, delay=2.0)
-        result = await retry.call(lambda: app.stock.bars(["AAPL"]))
-    """
+    """Call an async operation with retries on transient failure."""
 
     def __init__(self, max_retries: int = 3, delay: float = 2.0) -> None:
         if max_retries < 0:

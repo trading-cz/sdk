@@ -27,10 +27,11 @@ from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
 from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 settings = KafkaSettings()                      # reads KAFKA_BOOTSTRAP_SERVERS from env
 topics = KafkaTopicRegistry(env="dev")
-producer = TransportProducer(settings)
+transport = TransportProducer(settings)
 
 # Ensure the events topic exists
 admin = KafkaTopicAdmin(settings)
@@ -38,7 +39,7 @@ await admin.ensure_from_config(topics.events)
 
 # RequestReply handles DataRequest → DataReady handshake
 rr = RequestReply(
-    producer=producer,
+    producer=TypedProducer(transport, topics.events.name),
     topic=topics.events.name,
     settings=settings,
     service_id="my-service",

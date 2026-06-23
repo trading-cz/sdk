@@ -110,24 +110,7 @@ class EventRouter:
         filter_fn: Callable[[T, KafkaMessage], bool] | None = None,
         spawn_task: bool = False,
     ) -> EventRouter:
-        """Register a typed handler for *msg_type*.  Chainable.
-
-        Args:
-            msg_type: The ``EventType`` this handler subscribes to.
-            model_class: Pydantic model used to parse matching messages.
-            handler: Async callable invoked with ``(model, raw_message)``.
-            filter_fn: Optional predicate; handler is called only when it
-                returns ``True``.  Receives the parsed model and raw message.
-            spawn_task: When ``False`` (default) the handler is ``await``ed
-                inline — next message waits until the handler completes.
-                Good for fast handlers (state updates, <1 ms).
-                When ``True`` an ``asyncio.Task`` is spawned per message
-                so the router is not blocked.  Use for slow handlers such
-                as outbound HTTP fetches.
-
-        Returns:
-            ``self`` for chaining.
-        """
+        """Register a typed handler for *msg_type*.  Chainable"""
         self._handlers.append(
             _Registration(
                 msg_type=msg_type,
@@ -140,15 +123,7 @@ class EventRouter:
         return self
 
     async def run(self) -> None:
-        """Consume the channel until cancelled.  Dispatch each message.
-
-        Internally builds a :class:`TypedConsumer` from all registered types.
-        Messages whose ``message_type`` header matches no registration are
-        silently skipped (TypedConsumer multi-type behaviour).
-
-        Raises:
-            asyncio.CancelledError: propagated normally on task cancellation.
-        """
+        """Consume the channel until cancelled.  Dispatch each message."""
         if not self._handlers:
             logger.warning("EventRouter.run() started with no handlers registered")
 
@@ -177,23 +152,11 @@ class EventRouter:
         model: BaseModel,
         raw: KafkaMessage,
     ) -> None:
-        """Invoke a handler and optionally commit the offset.
-
-        On handler exception the offset is never committed (message
-        will be re-delivered on restart — at-least-once semantics).
-        When ``auto_commit`` is enabled the offset is committed after
-        a successful handler invocation via the underlying
-        :class:`TypedConsumer`.
-        """
+        """Invoke a handler and optionally commit the offset. """
         try:
             await reg.handler(model, raw)  # type: ignore[arg-type]
         except Exception:
-            logger.exception(
-                "Handler %s failed for %s (offset=%d)",
-                reg.handler.__name__,
-                reg.msg_type,
-                raw.offset,
-            )
+            logger.exception("Handler %s failed for %s (offset=%d)", reg.handler.__name__, reg.msg_type, raw.offset)
             return  # never commit on failure
 
         if self._auto_commit and self._consumer is not None:

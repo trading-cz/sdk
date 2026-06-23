@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 logger = logging.getLogger(__name__)
@@ -25,24 +26,17 @@ class KafkaTopicRegistry:
     """Environment-scoped topic name registry."""
 
     def __init__(self, env: str = "dev") -> None:
+        self._env = env
         self.events = KafkaTopicConfig(name=f"{env}-event", partitions=1)
-        self.market_data = KafkaTopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
-        self.historical_data = KafkaTopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)
+        self.historical = KafkaTopicConfig(name=f"{env}-stock-historical", partitions=1)
+        self.option_historical = KafkaTopicConfig(name=f"{env}-option-market-data", partitions=1)
+
+    def stream_topic(self, data_type: MarketDataType) -> KafkaTopicConfig:
+        return KafkaTopicConfig(name=f"{self._env}-stock-stream-{data_type.value}", partitions=5)
 
 
 class KafkaTopicAdmin:
-    """Creates Kafka topics via Admin API with connection reuse.
-
-    One instance per process.  Reuses a single :class:`AdminClient`
-    connection (lazy, created on first call) and caches created topic
-    names to avoid redundant Admin API calls.
-
-    Usage::
-
-        async with KafkaTopicAdmin(settings) as admin:
-            await admin.ensure("my-topic", num_partitions=5)
-            await admin.ensure_from_config(config)
-    """
+    """Creates Kafka topics via Admin API with connection reuse."""
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
@@ -51,7 +45,7 @@ class KafkaTopicAdmin:
         self._closed = False
 
     # ── Public API ──────────────────────────────────────────────────────
-
+    # TODO: use KafkaTopicConfig
     async def ensure(
         self,
         name: str,

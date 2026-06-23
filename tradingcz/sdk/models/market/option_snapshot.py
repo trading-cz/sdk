@@ -7,10 +7,13 @@ trade, quote, and greeks separately.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.market.quote import Quote
 from tradingcz.sdk.models.market.trade import Trade
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.OPTION_SNAPSHOT)
 class OptionSnapshot(BaseModel):
     """Market snapshot for an option contract.
 

@@ -15,36 +15,15 @@ from tradingcz.sdk.models.enums.event import (
     MarketDataType,
 )
 from tradingcz.sdk.models.events import DataRequest
-from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
 
 class StreamHandle[T](AsyncIterator[T]):
-    """Handle to a live data stream with automatic cleanup.
+    """Handle to a live data stream with automatic cleanup.  """
 
-    Returned by streaming methods like ``stream_quotes()`` and
-    ``stream_trades()``.  Supports two usage patterns:
-
-    **Bare iteration** (cleanup on loop exit)::
-
-        async for quote in stream.stream_quotes(["AAPL"]):
-            if done:
-                break  # channel is closed automatically
-
-    **Context manager** (guaranteed unsubscribe via DataRequest)::
-
-        async with stream.stream_quotes(["AAPL"]) as quotes:
-            async for quote in quotes:
-                ...
-        # unsubscribe sent here, even if exception raised
-    """
-
-    def __init__(
-        self,
-        iterator: AsyncIterator[T],
-        unsubscribe: _Unsubscribe,
-    ) -> None:
+    def __init__(self, iterator: AsyncIterator[T], unsubscribe: _Unsubscribe, ) -> None:
         self._iterator = iterator
         self._unsubscribe = unsubscribe
         self._exited = False
@@ -62,17 +41,12 @@ class StreamHandle[T](AsyncIterator[T]):
     async def __aenter__(self) -> StreamHandle[T]:
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         self._exited = True
         try:
             await self._unsubscribe()
         except Exception:
-            logger.debug("Unsubscribe failed (non-critical)", exc_info=True)
+            logger.info("Unsubscribe failed (non-critical)", exc_info=True)
         if hasattr(self._iterator, "aclose"):
             await self._iterator.aclose()  # type: ignore[union-attr]
 
@@ -82,15 +56,14 @@ class _Unsubscribe:
 
     def __init__(
         self,
-        producer: TransportProducer,
-        topic: str,
+        producer: TypedProducer,
         service_id: str,
         broker: Broker,
         symbols: list[str],
         data_kind: MarketDataType,
         asset: AssetType,
     ) -> None:
-        self._faf = FireAndForget(producer, topic, service_id)
+        self._faf = FireAndForget(producer, service_id)
         self._broker = broker
         self._symbols = symbols
         self._data_type = data_kind

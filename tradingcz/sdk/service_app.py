@@ -1,6 +1,6 @@
-"""ServiceApp — common base for ALL trading services.
+"""ServiceApp — minimal Kafka transport + health + shutdown wiring.
 
-See _README.md for full documentation, usage examples, logging, and exception handling.
+See _README.md for full documentation.
 """
 
 from __future__ import annotations
@@ -10,33 +10,20 @@ import logging
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.account.signals import SignalPublisher
-
-# Account clients (positions/balance/orders) disabled until executor supports them.
 from tradingcz.sdk.health.publisher import HealthPublisher
 from tradingcz.sdk.lang.async_utils import setup_shutdown_handlers
-from tradingcz.sdk.market_data._internal._transport import _DataTransport
-from tradingcz.sdk.market_data.corporate import CorporateActionsClient
-from tradingcz.sdk.market_data.option_historic import OptionsHistoricDataClient
-from tradingcz.sdk.market_data.stock_historic import StockDataClient
-from tradingcz.sdk.market_data.stock_stream import StockStreamClient
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
 from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
 
 
 class ServiceApp:  # pylint: disable=too-many-instance-attributes
-    """Base class for every service in the trading platform.
-
-    Wires together Kafka transport, health, market data, and account
-    clients.  All clients are created lazily on first access — no
-    feature flags needed.  See _README.md for full docs.
-    """
+    """Minimal Kafka transport + health + shutdown wiring.  Compose clients on top."""
 
     def __init__(
         self,
@@ -45,68 +32,34 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         env: str,
         kafka_settings: KafkaSettings,
         health_interval: float = 300.0,
-        broker: str = "alpaca",
     ) -> None:
         self.service_id = service_id
         self._env = env
         self._health_interval = health_interval
-        self._broker = broker
         self._kafka = kafka_settings
         self._shutdown = asyncio.Event()
 
         self.topics = KafkaTopicRegistry(env=self._env)
         self.events_topic = self.topics.events.name
         self.events_producer = TransportProducer(self._kafka)
-        self._faf = FireAndForget(self.events_producer, self.events_topic, self.service_id)
+        self._faf = FireAndForget(TypedProducer(self.events_producer, self.events_topic), self.service_id)
         self._health = HealthPublisher(self._faf, self.service_id, interval=self._health_interval)
         self._topic_admin = KafkaTopicAdmin(self._kafka)
-
-        self._rr: RequestReply | None = None
-        self._transport: _DataTransport | None = None
-        self._stock: StockDataClient | None = None
-        self._stock_stream: StockStreamClient | None = None
-        self._options: OptionsHistoricDataClient | None = None
-        self._corporate: CorporateActionsClient | None = None
-        self._signals: SignalPublisher | None = None
-
-        # Positions/Balance/Orders — disabled until executor implements handlers.
 
     # -- Lifecycle --
 
     async def start(self) -> None:
-        """Create topics, emit INITIALIZING + READY, start RequestReply."""
+        """Ensure topics, emit INITIALIZING + READY, register shutdown handlers."""
         await self._topic_admin.ensure_from_config(self.topics.events)
-
         await self._health.initializing()
-
-        self._rr = RequestReply(
-            producer=self.events_producer,
-            topic=self.events_topic,
-            settings=self._kafka,
-            service_id=self.service_id,
-            group_suffix="svc-reply",
-        )
-        await self._rr.start()
-        self._transport = _DataTransport(
-            rr=self._rr,
-            producer=self.events_producer,
-            settings=self._kafka,
-            topics=self.topics,
-            service_id=self.service_id,
-            broker=self._broker,  # type: ignore[arg-type]
-        )
-        logger.info("ServiceApp: RequestReply + _DataTransport ready")
-
         await self._health.ready()
         setup_shutdown_handlers(self._shutdown)
         logger.info("ServiceApp started: id=%s env=%s", self.service_id, self._env)
 
     async def close(self) -> None:
-        """Stop health (emits 'down'), close RR, flush producer."""
+        """Stop health (emits 'down'), flush and close producer, close admin."""
         if self._health is not None:
             await self._health.down()
-        if self._rr is not None:
-            await self._rr.close()
         if self.events_producer is not None:
             await self.events_producer.close()
         if self._topic_admin is not None:
@@ -139,76 +92,22 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         """Service identifier for Kafka headers."""
         return self.service_id
 
-    # -- Market data clients (lazy) --
-
-    @property
-    def stock(self) -> StockDataClient:
-        """Stock data client (bars, latest quotes).  Lazy — requires ``start()`` first."""
-        if self._transport is None:
-            raise RuntimeError("Call start() before accessing stock client.")
-        if self._stock is None:
-            self._stock = StockDataClient(_transport=self._transport)
-        return self._stock
-
-    @property
-    def stock_stream(self) -> StockStreamClient:
-        """Stock streaming client (quotes, bars, trades).  Lazy — requires ``start()`` first."""
-        if self._transport is None:
-            raise RuntimeError("Call start() before accessing stock stream client.")
-        if self._stock_stream is None:
-            self._stock_stream = StockStreamClient(_transport=self._transport)
-        return self._stock_stream
-
-    @property
-    def options(self) -> OptionsHistoricDataClient:
-        """Options data client (snapshots).  Lazy — requires ``start()`` first."""
-        if self._transport is None:
-            raise RuntimeError("Call start() before accessing options client.")
-        if self._options is None:
-            self._options = OptionsHistoricDataClient(_transport=self._transport)
-        return self._options
-
-    @property
-    def corporate_actions(self) -> CorporateActionsClient:
-        """Corporate actions client (dividends, splits).  Lazy — requires ``start()`` first."""
-        if self._transport is None:
-            raise RuntimeError("Call start() before accessing corporate actions client.")
-        if self._corporate is None:
-            self._corporate = CorporateActionsClient(_transport=self._transport)
-        return self._corporate
-
-    # -- Account clients (lazy) --
-
-    @property
-    def signals(self) -> SignalPublisher:
-        """Signal publisher (fire-and-forget).  Lazy — uses existing F&F transport."""
-        if self._signals is None:
-            self._signals = SignalPublisher(faf=self._faf)
-        return self._signals
-
-    # positions / balance / orders — disabled until executor supports them.
-
-    # -- Multi-broker --
-
-    def with_broker(self, broker: str) -> BrokerScope:
-        """Return a BrokerScope with data clients scoped to *broker*."""
-        if self._rr is None or self._base is None:
-            raise RuntimeError("Call start() before with_broker()")
-        base = BaseDataClient(
-            rr=self._rr,
-            settings=self._kafka,
-            topics=self.topics,  # type: ignore[arg-type]
-            service_id=self.service_id,
-            broker=broker,  # type: ignore[arg-type]
-        )
-        return BrokerScope(base)
-
     # -- Publishing --
 
-    async def publish_event(self, message: BaseModel, *, message_type: EventType, event_id: str = "", key: str = "") -> None:
+    @property
+    def faf(self) -> FireAndForget:
+        """Fire-and-forget publisher — compose ``SignalPublisher(faf=app.faf)`` etc."""
+        return self._faf
+
+    async def publish_event(
+        self,
+        message: BaseModel,
+        *,
+        message_type: EventType,
+        event_id: str = "",
+        key: str = "",
+    ) -> None:
         """Publish a typed message on the events channel (fire-and-forget)."""
-        if not self._health.running:
-            raise RuntimeError("Call start() before publish_event()")
         await self._faf.send(message, event_type=message_type, event_id=event_id, key=key)
 
     # -- Shutdown --
@@ -236,46 +135,4 @@ class ServiceApp:  # pylint: disable=too-many-instance-attributes
         await self.close()
 
 
-# -- BrokerScope --
-
-
-class BrokerScope:
-    """Broker-scoped client factory returned by ``ServiceApp.with_broker()``."""
-
-    def __init__(self, transport: _DataTransport) -> None:
-        self._transport = transport
-        self._stock: StockDataClient | None = None
-        self._stock_stream: StockStreamClient | None = None
-        self._options: OptionsHistoricDataClient | None = None
-        self._corporate: CorporateActionsClient | None = None
-
-    @property
-    def stock(self) -> StockDataClient:
-        """Stock data client scoped to this broker."""
-        if self._stock is None:
-            self._stock = StockDataClient(_transport=self._transport)
-        return self._stock
-
-    @property
-    def stock_stream(self) -> StockStreamClient:
-        """Stock streaming client scoped to this broker."""
-        if self._stock_stream is None:
-            self._stock_stream = StockStreamClient(_transport=self._transport)
-        return self._stock_stream
-
-    @property
-    def options(self) -> OptionsHistoricDataClient:
-        """Options data client scoped to this broker."""
-        if self._options is None:
-            self._options = OptionsHistoricDataClient(_transport=self._transport)
-        return self._options
-
-    @property
-    def corporate_actions(self) -> CorporateActionsClient:
-        """Corporate actions client scoped to this broker."""
-        if self._corporate is None:
-            self._corporate = CorporateActionsClient(_transport=self._transport)
-        return self._corporate
-
-
-__all__ = ["ServiceApp", "BrokerScope"]
+__all__ = ["ServiceApp"]

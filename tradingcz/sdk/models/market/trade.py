@@ -7,7 +7,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+from tradingcz.sdk.registry import register_event, register_market_data
 
+
+@register_event(EventType.TRADE)
+@register_market_data(MarketDataType.TRADES)
 class Trade(BaseModel):  # pylint: disable=too-many-instance-attributes
     model_config = ConfigDict(frozen=True)
 

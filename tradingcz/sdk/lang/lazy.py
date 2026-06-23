@@ -1,13 +1,4 @@
-"""Lazy[T] — descriptor for lazy-initialized attributes.
-
-Usage::
-
-    class TransportProducer:
-        _producer = Lazy(lambda self: SyncProducer(self._settings.producer_config()))
-
-        def send(self, name, payload):
-            producer = self._producer  # initialized on first access
-"""
+"""Lazy[T] — descriptor for lazy-initialized attributes."""
 
 from __future__ import annotations
 
@@ -16,12 +7,7 @@ from typing import Any
 
 
 class Lazy[T]:
-    """Descriptor that initializes its value on first attribute access.
-
-    The factory receives ``self`` (the owning instance) and returns the value.
-    Once set, the value is stored in the instance __dict__ — further accesses
-    bypass the descriptor entirely.
-    """
+    """Descriptor that initializes its value on first attribute access."""
 
     def __init__(self, factory: Callable[[Any], T]) -> None:
         self._factory = factory
