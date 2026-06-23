@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from types import TracebackType
@@ -20,12 +21,17 @@ logger = logging.getLogger(__name__)
 
 
 class StreamHandle[T](AsyncIterator[T]):
-    """Handle to a live data stream with automatic cleanup.  """
+    """Handle to a live data stream with automatic cleanup."""
 
-    def __init__(self, iterator: AsyncIterator[T], unsubscribe: _Unsubscribe, ) -> None:
+    def __init__(
+        self,
+        iterator: AsyncIterator[T],
+        unsubscribe: _Unsubscribe,
+    ) -> None:
         self._iterator = iterator
         self._unsubscribe = unsubscribe
         self._exited = False
+        self.unsubscribe_timeout = 5.0  # seconds
 
     def __aiter__(self) -> StreamHandle[T]:
         return self
@@ -40,10 +46,18 @@ class StreamHandle[T](AsyncIterator[T]):
     async def __aenter__(self) -> StreamHandle[T]:
         return self
 
-    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._exited = True
         try:
-            await self._unsubscribe()
+            async with asyncio.timeout(self.unsubscribe_timeout):
+                await self._unsubscribe()
+        except TimeoutError:
+            logger.warning("Unsubscribe timed out after %.0fs (data may keep flowing)", self.unsubscribe_timeout)
         except Exception:
             logger.info("Unsubscribe failed (non-critical)", exc_info=True)
         if hasattr(self._iterator, "aclose"):

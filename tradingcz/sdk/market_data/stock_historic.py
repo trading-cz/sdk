@@ -121,12 +121,11 @@ class StockDataClient(StockDataProvider):
         self,
         symbols: list[str],
     ) -> dict[str, Bar]:
-        """Fetch latest bar per symbol — sentinel: omits start/end time."""
         logger.info("StockDataClient: get_latest_bars symbols=%d", len(symbols))
         result = await self._transport.request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_type=MarketDataType.BARS,
+            data_type=MarketDataType.LATEST_BARS,
             model_type=Bar,
             timeout=self._default_timeout,
         )
@@ -136,12 +135,11 @@ class StockDataClient(StockDataProvider):
         self,
         symbols: list[str],
     ) -> dict[str, Trade]:
-        """Fetch latest trade per symbol — sentinel: omits start/end time."""
         logger.info("StockDataClient: get_latest_trades symbols=%d", len(symbols))
         result = await self._transport.request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_type=MarketDataType.TRADES,
+            data_type=MarketDataType.LATEST_TRADES,
             model_type=Trade,
             timeout=self._default_timeout,
         )
@@ -151,12 +149,11 @@ class StockDataClient(StockDataProvider):
         self,
         symbols: list[str],
     ) -> dict[str, Quote]:
-        """Fetch latest quote per symbol — sentinel: omits start/end time."""
         logger.info("StockDataClient: get_latest_quotes symbols=%d", len(symbols))
         result = await self._transport.request_historical(
             symbols=symbols,
             asset=AssetType.STOCK,
-            data_type=MarketDataType.QUOTES,
+            data_type=MarketDataType.LATEST_QUOTES,
             model_type=Quote,
             timeout=self._default_timeout,
         )

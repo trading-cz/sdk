@@ -127,8 +127,11 @@ class MarketDataType(StrEnum):
     """
 
     BARS = "bars"
+    LATEST_BARS = "latest_bars"
     TRADES = "trades"
+    LATEST_TRADES = "latest_trades"
     QUOTES = "quotes"
+    LATEST_QUOTES = "latest_quotes"
     SNAPSHOTS = "snapshots"
     DIVIDENDS = "dividends"
     SPLITS = "splits"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import cast
 
 from pydantic import BaseModel
 
@@ -52,7 +53,8 @@ class SingleTypeConsumer[T: BaseModel]:
 
     async def __aiter__(self) -> AsyncIterator[tuple[EventType, T, KafkaMessage]]:
         async for event_type, model, raw in self._inner:
-            yield event_type, model, raw  # type: ignore[arg-type,misc]
+            # cast: TypedConsumer.__aiter__ returns BaseModel; we know it's T
+            yield event_type, cast(T, model), raw
             if self._auto_commit:
                 await self._inner.commit(raw)
 
