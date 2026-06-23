@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import uuid4
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.exceptions import MessageTypeError
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_header import EventHeader, Header
@@ -51,6 +51,7 @@ class RequestReply:
         self._listen_task: asyncio.Task[None] | None = None
         self._skipped = 0
         self._group_suffix = group_suffix
+        self._correlation_id: str = ""
 
     # ------------------------------------------------------------------
     # Type registry
@@ -100,6 +101,15 @@ class RequestReply:
     # Core API
     # ------------------------------------------------------------------
 
+    @property
+    def correlation_id(self) -> str:
+        """The correlation ID from the most recent :meth:`request` call.
+
+        Use this to filter data-topic messages that were published
+        as a result of the request.
+        """
+        return self._correlation_id
+
     async def request[Resp: BaseModel](  # pylint: disable=unused-argument
         self,
         req: BaseModel,
@@ -107,23 +117,20 @@ class RequestReply:
         response_type: type[Resp],  # type-checker only, not used at runtime
         timeout: float = 30.0,
     ) -> Resp:
-        # Every registered event model has event_id (UUID | str).
-        # mypy can't verify this because Protocol + Union variance
-        # rejects UUID as subtype of Union[UUID, str].
-        event_id: str = str(req.event_id)  # type: ignore[attr-defined]
-        if not event_id:
-            raise MessageTypeError(f"Request model {type(req).__name__} has no event_id")
+        # Correlation is a transport concern — RequestReply generates
+        # the ID, puts it in the Kafka header, and the responder echoes
+        # it back.  Callers access it via .correlation_id for data-topic
+        # filtering.
+        self._correlation_id = str(uuid4())
+        event_id = self._correlation_id
 
         request_type = EventRegistry.event_type_for(req)
         _ = response_type  # used only for type-checker generic binding
         self._seq += 1
 
         key = KafkaKey(value=f"{request_type.value}:{self._service_id}:{event_id}")
-        headers = EventHeader(
-            event_type=request_type,
-            source_app=self._service_id,
-            event_id=event_id,
-        )
+        headers = EventHeader(event_type=request_type, source_app=self._service_id, event_id=event_id)
+
         # Send + flush — request delivery must be guaranteed before awaiting response
         await self._typed_producer.send(req, key=key, headers=headers)
         await self._typed_producer.flush()
@@ -144,19 +151,9 @@ class RequestReply:
     # ------------------------------------------------------------------
 
     async def _listen(self) -> None:
-        """Background task: TypedConsumer dispatches, resolve pending futures.
-
-        Uses :class:`TypedConsumer` for typed dispatch + auto-commit —
-        no manual header parsing or serialization.
-        """
+        """Background task: TypedConsumer dispatches, resolve pending futures."""
         logger.debug("RequestReply listener started on %s", self._topic)
-        consumer = TypedConsumer(
-            topic=self._topic,
-            settings=self._settings,
-            types=self._types,
-            group_suffix=self._group_suffix,
-            auto_commit=True,
-        )
+        consumer = TypedConsumer(topic=self._topic, settings=self._settings, types=self._types, group_suffix=self._group_suffix, auto_commit=True)
         try:
             async for _msg_type, model, _raw in consumer:
                 # event_id is mandatory in Kafka headers — missing → skip

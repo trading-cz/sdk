@@ -123,11 +123,12 @@ class _DataTransport:
         results: dict[str, list[T]] = {}
         count = 0
         expected = resp.record_count or 0
+        correlation_id = self._rr.correlation_id
 
         consumer = TransportConsumer(resp.data_topic, self._settings, f"data-{uuid.uuid4().hex[:8]}")
         try:
             async for msg in consumer:
-                if msg.headers.get(Header.EVENT_ID) != req.event_id:
+                if msg.headers.get(Header.EVENT_ID) != correlation_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
                 if seq and self._dedup.is_duplicate(

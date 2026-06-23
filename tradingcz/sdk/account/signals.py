@@ -25,7 +25,7 @@ class SignalPublisher:
         await self._faf.send(
             signal,
             event_id=event_id,
-            key=str(signal.event_id),
+            key=str(event_id),
         )
 
 
