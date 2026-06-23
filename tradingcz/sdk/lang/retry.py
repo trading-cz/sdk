@@ -39,7 +39,9 @@ class Retry:
                     logger.warning( "Retry %d/%d: %s — retrying in %.1fs", attempt + 1, self.max_retries + 1, exc, self.delay, )
                     await asyncio.sleep(self.delay)
 
-        raise last_exc  # type: ignore[misc]
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Retry.call: no exception captured")
 
     @property
     def attempts(self) -> int:

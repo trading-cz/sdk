@@ -3,8 +3,9 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from typing import cast
 
-from confluent_kafka import Producer as SyncProducer
+from confluent_kafka import Message, Producer as SyncProducer
 
 from tradingcz.sdk.exceptions import TransportConnectionError, TransportError
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
@@ -69,7 +70,7 @@ class TransportProducer:
             raise TransportError("TransportProducer is closed")
 
         def _flush() -> int:
-            return self._producer.flush(timeout)  # type: ignore[no-any-return]
+            return cast(int, self._producer.flush(timeout))
 
         remaining = await asyncio.to_thread(_flush)
         if remaining > 0:
@@ -87,17 +88,14 @@ class TransportProducer:
     # ── Delivery callback ────────────────────────────────────────────────
 
     def _handle_error(self, err: object, msg: object) -> None:
-        """Delivery callback — runs on librdkafka internal thread.
-
-        Extracts message metadata via direct attribute access; falls
-        back to sentinel values if the report object is malformed.
-        """
+        """Delivery callback — runs on librdkafka internal thread."""
         if err is None:
             return
+        kmsg = cast(Message, msg)
         try:
-            topic = msg.topic()  # type: ignore[union-attr]
-            partition = msg.partition()  # type: ignore[union-attr]
-            offset = msg.offset()  # type: ignore[union-attr]
+            topic = kmsg.topic() or "?"
+            partition = kmsg.partition() or -1
+            offset = kmsg.offset() or -1
         except Exception:
             logger.warning("Cannot extract metadata from delivery report", exc_info=True)
             topic = "?"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, overload
 
 
 class Lazy[T]:
@@ -11,14 +11,19 @@ class Lazy[T]:
 
     def __init__(self, factory: Callable[[Any], T]) -> None:
         self._factory = factory
-        self._name: str = ""  # set by __set_name__
+        self._name: str  # guaranteed by __set_name__
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name
 
-    def __get__(self, obj: object | None, owner: type) -> T:
+    @overload
+    def __get__(self, obj: None, owner: type) -> Lazy[T]: ...
+    @overload
+    def __get__(self, obj: object, owner: type) -> T: ...
+
+    def __get__(self, obj: object | None, owner: type) -> T | Lazy[T]:
         if obj is None:
-            return self  # type: ignore[return-value]
+            return self
         value = self._factory(obj)
         obj.__dict__[self._name] = value
         return value

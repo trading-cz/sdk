@@ -1,7 +1,7 @@
 """Decorator-based factory registry — key → (class, factory)."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 
 class FactoryRegistry[K, V]:
@@ -15,7 +15,7 @@ class FactoryRegistry[K, V]:
     def register(self, key: K, *, factory: Callable[..., Any] | None = None) -> Callable[[type], type]:
         """Decorator: register the decorated class under *key*."""
         def decorator(cls: type) -> type:
-            self._items[key] = (cls, factory or self._default_factory)  # type: ignore[assignment]
+            self._items[key] = (cast(V, cls), factory or self._default_factory)
             return cls
 
         return decorator
