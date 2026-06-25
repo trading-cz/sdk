@@ -23,60 +23,37 @@ from tradingcz.sdk.typed.typed_producer import TypedProducer
 logger = logging.getLogger(__name__)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# RequestReply — typed request/response by event_id
-# ═════════════════════════════════════════════════════════════════════════════
-
-
 class RequestReply:
     """Send a typed request, await a correlated typed response."""
 
     def __init__(
         self,
         producer: TypedProducer,
-        topic: str,
         settings: KafkaSettings,
         service_id: str,
-        *,
         group_suffix: str,
-        message_types: dict[EventType, type[BaseModel]] | None = None,
+        response_types: list[type[BaseModel]],
     ) -> None:
         self._typed_producer = producer
-        self._topic = topic
         self._settings = settings
         self._service_id = service_id
-        self._seq = 0
-        self._types: dict[EventType, type[BaseModel]] = dict(message_types) if message_types else {}
+        self._response_types = response_types
+        self._response_event_types: set[EventType] = {EventRegistry.event_type_for(t) for t in response_types}
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
-        self._skipped = 0
         self._group_suffix = group_suffix
         self._correlation_id: str = ""
-
-    # ------------------------------------------------------------------
-    # Type registry
-    # ------------------------------------------------------------------
-
-    def register_type(self, model: type[BaseModel]) -> None:
-        """Register *model* for response dispatch.
-
-        The ``EventType`` is derived from :class:`EventRegistry`.
-        """
-        message_type = EventRegistry.event_type_for(model)
-        self._types[message_type] = model
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Start the background listener (idempotent)."""
         if self._listen_task is not None:
             return
         self._listen_task = asyncio.create_task(self._listen())
 
     async def close(self) -> None:
-        """Cancel listener and reject all pending futures."""
         if self._listen_task and not self._listen_task.done():
             self._listen_task.cancel()
             try:
@@ -89,12 +66,10 @@ class RequestReply:
         self._pending.clear()
 
     async def __aenter__(self) -> RequestReply:
-        """Async context manager entry — calls :meth:`start`."""
         await self.start()
         return self
 
     async def __aexit__(self, *args: object) -> None:
-        """Async context manager exit — calls :meth:`close`."""
         await self.close()
 
     # ------------------------------------------------------------------
@@ -103,18 +78,13 @@ class RequestReply:
 
     @property
     def correlation_id(self) -> str:
-        """The correlation ID from the most recent :meth:`request` call.
-
-        Use this to filter data-topic messages that were published
-        as a result of the request.
-        """
         return self._correlation_id
 
     async def request[Resp: BaseModel](  # pylint: disable=unused-argument
         self,
         req: BaseModel,
-        *,
         response_type: type[Resp],  # type-checker only, not used at runtime
+        *,
         timeout: float = 30.0,
     ) -> Resp:
         # Correlation is a transport concern — RequestReply generates
@@ -122,29 +92,24 @@ class RequestReply:
         # it back.  Callers access it via .correlation_id for data-topic
         # filtering.
         self._correlation_id = str(uuid4())
-        event_id = self._correlation_id
-
-        request_type = EventRegistry.event_type_for(req)
+        request_event_type = EventRegistry.event_type_for(req)
         _ = response_type  # used only for type-checker generic binding
-        self._seq += 1
 
-        key = KafkaKey(value=f"{request_type.value}:{self._service_id}:{event_id}")
-        headers = EventHeader(event_type=request_type, source_app=self._service_id, event_id=event_id)
-
-        # Send + flush — request delivery must be guaranteed before awaiting response
+        key = KafkaKey(value=f"{request_event_type.value}:{self._service_id}:{self._correlation_id}")
+        headers = EventHeader(event_type=request_event_type, source_app=self._service_id, event_id=self._correlation_id)
         await self._typed_producer.send(req, key=key, headers=headers)
         await self._typed_producer.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_running_loop().create_future()
-        self._pending[event_id] = future  # type: ignore[assignment]
+        self._pending[self._correlation_id] = future
 
         try:
             async with asyncio.timeout(timeout):
                 return await future
-        except TimeoutError:
-            raise TimeoutError(f"Request {event_id!r} timed out after {timeout:.1f}s") from None
+        except TimeoutError as e:
+            raise TimeoutError(f"Request {self._correlation_id!r} timed out after {timeout:.1f}s") from e
         finally:
-            self._pending.pop(event_id, None)
+            self._pending.pop(self._correlation_id, None)
 
     # ------------------------------------------------------------------
     # Internal
@@ -152,28 +117,31 @@ class RequestReply:
 
     async def _listen(self) -> None:
         """Background task: TypedConsumer dispatches, resolve pending futures."""
-        logger.debug("RequestReply listener started on %s", self._topic)
-        consumer = TypedConsumer(topic=self._topic, settings=self._settings, types=self._types, group_suffix=self._group_suffix, auto_commit=True)
+        topic = self._typed_producer.topic
+        logger.info("RequestReply listener started on %s", topic)
+        consumer = TypedConsumer(
+            topic=topic,
+            settings=self._settings,
+            types=self._response_types,
+            group_suffix=self._group_suffix,
+            auto_commit=True,
+        )
         try:
-            async for _msg_type, model, _raw in consumer:
-                # event_id is mandatory in Kafka headers — missing → skip
+            async for event_type, model, _raw in consumer:
                 event_id: str = _raw.headers.get(Header.EVENT_ID, "")
+                if event_type not in self._response_event_types:
+                    logger.debug("RequestReply: skipping unregistered event_type=%s event_id=%s", event_type, event_id)
+                    continue
                 if not event_id:
-                    logger.debug("RequestReply: message has no event_id header, skipping (type=%s)", _msg_type)
-                    self._skipped += 1
+                    logger.warning("RequestReply: message has no event_id header, skipping (event_type=%s)", event_type)
                     continue
                 future = self._pending.get(event_id)
                 if future is not None and not future.done():
                     future.set_result(model)
         except asyncio.CancelledError:
-            logger.debug("RequestReply listener cancelled")
+            logger.info("RequestReply listener cancelled")
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("RequestReply listener crashed")
-
-    @property
-    def skipped_count(self) -> int:
-        """Number of messages skipped due to missing ``event_id``."""
-        return self._skipped
 
 
 __all__ = ["RequestReply"]
