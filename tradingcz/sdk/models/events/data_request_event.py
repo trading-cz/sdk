@@ -15,6 +15,7 @@ Correlation is handled by the transport layer (Kafka header ``event_id``).
 """
 
 from datetime import datetime
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +33,7 @@ from tradingcz.sdk.registry import register_event
 @register_event(EventType.DATA_REQUEST)
 class DataRequest(BaseModel):
     """Request for historical or streaming market data."""
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for data request")
     type: DataRequestType = Field(..., description="Request type: historical or streaming")
     source_app: str = Field(default="", description="Service identity of the requester (set by transport layer)")
     asset: AssetType = Field(default=AssetType.STOCK, description="Asset class: stock, option, etc.")
@@ -50,6 +52,7 @@ class DataReady(BaseModel):
     Sent by ingestion after fulfilling a DataRequest.
     ``record_count`` is set only when ``type=DataRequestType.HISTORIC``.
     """
+    event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     data_topic: str = Field(..., description="Kafka topic where data is published")
     type: DataRequestType = Field(default=DataRequestType.HISTORIC, description="Request type: historical or streaming")
@@ -59,5 +62,6 @@ class DataReady(BaseModel):
 @register_event(EventType.DATA_ERROR)
 class DataError(BaseModel):
     """Error response to a DataRequest."""
+    event_id: str = Field(..., description="Correlation ID from DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     error: str = Field(..., description="Error message describing the failure")
