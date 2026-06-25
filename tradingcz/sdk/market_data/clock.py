@@ -59,7 +59,10 @@ class TimeKeeper:
         """Get or create an event that will be set when the market is within the specified minutes of closing."""
         if minutes_before_close not in self._market_close_warning_events:
             self._market_close_warning_events[minutes_before_close] = asyncio.Event()
-            logger.debug( "New warning event for market close in %d minutes created", minutes_before_close, )
+            logger.debug(
+                "New warning event for market close in %d minutes created",
+                minutes_before_close,
+            )
         return self._market_close_warning_events[minutes_before_close]
 
     async def second_until_market_close(self) -> int:
@@ -74,15 +77,12 @@ class TimeKeeper:
         last_sync_time: float | None = None
         minutes_remaining: int = 0
         while True:
-            if (
-                last_sync_time is None
-                or time.monotonic() - last_sync_time >= self._sync_interval
-            ):
-                logger.info( "Refreshing market clock cache from broker API source of truth..." )
+            if last_sync_time is None or time.monotonic() - last_sync_time >= self._sync_interval:
                 await self._clock.refresh_clock()
                 logger.info(
-                    "Refreshing market clock cache. New data:\n"
-                    " Market time: %s,\n Next open: %s,\n Next close: %s", await self._clock.get_current_market_time(),
+                    "Refreshing market clock cache from Broker API. New data:\n"
+                    " Market time: %s,\n Next open: %s,\n Next close: %s",
+                    await self._clock.get_current_market_time(),
                     await self._clock.get_next_market_open(),
                     await self._clock.get_next_market_close(),
                 )
@@ -97,7 +97,10 @@ class TimeKeeper:
                 minutes_remaining = minutes_remaining_new
 
             if minutes_remaining in self._market_close_warning_events:
-                logger.debug( "Firing warning event for market close in %d minutes for all waiting tasks...", minutes_remaining, )
+                logger.debug(
+                    "Firing warning event for market close in %d minutes for all waiting tasks...",
+                    minutes_remaining,
+                )
                 event = self._market_close_warning_events[minutes_remaining]
                 if not event.is_set():
                     event.set()
@@ -106,4 +109,3 @@ class TimeKeeper:
 
 
 __all__ = ["TimeKeeper", "MarketClockProvider"]
-

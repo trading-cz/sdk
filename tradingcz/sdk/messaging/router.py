@@ -65,7 +65,7 @@ class EventRouter:
         self._auto_offset_reset = auto_offset_reset
         self._poll_timeout_ms = poll_timeout_ms
         self._batch_size = batch_size
-        self._handlers: list[_Registration] = []
+        self._handlers: dict[str, _Registration[BaseModel]] = {}
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
         self._spawned_tasks: set[asyncio.Task[None]] = set()
@@ -166,15 +166,15 @@ class EventRouter:
         with spawned tasks — use inline handlers for manual commit control.
         """
         msg_type = EventRegistry.event_type_for(model_class)
-        # cast: filter_fn loses T specificity in heterogeneous handler list
-        self._handlers.append(
-            _Registration(
-                msg_type=msg_type,
-                model_class=model_class,
-                handler=handler,
-                filter_fn=cast(Callable[[Any, KafkaMessage], bool] | None, filter_fn),
-                spawn_task=spawn_task,
-            )
+        key = str(msg_type)
+        if key in self._handlers:
+            raise ValueError(f"Handler already registered for msg_type={key}. Existing: {self._handlers[key].model_class.__name__}, New: {model_class.__name__}")
+        self._handlers[key] = _Registration(
+            msg_type=msg_type,
+            model_class=model_class,
+            handler=handler,
+            filter_fn=cast(Callable[[Any, KafkaMessage], bool] | None, filter_fn),
+            spawn_task=spawn_task,
         )
         return self
 
@@ -182,9 +182,11 @@ class EventRouter:
         """Consume the channel until cancelled.  Dispatch each message."""
         if not self._handlers:
             logger.warning("EventRouter.run() started with no handlers registered")
+            return
 
-        types: dict[EventType, type[BaseModel]] = {
-            reg.msg_type: reg.model_class for reg in self._handlers
+        types: dict[str, type[BaseModel]] = {
+            str(reg.msg_type): reg.model_class
+            for reg in self._handlers.values()
         }
         self._consumer = TypedConsumer(
             self._topic,
@@ -199,24 +201,26 @@ class EventRouter:
         )
 
         async for msg_type, model, raw in self._consumer:
-            for reg in self._handlers:
-                if reg.msg_type != msg_type:
-                    continue
-                if reg.filter_fn is not None and not reg.filter_fn(model, raw):
-                    continue
-                if reg.spawn_task:
-                    if self._semaphore:
-                        await self._semaphore.acquire()
-                    task = asyncio.create_task(
-                        self._dispatch(reg, model, raw),
-                        name=f"router-{msg_type}",
-                    )
-                    self._spawned_tasks.add(task)
-                    task.add_done_callback(self._spawned_tasks.discard)
-                    if self._semaphore:
-                        task.add_done_callback(lambda _: self._semaphore.release())  # type: ignore[union-attr]
-                else:
-                    await self._dispatch(reg, model, raw)
+            if model is None:
+                continue
+            reg = self._handlers.get(msg_type)
+            if reg is None:
+                continue
+            if reg.filter_fn is not None and not reg.filter_fn(model, raw):
+                continue
+            if reg.spawn_task:
+                if self._semaphore:
+                    await self._semaphore.acquire()
+                task = asyncio.create_task(
+                    self._dispatch(reg, model, raw),
+                    name=f"router-{msg_type}",
+                )
+                self._spawned_tasks.add(task)
+                task.add_done_callback(self._spawned_tasks.discard)
+                if self._semaphore:
+                    task.add_done_callback(lambda _: self._semaphore.release())  # type: ignore[union-attr]
+            else:
+                await self._dispatch(reg, model, raw)
 
     async def _dispatch(
         self, reg: _Registration[Any], model: BaseModel, raw: KafkaMessage
@@ -229,12 +233,7 @@ class EventRouter:
         try:
             await reg.handler(model, raw)
         except Exception:
-            logger.exception(
-                "Handler %s failed for %s (offset=%d)",
-                reg.handler.__name__,
-                reg.msg_type,
-                raw.offset,
-            )
+            logger.exception("Handler %s failed for %s (offset=%d)", reg.handler.__name__, reg.msg_type, raw.offset)
             return  # never commit on failure — at-least-once
 
         if self._auto_commit and self._consumer is not None:

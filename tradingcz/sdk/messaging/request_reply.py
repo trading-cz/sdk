@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_header import EventHeader, Header
 from tradingcz.sdk.transport.kafka_key import KafkaKey
@@ -37,8 +36,10 @@ class RequestReply:
         self._typed_producer = producer
         self._settings = settings
         self._service_id = service_id
-        self._response_types = response_types
-        self._response_event_types: set[EventType] = {EventRegistry.event_type_for(t) for t in response_types}
+        self._response_types: dict[str, type[BaseModel]] = {
+            str(EventRegistry.event_type_for(t)): t for t in response_types
+        }
+        self._response_event_types: set[str] = set(self._response_types.keys())
         self._pending: dict[str, asyncio.Future[BaseModel]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._group_suffix = group_suffix
@@ -128,6 +129,8 @@ class RequestReply:
         )
         try:
             async for event_type, model, _raw in consumer:
+                if model is None:
+                    continue
                 event_id: str = _raw.headers.get(Header.EVENT_ID, "")
                 if event_type not in self._response_event_types:
                     logger.debug("RequestReply: skipping unregistered event_type=%s event_id=%s", event_type, event_id)

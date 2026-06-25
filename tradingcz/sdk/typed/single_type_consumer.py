@@ -7,7 +7,6 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
@@ -36,7 +35,7 @@ class SingleTypeConsumer[T: BaseModel]:
         self._inner = TypedConsumer(
             topic=topic,
             settings=settings,
-            types={event_type: model_type},
+            types={str(event_type): model_type},
             group_suffix=group_suffix,
             auto_commit=False,  # wrapper controls commit
             auto_offset_reset=auto_offset_reset,
@@ -51,9 +50,10 @@ class SingleTypeConsumer[T: BaseModel]:
     async def commit(self, msg: KafkaMessage) -> None:
         await self._inner.commit(msg)
 
-    async def __aiter__(self) -> AsyncIterator[tuple[EventType, T, KafkaMessage]]:
+    async def __aiter__(self) -> AsyncIterator[tuple[str, T, KafkaMessage]]:
         async for event_type, model, raw in self._inner:
-            # cast: TypedConsumer.__aiter__ returns BaseModel; we know it's T
+            if model is None:
+                continue
             yield event_type, cast(T, model), raw
             if self._auto_commit:
                 await self._inner.commit(raw)
