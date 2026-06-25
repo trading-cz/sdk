@@ -50,7 +50,7 @@ class EventRouter:
         self._auto_offset_reset = auto_offset_reset
         self._poll_timeout_ms = poll_timeout_ms
         self._batch_size = batch_size
-        self._handlers: list[_Registration] = []
+        self._handlers: dict[str, _Registration[BaseModel]] = {}
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
 
@@ -128,48 +128,40 @@ class EventRouter:
         Returns:
             ``self`` for chaining.
         """
-        self._handlers.append(
-            _Registration(
-                msg_type=str(msg_type),
-                model_class=model_class,
-                handler=handler,
-                filter_fn=filter_fn,
-                spawn_task=spawn_task,
-            )
+        key = str(msg_type)
+        if key in self._handlers:
+            raise ValueError(f"Handler already registered for msg_type={key}. Existing: {self._handlers[key].model_class.__name__}, New: {model_class.__name__}")
+        self._handlers[key] = _Registration(
+            msg_type=key,
+            model_class=model_class,
+            handler=handler,  # type: ignore[arg-type]
+            filter_fn=filter_fn,  # type: ignore[arg-type]
+            spawn_task=spawn_task,
         )
         return self
 
     async def run(self) -> None:
-        """Consume the channel until cancelled.  Dispatch each message.
-
-        Internally builds a :class:`TypedConsumer` from all registered types.
-        Messages whose ``message_type`` header matches no registration are
-        silently skipped (TypedConsumer multi-type behaviour).
-
-        Raises:
-            asyncio.CancelledError: propagated normally on task cancellation.
-        """
+        """Consume the channel until cancelled.  Dispatch each message."""
         if not self._handlers:
             logger.warning("EventRouter.run() started with no handlers registered")
+            return
 
         types: dict[str, type[BaseModel]] = {
-            reg.msg_type: reg.model_class for reg in self._handlers
+            msg_type: reg.model_class
+            for msg_type, reg in self._handlers.items()
         }
         self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
 
         async for msg_type, model, raw in self._consumer:
-            for reg in self._handlers:
-                if reg.msg_type != msg_type:
-                    continue
-                if reg.filter_fn is not None and not reg.filter_fn(model, raw):  # type: ignore[arg-type]
-                    continue
-                if reg.spawn_task:
-                    asyncio.create_task(
-                        self._dispatch(reg, model, raw),
-                        name=f"router-{msg_type}",
-                    )
-                else:
-                    await self._dispatch(reg, model, raw)
+            if model is None:
+                continue
+            reg = self._handlers[msg_type]
+            if reg.filter_fn is not None and not reg.filter_fn(model, raw):  # type: ignore[arg-type]
+                continue
+            if reg.spawn_task:
+                asyncio.create_task(self._dispatch(reg, model, raw), name=f"router-{msg_type}")
+            else:
+                await self._dispatch(reg, model, raw)
 
     async def _dispatch(
         self,
@@ -188,13 +180,8 @@ class EventRouter:
         try:
             await reg.handler(model, raw)  # type: ignore[arg-type]
         except Exception:
-            logger.exception(
-                "Handler %s failed for %s (offset=%d)",
-                reg.handler.__name__,
-                reg.msg_type,
-                raw.offset,
-            )
-            return  # never commit on failure
+            logger.exception("Handler %s failed for %s (offset=%d)", reg.handler.__name__, reg.msg_type, raw.offset)
+            return  # never commit on failure ?
 
         if self._auto_commit and self._consumer is not None:
             await self._consumer.commit(raw)
