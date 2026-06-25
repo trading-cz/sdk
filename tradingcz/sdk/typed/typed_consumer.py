@@ -28,7 +28,7 @@ class TypedConsumer:
         self,
         topic: str,
         settings: KafkaSettings,
-        types: dict[str, type[BaseModel]],
+        types: dict[str, type[BaseModel]] | None = None,
         *,
         auto_commit: bool = True,
         on_error: Callable[[KafkaMessage], Awaitable[None]] | None = None,
@@ -39,7 +39,7 @@ class TypedConsumer:
     ) -> None:
         self._topic = topic
         self._settings = settings
-        self._types = types
+        self._types = types or {}
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
@@ -55,7 +55,7 @@ class TypedConsumer:
             raise RuntimeError("commit() called outside iteration")
         await self._session.commit(msg)
 
-    async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
+    async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel | None, KafkaMessage]]:
         self._session = TransportConsumer(
             self._topic,
             self._settings,
@@ -66,23 +66,24 @@ class TypedConsumer:
         )
         async for msg in self._session:
             try:
-                event_type, model = self._dispatch(msg)
+                result = self._dispatch(msg)
             except SdkError:
                 await self._notify_error(msg)
                 continue
+            event_type, model = result
             yield event_type, model, msg
             await self._commit_if_enabled(msg)
 
     # ── Dispatch ─────────────────────────────────────────────────────────
 
-    def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel]:
+    def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel | None]:
         event_type = msg.headers.get(Header.EVENT_TYPE, "")
         if not event_type:
             raise MessageTypeError(f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})")
 
         model_type = self._types.get(event_type)
         if model_type is None:
-            raise MessageTypeError(f"Unregistered event_type {event_type!r} on {self._topic} (offset={msg.offset} key={msg.key!r})")
+            return event_type, None
         return event_type, self._deserializer.deserialize(msg.payload, model_type=model_type)
 
     # ── Internals ────────────────────────────────────────────────────────
