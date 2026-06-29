@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from tradingcz.sdk.exceptions import TransportError
+from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 logger = logging.getLogger(__name__)
@@ -25,24 +27,17 @@ class KafkaTopicRegistry:
     """Environment-scoped topic name registry."""
 
     def __init__(self, env: str = "dev") -> None:
+        self._env = env
         self.events = KafkaTopicConfig(name=f"{env}-event", partitions=1)
-        self.market_data = KafkaTopicConfig(name=f"{env}-stock-market-stream-data", partitions=5)
-        self.historical_data = KafkaTopicConfig(name=f"{env}-stock-market-historical-data", partitions=1)
+        self.historical = KafkaTopicConfig(name=f"{env}-stock-historical", partitions=1)
+        self.option_historical = KafkaTopicConfig(name=f"{env}-option-market-data", partitions=1)
+
+    def stream_topic(self, data_type: MarketDataType) -> KafkaTopicConfig:
+        return KafkaTopicConfig(name=f"{self._env}-stock-stream-{data_type.value}", partitions=5)
 
 
 class KafkaTopicAdmin:
-    """Creates Kafka topics via Admin API with connection reuse.
-
-    One instance per process.  Reuses a single :class:`AdminClient`
-    connection (lazy, created on first call) and caches created topic
-    names to avoid redundant Admin API calls.
-
-    Usage::
-
-        async with KafkaTopicAdmin(settings) as admin:
-            await admin.ensure("my-topic", num_partitions=5)
-            await admin.ensure_from_config(config)
-    """
+    """Creates Kafka topics via Admin API with connection reuse."""
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
@@ -51,19 +46,10 @@ class KafkaTopicAdmin:
         self._closed = False
 
     # ── Public API ──────────────────────────────────────────────────────
-
-    async def ensure(
-        self,
-        name: str,
-        *,
-        num_partitions: int | None = None,
-        replication_factor: int | None = None,
-        retention_ms: int | None = None,
-        cleanup_policy: str | None = None,
-    ) -> None:
+    async def ensure(self, name: str, *, num_partitions: int | None = None, replication_factor: int | None = None, retention_ms: int | None = None, cleanup_policy: str | None = None) -> None:
         """Create a topic if it doesn't already exist."""
         if self._closed:
-            raise RuntimeError("KafkaTopicAdmin is closed")
+            raise TransportError("KafkaTopicAdmin is closed")
         if name in self._created:
             return
 
@@ -125,11 +111,9 @@ class KafkaTopicAdmin:
     async def __aexit__(self, *args: object) -> None:
         await self.close()
 
-    # ── Internal ─────────────────────────────────────────────────────────
-
     def _get_admin(self) -> AdminClient:
         if self._closed:
-            raise RuntimeError("KafkaTopicAdmin is closed")
+            raise TransportError("KafkaTopicAdmin is closed")
         if self._admin is None:
             self._admin = AdminClient({"bootstrap.servers": self._settings.bootstrap_servers})
         return self._admin

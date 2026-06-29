@@ -5,10 +5,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from types import TracebackType
+from typing import Any, cast
 
 from pydantic import BaseModel
 
+from tradingcz.sdk.exceptions import ServiceNotReadyError
 from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
@@ -20,15 +23,26 @@ logger = logging.getLogger(__name__)
 class _Registration[T: BaseModel]:
     """Internal record for a single registered handler."""
 
-    msg_type: str
+    msg_type: EventType
     model_class: type[T]
     handler: Callable[[T, KafkaMessage], Awaitable[None]]
-    filter_fn: Callable[[T, KafkaMessage], bool] | None
+    filter_fn: Callable[[Any, KafkaMessage], bool] | None
     spawn_task: bool = field(default=False)
 
 
 class EventRouter:
-    """Single Kafka consumer.  Route messages to registered async handlers."""
+    """Single Kafka consumer.  Route messages to registered async handlers.
+
+    Handlers run in the consume loop by default (``spawn_task=False``).
+    Set ``spawn_task=True`` to run a handler in a background task — the
+    spawned task is tracked and cancelled on :meth:`close`.
+
+    When ``auto_commit=True`` (default), offsets are committed after each
+    successful handler invocation, including spawned tasks.
+    When ``auto_commit=False``, the handler must call :meth:`commit`
+    explicitly — this is only supported for inline handlers
+    (``spawn_task=False``).
+    """
 
     def __init__(
         self,
@@ -41,6 +55,7 @@ class EventRouter:
         auto_offset_reset: str | None = None,
         poll_timeout_ms: int | None = None,
         batch_size: int | None = None,
+        max_concurrency: int | None = None,
     ) -> None:
         self._topic = topic
         self._settings = settings
@@ -53,6 +68,10 @@ class EventRouter:
         self._handlers: dict[str, _Registration[BaseModel]] = {}
         self._consumer: TypedConsumer | None = None
         self._run_task: asyncio.Task[None] | None = None
+        self._spawned_tasks: set[asyncio.Task[None]] = set()
+        self._semaphore: asyncio.Semaphore | None = (
+            asyncio.Semaphore(max_concurrency) if max_concurrency else None
+        )
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
@@ -67,13 +86,42 @@ class EventRouter:
         self._run_task = asyncio.create_task(self.run(), name=f"router-{self._topic}")
 
     async def close(self) -> None:
-        """Cancel the background consumer task and wait for it to finish."""
+        """Cancel the background consumer task and all spawned handlers.
+
+        Spawned handlers get *cancel_timeout* seconds to finish after
+        cancellation; the consumer loop gets *cancel_timeout* seconds
+        after that.  If either deadline is exceeded, a warning is logged
+        and shutdown proceeds (the pod may be SIGKILL'd by Kubernetes).
+        """
+        cancel_timeout = 10.0
+        # Cancel spawned tasks first, then the consumer loop
+        for task in list(self._spawned_tasks):
+            if not task.done():
+                task.cancel()
+        if self._spawned_tasks:
+            try:
+                async with asyncio.timeout(cancel_timeout):
+                    await asyncio.gather(*self._spawned_tasks, return_exceptions=True)
+            except TimeoutError:
+                logger.warning(
+                    "Timed out after %.0fs waiting for %d spawned tasks to cancel",
+                    cancel_timeout,
+                    len([t for t in self._spawned_tasks if not t.done()]),
+                )
+            self._spawned_tasks.clear()
+
         if self._run_task and not self._run_task.done():
             self._run_task.cancel()
             try:
-                await self._run_task
+                async with asyncio.timeout(cancel_timeout):
+                    await self._run_task
             except asyncio.CancelledError:
                 pass
+            except TimeoutError:
+                logger.warning(
+                    "Timed out after %.0fs waiting for consumer loop to cancel",
+                    cancel_timeout,
+                )
         self._run_task = None
         self._consumer = None
 
@@ -98,44 +146,34 @@ class EventRouter:
         control over when the offset is committed.
         """
         if self._consumer is None:
-            raise RuntimeError("commit() called outside run()")
+            raise ServiceNotReadyError("commit() called outside run()")
         await self._consumer.commit(msg)
 
     def on[T: BaseModel](
         self,
-        msg_type: EventType,
         model_class: type[T],
         handler: Callable[[T, KafkaMessage], Awaitable[None]],
         *,
         filter_fn: Callable[[T, KafkaMessage], bool] | None = None,
         spawn_task: bool = False,
     ) -> EventRouter:
-        """Register a typed handler for *msg_type*.  Chainable.
+        """Register a typed handler for *model_class*.  Chainable.
 
-        Args:
-            msg_type: The ``EventType`` this handler subscribes to.
-            model_class: Pydantic model used to parse matching messages.
-            handler: Async callable invoked with ``(model, raw_message)``.
-            filter_fn: Optional predicate; handler is called only when it
-                returns ``True``.  Receives the parsed model and raw message.
-            spawn_task: When ``False`` (default) the handler is ``await``ed
-                inline — next message waits until the handler completes.
-                Good for fast handlers (state updates, <1 ms).
-                When ``True`` an ``asyncio.Task`` is spawned per message
-                so the router is not blocked.  Use for slow handlers such
-                as outbound HTTP fetches.
+        The ``EventType`` is derived from ``EventRegistry``.
 
-        Returns:
-            ``self`` for chaining.
+        When ``spawn_task=True``, the handler runs in a background task
+        tracked by the router.  ``auto_commit=False`` is **not supported**
+        with spawned tasks — use inline handlers for manual commit control.
         """
+        msg_type = EventRegistry.event_type_for(model_class)
         key = str(msg_type)
         if key in self._handlers:
             raise ValueError(f"Handler already registered for msg_type={key}. Existing: {self._handlers[key].model_class.__name__}, New: {model_class.__name__}")
         self._handlers[key] = _Registration(
-            msg_type=key,
+            msg_type=msg_type,
             model_class=model_class,
-            handler=handler,  # type: ignore[arg-type]
-            filter_fn=filter_fn,  # type: ignore[arg-type]
+            handler=handler,
+            filter_fn=cast(Callable[[Any, KafkaMessage], bool] | None, filter_fn),
             spawn_task=spawn_task,
         )
         return self
@@ -147,41 +185,56 @@ class EventRouter:
             return
 
         types: dict[str, type[BaseModel]] = {
-            msg_type: reg.model_class
-            for msg_type, reg in self._handlers.items()
+            str(reg.msg_type): reg.model_class
+            for reg in self._handlers.values()
         }
-        self._consumer = TypedConsumer(self._topic, self._settings, types, on_error=self._on_error, group_suffix=self._group_suffix, auto_commit=False, auto_offset_reset=self._auto_offset_reset, poll_timeout_ms=self._poll_timeout_ms, batch_size=self._batch_size)
+        self._consumer = TypedConsumer(
+            self._topic,
+            self._settings,
+            types,
+            on_error=self._on_error,
+            group_suffix=self._group_suffix,
+            auto_commit=False,
+            auto_offset_reset=self._auto_offset_reset,
+            poll_timeout_ms=self._poll_timeout_ms,
+            batch_size=self._batch_size,
+        )
 
         async for msg_type, model, raw in self._consumer:
             if model is None:
                 continue
-            reg = self._handlers[msg_type]
-            if reg.filter_fn is not None and not reg.filter_fn(model, raw):  # type: ignore[arg-type]
+            reg = self._handlers.get(msg_type)
+            if reg is None:
+                continue
+            if reg.filter_fn is not None and not reg.filter_fn(model, raw):
                 continue
             if reg.spawn_task:
-                asyncio.create_task(self._dispatch(reg, model, raw), name=f"router-{msg_type}")
+                if self._semaphore:
+                    await self._semaphore.acquire()
+                task = asyncio.create_task(
+                    self._dispatch(reg, model, raw),
+                    name=f"router-{msg_type}",
+                )
+                self._spawned_tasks.add(task)
+                task.add_done_callback(self._spawned_tasks.discard)
+                if self._semaphore:
+                    task.add_done_callback(lambda _: self._semaphore.release())  # type: ignore[union-attr]
             else:
                 await self._dispatch(reg, model, raw)
 
     async def _dispatch(
-        self,
-        reg: _Registration[BaseModel],
-        model: BaseModel,
-        raw: KafkaMessage,
+        self, reg: _Registration[Any], model: BaseModel, raw: KafkaMessage
     ) -> None:
-        """Invoke a handler and optionally commit the offset.
+        """Invoke handler and optionally commit offset.
 
-        On handler exception the offset is never committed (message
-        will be re-delivered on restart — at-least-once semantics).
-        When ``auto_commit`` is enabled the offset is committed after
-        a successful handler invocation via the underlying
-        :class:`TypedConsumer`.
+        On handler exception the offset is **never** committed — the
+        message will be replayed on next restart (at-least-once).
         """
         try:
-            await reg.handler(model, raw)  # type: ignore[arg-type]
+            await reg.handler(model, raw)
         except Exception:
             logger.exception("Handler %s failed for %s (offset=%d)", reg.handler.__name__, reg.msg_type, raw.offset)
-            return  # never commit on failure ?
+            return  # never commit on failure — at-least-once
 
         if self._auto_commit and self._consumer is not None:
             await self._consumer.commit(raw)

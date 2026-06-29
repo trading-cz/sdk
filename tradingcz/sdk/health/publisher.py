@@ -1,6 +1,6 @@
 """HealthPublisher — emit lifecycle events for THIS service.
 
-Used internally by ServiceApp.  Full API docs: health/_README.md
+Full API docs: health/_README.md
 """
 
 from __future__ import annotations
@@ -9,8 +9,9 @@ import asyncio
 import logging
 
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
-from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
+from tradingcz.sdk.models.enums.event import LifecycleEventType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
+from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_key import KafkaKey
 
 logger = logging.getLogger(__name__)
@@ -83,11 +84,11 @@ class HealthPublisher:
 
     async def _emit(self, event: LifecycleEventType) -> None:
         lifecycle = LifecycleEvent(service_id=self._service_id, event=event)
-        key = KafkaKey(value=f"{EventType.SERVICE_LIFECYCLE}:{self._service_id}:{event}").to_kafka()
+        event_type = EventRegistry.event_type_for(lifecycle)
+        key = KafkaKey(value=f"{event_type.value}:{self._service_id}:{event}").to_kafka()
         try:
-            await self._faf.send(lifecycle, event_type=EventType.SERVICE_LIFECYCLE, event_id=str(key), key=key)
-            if event in (LifecycleEventType.INITIALIZING, LifecycleEventType.READY, LifecycleEventType.DOWN):
-                logger.info("ServiceLifecycle sent: service=%s event=%s", self._service_id, event)
+            await self._faf.send(lifecycle, event_id=str(key), key=key)
+            logger.info("ServiceLifecycle sent: service=%s event=%s", self._service_id, event)
         except Exception:
             logger.warning("Failed to emit %s for %s", event, self._service_id, exc_info=True)
 

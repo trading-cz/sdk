@@ -31,7 +31,7 @@ pip uninstall trading-sdk
 | **Kafka transport** — produce/consume raw bytes, manage consumer groups, commit offsets | `transport/` |
 | **Typed messaging** — serialize/deserialize Pydantic models, header-based dispatch | `typed/` |
 | **Messaging patterns** — request/reply, fire-and-forget, event routing, startup replay | `messaging/` |
-| **Application wiring** — one-line lifecycle (health, shutdown, topic admin) | `service_app.py` |
+| **Application wiring** — direct composition of transport, health, shutdown | `_README.md` |
 | **Market data clients** — bars, quotes, streaming, options, corporate actions | `market_data/`, `account/` |
 | **Shared models** — enums, events, order types, indicators | `models/`, `indicators/` |
 
@@ -41,7 +41,7 @@ Four layers, each depends only on the one below it:
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp  (+ BrokerScope)            │  ← Layer 4: Application wiring
+│  YOUR APP  (direct composition)         │  ← Layer 4: Application wiring
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: Messaging patterns
 ├─────────────────────────────────────────┤
@@ -63,17 +63,26 @@ Detailed docs live in each package:
 ## Quick start
 
 ```python
-from tradingcz.sdk import ServiceApp
+from tradingcz.sdk.transport.kafka_settings import KafkaSettings
+from tradingcz.sdk.transport.transport_producer import TransportProducer
+from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
+from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
+from tradingcz.sdk.typed.typed_producer import TypedProducer
+from tradingcz.sdk.messaging.router import EventRouter
 
-async with ServiceApp(service_id="my-app", env="dev") as svc:
-    # Publish events (fire-and-forget)
-    await svc.publish_event(model, message_type=EventType.DATA_READY, event_id="evt-001")
+# Direct wiring — every service owns its transport
+settings = KafkaSettings(consumer_group="my-app")
+topics = KafkaTopicRegistry(env="dev")
+events_topic = topics.events.name
+producer = TransportProducer(settings)
+faf = FireAndForget(TypedProducer(producer, events_topic), "my-app")
 
-    # Consume with EventRouter (L3)
-    router = EventRouter(svc.events_topic, svc.kafka_settings, group_suffix="worker")
-    await router.start()
+# Publish events (fire-and-forget)
+await faf.send(model, event_id="evt-001")
 
-    await svc.run_until_shutdown(tasks)
+# Consume with EventRouter (L3)
+router = EventRouter(events_topic, settings, group_suffix="worker")
+await router.start()
 ```
 
 ## Naming conventions
@@ -91,5 +100,5 @@ Smoke tests live in the [`testing`](https://github.com/trading-cz/testing) repos
 Local unit tests:
 
 ```bash
-pytest tests/ test_service_app_smoke.py -v
+pytest tests/ -v
 ```

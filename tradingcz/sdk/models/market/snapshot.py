@@ -6,11 +6,14 @@ Combines the latest trade, quote, minute bar, and daily bar in one call.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.market.bar import Bar
 from tradingcz.sdk.models.market.quote import Quote
 from tradingcz.sdk.models.market.trade import Trade
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.SNAPSHOT)
 class Snapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 

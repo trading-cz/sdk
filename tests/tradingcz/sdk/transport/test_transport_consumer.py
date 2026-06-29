@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tradingcz.sdk.exceptions import TransportError
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.transport_consumer import TransportConsumer
@@ -102,5 +103,5 @@ async def test_poll() -> None:
 async def test_poll_raises_when_closed() -> None:
     s = _session()
     s._closed = True
-    with pytest.raises(RuntimeError, match="closed"):
+    with pytest.raises(TransportError, match="closed"):
         await s.poll()

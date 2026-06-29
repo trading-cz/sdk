@@ -22,15 +22,7 @@ class Header(StrEnum):
 
 
 class KafkaHeader(BaseModel):
-    """Base class for all Kafka message headers.
-
-    Provides the wire-format contract: typed Pydantic model
-    ↔ flat ``dict[str, str]`` suitable for Kafka headers.
-
-    Every Kafka message must carry at least ``event_type`` and
-    ``source_app`` so that consumers can route and attribute messages
-    without inspecting the payload.
-    """
+    """Base class for all Kafka message headers — typed model ↔ flat dict."""
 
     model_config = ConfigDict(extra="allow")
 

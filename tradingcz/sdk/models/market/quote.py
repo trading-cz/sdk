@@ -10,7 +10,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+from tradingcz.sdk.registry import register_event, register_market_data
 
+
+@register_event(EventType.QUOTE)
+@register_market_data(MarketDataType.QUOTES)
 class Quote(BaseModel):
     model_config = ConfigDict(frozen=True)
 

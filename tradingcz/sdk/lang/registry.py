@@ -1,23 +1,11 @@
 """Decorator-based class registry — key → (class, factory)."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 
 class Registry[K, V]:
-    """Map keys to (class, factory) pairs.  Default factory calls ``cls(**deps)``.
-
-    Usage::
-
-        adapters = Registry[str, type]()
-
-        @adapters.register("alpaca")
-        class AlpacaAdapter:
-            ...
-
-        cls, factory = adapters.get("alpaca")
-        instance = factory(cls=cls, api_key="...")
-    """
+    """Map keys to (class, factory) pairs.  Default factory calls ``cls(**deps)``."""
 
     _default_factory: Callable[..., Any] = staticmethod(lambda cls, **kw: cls(**kw))
 
@@ -29,7 +17,7 @@ class Registry[K, V]:
     ) -> Callable[[type], type]:
         """Decorator: register the decorated class under *key*."""
         def decorator(cls: type) -> type:
-            self._items[key] = (cls, factory or self._default_factory)  # type: ignore[assignment]
+            self._items[key] = (cast(V, cls), factory or self._default_factory)
             return cls
 
         return decorator

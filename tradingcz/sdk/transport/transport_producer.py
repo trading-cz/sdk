@@ -2,25 +2,39 @@
 
 import asyncio
 import logging
-import queue
+from collections.abc import Callable
+from typing import cast
 
+from confluent_kafka import Message
 from confluent_kafka import Producer as SyncProducer
 
+from tradingcz.sdk.exceptions import TransportConnectionError, TransportError
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
 logger = logging.getLogger(__name__)
 
 
 class TransportProducer:
-    """Async producer — send, flush, error tracking. One per process."""
+    """Async producer — send, flush, error tracking. One per process.
+
+    Args:
+        settings: Kafka broker configuration.
+        on_error: Optional synchronous callback invoked on delivery failure.
+            Signature: ``(topic, partition, offset, error_str) -> None``.
+            Runs on librdkafka's internal thread — keep it fast and
+            non-blocking.  For async work, schedule on the event loop
+            yourself (e.g. ``loop.call_soon_threadsafe``).
+    """
 
     def __init__(
         self,
         settings: KafkaSettings,
+        *,
+        on_error: Callable[[str, int, int, str], None] | None = None,
     ) -> None:
         self._settings = settings
         self._producer = SyncProducer(settings.producer_config())
-        self._error_queue: queue.Queue[str] = queue.Queue()
+        self._on_error = on_error
         self._closed = False
 
     # ── Core API ────────────────────────────────────────────────────────
@@ -34,7 +48,7 @@ class TransportProducer:
         headers: dict[str, str] | None = None,
     ) -> None:
         if self._closed:
-            raise RuntimeError("TransportProducer is closed")
+            raise TransportError("TransportProducer is closed")
         key_bytes = key.encode() if key else None
         header_list: list[tuple[str, bytes]] | None = None
         if headers:
@@ -54,51 +68,50 @@ class TransportProducer:
     async def flush(self, timeout: float = 30.0) -> None:
         """Wait for all queued messages to be delivered to Kafka."""
         if self._closed:
-            raise RuntimeError("TransportProducer is closed")
+            raise TransportError("TransportProducer is closed")
 
         def _flush() -> int:
-            return self._producer.flush(timeout)  # type: ignore[no-any-return]
+            return cast(int, self._producer.flush(timeout))
 
         remaining = await asyncio.to_thread(_flush)
         if remaining > 0:
-            raise RuntimeError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
+            raise TransportConnectionError(f"Failed to deliver messages: {remaining} message(s) still pending after flush")
 
     async def close(self) -> None:
         """Flush pending messages and mark as closed."""
         if not self._closed:
             try:
                 await self.flush()
-            except RuntimeError:
-                pass  # already flushed
+            except TransportError:
+                pass  # already closed or delivery failure during shutdown
             self._closed = True
-
-    def drain_errors(self) -> list[str]:
-        """Pull accumulated delivery errors (clears the queue)."""
-        errors: list[str] = []
-        while True:
-            try:
-                errors.append(self._error_queue.get_nowait())
-            except queue.Empty:
-                break
-        return errors
 
     # ── Delivery callback ────────────────────────────────────────────────
 
     def _handle_error(self, err: object, msg: object) -> None:
-        """Delivery callback — runs on librdkafka internal thread.
-
-        Thread-safe: only uses thread-safe ``queue.Queue.put()``.
-        Callers retrieve errors via :meth:`drain_errors`.
-        """
-        if err is not None:
-            logger.error(
-                "Delivery failed for %s [%d] offset=%s: %s",
-                getattr(msg, "topic", lambda: "?")() if callable(getattr(msg, "topic", None)) else "?",
-                getattr(msg, "partition", lambda: -1)() if callable(getattr(msg, "partition", None)) else -1,
-                getattr(msg, "offset", lambda: -1)() if callable(getattr(msg, "offset", None)) else -1,
-                err,
-            )
-            self._error_queue.put(str(err))
+        """Delivery callback — runs on librdkafka internal thread."""
+        if err is None:
+            return
+        kmsg = cast(Message, msg)
+        try:
+            topic = kmsg.topic() or "?"
+            partition = kmsg.partition() or -1
+            offset = kmsg.offset() or -1
+        except Exception:
+            logger.warning("Cannot extract metadata from delivery report", exc_info=True)
+            topic = "?"
+            partition = -1
+            offset = -1
+        error_str = str(err)
+        logger.error(
+            "Delivery failed for %s [%d] offset=%s: %s",
+            topic, partition, offset, error_str,
+        )
+        if self._on_error is not None:
+            try:
+                self._on_error(topic, partition, offset, error_str)
+            except Exception:
+                logger.exception("on_error callback raised for delivery error")
 
 
 __all__ = ["TransportProducer"]

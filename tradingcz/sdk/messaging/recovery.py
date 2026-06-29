@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable
 
 from pydantic import BaseModel
 
+from tradingcz.sdk.registry import EventRegistry
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.typed.typed_consumer import TypedConsumer
@@ -24,11 +25,17 @@ class ReplayConsumer:
 
     async def replay(
         self,
-        types: dict[str, type[BaseModel]],
+        model_types: list[type[BaseModel]],
         *,
         until: Callable[[str, BaseModel], bool],
     ) -> AsyncIterator[tuple[str, BaseModel, KafkaMessage]]:
+        """Replay the topic, yielding messages until *until* returns True.
 
+        ``EventType`` for each model class is derived from :class:`EventRegistry`.
+        """
+        types: dict[str, type[BaseModel]] = {
+            str(EventRegistry.event_type_for(m)): m for m in model_types
+        }
         group_suffix = uuid.uuid4().hex
         logger.info("ReplayConsumer: replaying %s (group_suffix=%s)", self._topic, group_suffix)
         consumer = TypedConsumer(
@@ -41,6 +48,8 @@ class ReplayConsumer:
         )
         count = 0
         async for msg_type, model, raw in consumer:
+            if model is None:
+                continue
             if until(msg_type, model):
                 logger.info("ReplayConsumer: sentinel reached after %d messages — stopping replay", count)
                 return

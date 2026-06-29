@@ -7,7 +7,8 @@ Pure Python utilities — no Kafka, no I/O. Used across all layers.
 | Class/Function | Role |
 | ---------------- | ------ |
 | `Lazy[T]` | Descriptor — init value on first access (used by `KafkaTransport._producer`) |
-| `Registry[K, V]` | Decorator-based registry — key → (class, factory) |
+| `FactoryRegistry[K, V]` | Decorator-based IoC registry — key → (class, factory) |
+| `ModelRegistry[K]` | Decorator-based type registry — bidirectional key ↔ Pydantic model |
 | `Retry` | Async retry wrapper — call any operation with retries |
 | `setup_shutdown_handlers` | Register SIGTERM/SIGINT → set `asyncio.Event` |
 
@@ -31,12 +32,12 @@ class ExpensiveClient:
 
 ---
 
-## Registry — key → (class, factory)
+## FactoryRegistry — key → (class, factory)
 
 ```python
-from tradingcz.sdk.lang import Registry
+from tradingcz.sdk.lang import FactoryRegistry
 
-adapters = Registry[str, type]()
+adapters = FactoryRegistry[str, type]()
 
 @adapters.register("alpaca")
 class AlpacaAdapter:
@@ -55,6 +56,63 @@ instance = factory(cls=cls, api_key="pk_live_...")
 cls, factory = adapters.get("ibkr")
 instance = factory(cls=cls, api_key="...")  # gateway="ib-gw" baked in
 ```text
+
+> For **bidirectional key ↔ model** mapping (used by TypedConsumer, EventRouter
+> for Kafka header dispatch), see `ModelRegistry` below.
+
+---
+
+## ModelRegistry — bidirectional key ↔ Pydantic model
+
+`ModelRegistry[K]` is a **class-level** bidirectional registry.  Unlike
+`FactoryRegistry[K, V]` (instance-based, stores factories), `ModelRegistry`
+stores bare model classes and supports reverse lookup.
+
+```python
+from tradingcz.sdk.lang.model_registry import ModelRegistry
+
+# Create a concrete registry:
+class EventRegistry(ModelRegistry[EventType]):
+    """EventType ↔ Pydantic model."""
+
+class MarketDataRegistry(ModelRegistry[MarketDataType]):
+    """MarketDataType ↔ Pydantic model."""
+```
+
+**Register models via decorator:**
+
+```python
+@EventRegistry.register(EventType.BAR)
+class Bar(BaseModel):
+    symbol: str
+    ...
+
+# Or use the convenience decorators from sdk.registry:
+from tradingcz.sdk.registry import register_event, register_market_data
+
+@register_event(EventType.BAR)
+@register_market_data(MarketDataType.BARS)
+class Bar(BaseModel): ...
+```
+
+**Lookup:**
+
+```python
+EventRegistry.model_for(EventType.BAR)       # → Bar
+EventRegistry.key_for(Bar)                   # → EventType.BAR (or None)
+EventRegistry.event_type_for(Bar)            # → EventType.BAR (raises if missing)
+MarketDataRegistry.data_type_for(Bar)        # → MarketDataType.BARS (or None)
+```
+
+**Key differences from `FactoryRegistry[K, V]`:**
+
+| | `FactoryRegistry[K, V]` | `ModelRegistry[K]` |
+|---|---|---|
+| Storage | Instance-based | Class-level (static) |
+| Value | `(class, factory)` tuple | Bare model class |
+| Lookup | One-way: `get(key)` | Bidirectional: `model_for(key)` + `key_for(model)` |
+| Purpose | Runtime IoC construction | Wire-protocol deserialization |
+| Subclassing | Not needed (instantiate directly) | Required (concrete key type) |
 
 ---
 

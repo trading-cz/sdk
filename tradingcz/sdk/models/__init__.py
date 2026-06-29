@@ -18,13 +18,18 @@ from tradingcz.sdk.models.market import (
     Bar,
     Quote,
     Snapshot,
-    StreamQuote,
     Trade,
     market_item_message_type,
 )
 from tradingcz.sdk.models.orders.bracket_order import BracketOrderRequest
 from tradingcz.sdk.models.orders.market_order import MarketOrderRequest
 from tradingcz.sdk.models.orders.oto_order import OtoOrderRequest
+from tradingcz.sdk.registry import (
+    EventRegistry,
+    MarketDataRegistry,
+    register_event,
+    register_market_data,
+)
 
 __all__ = [
     # Enums
@@ -35,13 +40,17 @@ __all__ = [
     "OrderType",
     # Wire format
     "EventType",
+    # Registry
+    "EventRegistry",
+    "MarketDataRegistry",
+    "register_event",
+    "register_market_data",
     # Domain Models
     "Bar",
     "Quote",
     "Trade",
     "Snapshot",
-    "StreamQuote",
-    # Market helpers
+    # Market helpers (deprecated — use EventRegistry)
     "market_item_message_type",
     # Health/Lifecycle
     "LifecycleEvent",

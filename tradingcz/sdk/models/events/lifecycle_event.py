@@ -5,23 +5,25 @@ topic so the platform can track which services are running, detect
 crashes, and trigger cleanup actions (e.g., ingestion removes streaming
 subscriptions for services that went down).
 
-Lifecycle sequence (managed by ``HealthPublisher`` via ``ServiceApp``)::
+Lifecycle sequence (managed by ``HealthPublisher``)::
 
     INITIALIZING → READY → HEARTBEAT (periodic, default 5 min) → DOWN
 
-- ``"initializing"`` — emitted early in ``ServiceApp.start()``
+- ``"initializing"`` — emitted early in the application start
 - ``"ready"``       — emitted after all init is complete, heartbeat begins
 - ``"heartbeat"``   — periodic liveness signal
-- ``"down"``        — emitted on ``ServiceApp.close()`` (graceful shutdown)
+- ``"down"``        — emitted on graceful shutdown
 """
 
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from tradingcz.sdk.models.enums.event import LifecycleEventType
+from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
+from tradingcz.sdk.registry import register_event
 
 
+@register_event(EventType.SERVICE_LIFECYCLE)
 class LifecycleEvent(BaseModel):
     """Service health and lifecycle event.
 

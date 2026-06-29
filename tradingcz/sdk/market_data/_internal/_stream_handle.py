@@ -1,0 +1,99 @@
+"""StreamHandle — async context manager for guaranteed unsubscribe."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import AsyncIterator
+from types import TracebackType
+from uuid import uuid4
+
+from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
+from tradingcz.sdk.models.enums.event import (
+    AssetType,
+    Broker,
+    DataRequestType,
+    MarketDataType,
+)
+from tradingcz.sdk.models.events import DataRequest
+
+logger = logging.getLogger(__name__)
+
+
+class StreamHandle[T](AsyncIterator[T]):
+    """Handle to a live data stream with automatic cleanup."""
+
+    def __init__(
+        self,
+        iterator: AsyncIterator[T],
+        unsubscribe: _Unsubscribe,
+    ) -> None:
+        self._iterator = iterator
+        self._unsubscribe = unsubscribe
+        self._exited = False
+        self.unsubscribe_timeout = 5.0  # seconds
+
+    def __aiter__(self) -> StreamHandle[T]:
+        return self
+
+    async def __anext__(self) -> T:
+        try:
+            return await self._iterator.__anext__()
+        except StopAsyncIteration:
+            self._exited = True
+            raise
+
+    async def __aenter__(self) -> StreamHandle[T]:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self._exited = True
+        try:
+            async with asyncio.timeout(self.unsubscribe_timeout):
+                await self._unsubscribe()
+        except TimeoutError:
+            logger.warning("Unsubscribe timed out after %.0fs (data may keep flowing)", self.unsubscribe_timeout)
+        except Exception:
+            logger.info("Unsubscribe failed (non-critical)", exc_info=True)
+        if hasattr(self._iterator, "aclose"):
+            await self._iterator.aclose()  # type: ignore[union-attr]
+
+
+class _Unsubscribe:
+    """Fire-and-forget unsubscribe — sends a DataRequest via FireAndForget, no response expected."""
+
+    def __init__(
+        self,
+        faf: FireAndForget,
+        broker: Broker,
+        symbols: list[str],
+        data_kind: MarketDataType,
+        asset: AssetType,
+    ) -> None:
+        self._faf = faf
+        self._broker = broker
+        self._symbols = symbols
+        self._data_type = data_kind
+        self._asset = asset
+
+    async def __call__(self) -> None:
+        """Send unsubscribe DataRequest (fire-and-forget)."""
+        req = DataRequest(
+            type=DataRequestType.UNSUBSCRIBE,
+            asset=self._asset,
+            broker=self._broker,
+            symbols=self._symbols,
+            data_type=self._data_type,
+        )
+        try:
+            await self._faf.send(req, event_id=str(uuid4()))
+        except Exception:
+            logger.info("Unsubscribe request failed for %s (data_kind=%s)", self._symbols, self._data_type, exc_info=True)
+
+
+__all__ = ["StreamHandle"]

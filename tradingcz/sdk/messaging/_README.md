@@ -7,7 +7,7 @@ and [transport](../transport/_README.md) (Layer 1).
 
 ```text
 ┌─────────────────────────────────────────┐
-│  ServiceApp                             │  ← Layer 4: Application
+│  Your App (direct wiring)               │  ← Layer 4: Application
 ├─────────────────────────────────────────┤
 │  EventRouter / RequestReply / F&F       │  ← Layer 3: THIS PACKAGE
 ├─────────────────────────────────────────┤
@@ -155,18 +155,24 @@ await router.close()
 
 ```python
 from tradingcz.sdk.messaging import RequestReply
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
-async with RequestReply(producer, topic, settings, "my-svc", group_suffix="rr") as rr:
+typed_producer = TypedProducer(transport, events_topic)
+async with RequestReply(typed_producer, events_topic, kafka_settings, "my-svc", group_suffix="rr") as rr:
     rr.register_type(EventType.DATA_READY, DataReady)
-    response = await rr.request(request, response_type=DataReady, timeout=15.0)
+    response = await rr.request(
+        request, response_type=DataReady, request_type=EventType.DATA_REQUEST, timeout=15.0,
+    )
 ```
 
 ### Fire-and-forget (signals, lifecycle events)
 
 ```python
 from tradingcz.sdk.messaging import FireAndForget
+from tradingcz.sdk.typed.typed_producer import TypedProducer
 
-faf = FireAndForget(producer, topic, service_id="risk")
+typed_producer = TypedProducer(transport, events_topic)
+faf = FireAndForget(typed_producer, service_id="risk")
 await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
 ```
 
@@ -175,7 +181,7 @@ await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
 ```python
 from tradingcz.sdk.messaging import ReplayConsumer
 
-# INITIALIZING sentinel is published automatically by ServiceApp.start().
+# INITIALIZING sentinel is published automatically by HealthPublisher.
 # Replay until your own INITIALIZING:
 consumer = ReplayConsumer(topic, settings)
 async for msg_type, model, raw in consumer.replay(
@@ -188,7 +194,6 @@ async for msg_type, model, raw in consumer.replay(
 ):
     reconstruct_state(msg_type, model, raw.headers)
 
-# READY is published automatically by ServiceApp.start() after
-# _on_after_initializing() completes.  Override that hook for
-# custom init (e.g., recovery).
+# READY is published automatically by HealthPublisher after
+# health.ready().  Run recovery before calling start().
 ```

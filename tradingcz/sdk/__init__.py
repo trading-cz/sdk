@@ -7,12 +7,12 @@ Core building blocks for all trading-cz services:
 - health monitoring, logging, exceptions
 """
 
+from importlib.metadata import version as _version
 from pathlib import Path
 from pkgutil import extend_path
 
-from tradingcz.sdk.service_app import BrokerScope, ServiceApp
-
-__all__ = ["ServiceApp", "BrokerScope"]
+__all__: list[str] = []
+__version__ = _version("trading-sdk")
 
 # Allow `tradingcz.sdk.*` portions from multiple distributions.
 __path__ = extend_path(__path__, __name__)

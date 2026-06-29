@@ -7,6 +7,7 @@ from tradingcz.sdk.models.events.data_request_event import (
 )
 from tradingcz.sdk.models.events.execution_request_event import ExecutionRequestEvent
 from tradingcz.sdk.models.events.service_request_event import ServiceRequestEvent
+from tradingcz.sdk.models.events.trading_signal_event import TradingSignalEvent
 
 __all__ = [
     "DataError",
@@ -14,4 +15,5 @@ __all__ = [
     "DataRequest",
     "ExecutionRequestEvent",
     "ServiceRequestEvent",
+    "TradingSignalEvent",
 ]

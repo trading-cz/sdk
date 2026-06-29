@@ -124,18 +124,15 @@ class MarketDataType(StrEnum):
         TRADES          — individual trade ticks
         QUOTES          — level-1 bid/ask quotes
         SNAPSHOTS       — combined trade + quote + greeks snapshot
-        LATEST_BARS     — most-recent bar per symbol (no time range)
-        LATEST_TRADES   — most-recent trade per symbol
-        LATEST_QUOTES   — most-recent quote per symbol
     """
 
     BARS = "bars"
-    TRADES = "trades"
-    QUOTES = "quotes"
-    SNAPSHOTS = "snapshots"
     LATEST_BARS = "latest_bars"
+    TRADES = "trades"
     LATEST_TRADES = "latest_trades"
+    QUOTES = "quotes"
     LATEST_QUOTES = "latest_quotes"
+    SNAPSHOTS = "snapshots"
     DIVIDENDS = "dividends"
     SPLITS = "splits"
 

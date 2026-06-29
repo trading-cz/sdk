@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
 from tradingcz.sdk.models.events import ServiceRequestEvent
+from tradingcz.sdk.registry import register_event
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class Balance(BaseModel):
     currency: str = "USD"
 
 
+@register_event(EventType.BALANCE_RESPONSE)
 class BalanceResponse(BaseModel):
     """Response to a balance query."""
 
@@ -44,7 +46,7 @@ class BalanceClient:
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
-        self._rr.register_type(EventType.BALANCE_RESPONSE, BalanceResponse)
+        self._rr.register_type(BalanceResponse)
 
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""
@@ -54,7 +56,6 @@ class BalanceClient:
             req,
             response_type=BalanceResponse,
             timeout=timeout,
-            request_type=EventType.SERVICE_REQUEST,
         )
         return resp.balance
 
