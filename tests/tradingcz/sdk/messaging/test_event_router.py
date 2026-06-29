@@ -92,9 +92,9 @@ class TestEventRouterRegistration:
         async def handler(_m: LifecycleEvent, _r: KafkaMessage) -> None:
             pass
 
-        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
+        router.on(LifecycleEvent, handler)
         with pytest.raises(ValueError, match="Handler already registered"):
-            router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, handler)
+            router.on(LifecycleEvent, handler)
 
     def test_different_event_types_ok(self) -> None:
         """Different EventTypes can be registered without conflict."""
@@ -106,8 +106,8 @@ class TestEventRouterRegistration:
         async def h2(_m: ServiceRequestEvent, _r: KafkaMessage) -> None:
             pass
 
-        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, h1)
-        router.on(EventType.SERVICE_REQUEST, ServiceRequestEvent, h2)
+        router.on(LifecycleEvent, h1)
+        router.on(ServiceRequestEvent, h2)
         # No exception → pass
 
 
@@ -124,7 +124,7 @@ class TestEventRouterDispatch:
         async def lifecycle_handler(model: LifecycleEvent, _raw: KafkaMessage) -> None:
             received.append(model)
 
-        router.on(EventType.SERVICE_LIFECYCLE, LifecycleEvent, lifecycle_handler)
+        router.on(LifecycleEvent, lifecycle_handler)
 
         # Two messages: one matching (SERVICE_LIFECYCLE), one unmatched (SERVICE_REQUEST)
         matched_event = LifecycleEvent(service_id="svc1", event=LifecycleEventType.READY)
@@ -158,7 +158,6 @@ class TestEventRouterDispatch:
             return raw.key == "key-a"
 
         router.on(
-            EventType.SERVICE_LIFECYCLE,
             LifecycleEvent,
             lifecycle_handler,
             filter_fn=only_key_a,
@@ -196,7 +195,6 @@ class TestEventRouterDispatch:
             return raw.headers.get("source_app") == "alpha"
 
         router.on(
-            EventType.SERVICE_LIFECYCLE,
             LifecycleEvent,
             lifecycle_handler,
             filter_fn=only_alpha_source,

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from tradingcz.sdk.messaging.router import EventRouter
 from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
+from tradingcz.sdk.models.events.service_request_event import ServiceRequestEvent
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
@@ -32,9 +33,9 @@ def _lifecycle(event: LifecycleEventType) -> LifecycleEvent:
 # ── Async iterator mock for TypedConsumer ──────────────────────────────
 
 class _MockTypedIter:
-    """Fake async iterator yielding (EventType, model, KafkaMessage) tuples."""
+    """Fake async iterator yielding (str, model, KafkaMessage) tuples."""
 
-    def __init__(self, *items: tuple[EventType, BaseModel, KafkaMessage]) -> None:
+    def __init__(self, *items: tuple[str, BaseModel, KafkaMessage]) -> None:
         self._items = list(items)
         self._idx = 0
         self.committed: list[KafkaMessage] = []
@@ -43,7 +44,7 @@ class _MockTypedIter:
     def __aiter__(self) -> _MockTypedIter:
         return self
 
-    async def __anext__(self) -> tuple[EventType, BaseModel, KafkaMessage]:
+    async def __anext__(self) -> tuple[str, BaseModel, KafkaMessage]:
         if self._idx >= len(self._items):
             raise StopAsyncIteration
         item = self._items[self._idx]
@@ -60,35 +61,35 @@ class _MockTypedIter:
 
 @pytest.mark.asyncio
 async def test_dispatches_to_correct_handler() -> None:
-    """Two handlers for same event_type but different filters → correct one called."""
-    ready_model = _lifecycle(LifecycleEventType.READY)
-    hb_model = _lifecycle(LifecycleEventType.HEARTBEAT)
+    """Two handlers for different event types → each dispatched for its own type."""
+    lifecycle_model = _lifecycle(LifecycleEventType.READY)
+    request_model = ServiceRequestEvent(service="get_balance")
     raw = _raw_msg()
 
-    ready_called = False
-    hb_called = False
+    lifecycle_called = False
+    request_called = False
 
-    async def on_ready(_m: LifecycleEvent, _r: KafkaMessage) -> None:
-        nonlocal ready_called
-        ready_called = True
+    async def on_lifecycle(_m: LifecycleEvent, _r: KafkaMessage) -> None:
+        nonlocal lifecycle_called
+        lifecycle_called = True
 
-    async def on_heartbeat(_m: LifecycleEvent, _r: KafkaMessage) -> None:
-        nonlocal hb_called
-        hb_called = True
+    async def on_request(_m: ServiceRequestEvent, _r: KafkaMessage) -> None:
+        nonlocal request_called
+        request_called = True
 
     router = EventRouter("t", _settings(), group_suffix="t1")
-    router.on(LifecycleEvent, on_ready, filter_fn=lambda m, _: m.event == LifecycleEventType.READY)
-    router.on(LifecycleEvent, on_heartbeat, filter_fn=lambda m, _: m.event == LifecycleEventType.HEARTBEAT)
+    router.on(LifecycleEvent, on_lifecycle)
+    router.on(ServiceRequestEvent, on_request)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, ready_model, raw),
-        (EventType.SERVICE_LIFECYCLE, hb_model, raw),
+        (str(EventType.SERVICE_LIFECYCLE), lifecycle_model, raw),
+        (str(EventType.SERVICE_REQUEST), request_model, raw),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()
 
-    assert ready_called
-    assert hb_called
+    assert lifecycle_called
+    assert request_called
 
 
 @pytest.mark.asyncio
@@ -104,7 +105,7 @@ async def test_filter_fn_skips_non_matching() -> None:
     router.on(LifecycleEvent, handler, filter_fn=lambda _m, _r: False)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, _lifecycle(LifecycleEventType.READY), _raw_msg()),
+        (str(EventType.SERVICE_LIFECYCLE), _lifecycle(LifecycleEventType.READY), _raw_msg()),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()
@@ -128,7 +129,7 @@ async def test_auto_commit_true_commits_after_handler() -> None:
     router.on(LifecycleEvent, handler)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, _lifecycle(LifecycleEventType.READY), raw),
+        (str(EventType.SERVICE_LIFECYCLE), _lifecycle(LifecycleEventType.READY), raw),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()
@@ -149,7 +150,7 @@ async def test_auto_commit_false_does_not_commit() -> None:
     router.on(LifecycleEvent, handler)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, _lifecycle(LifecycleEventType.READY), raw),
+        (str(EventType.SERVICE_LIFECYCLE), _lifecycle(LifecycleEventType.READY), raw),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()
@@ -169,7 +170,7 @@ async def test_manual_commit_with_auto_commit_false() -> None:
     router.on(LifecycleEvent, handler)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, _lifecycle(LifecycleEventType.READY), raw),
+        (str(EventType.SERVICE_LIFECYCLE), _lifecycle(LifecycleEventType.READY), raw),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()
@@ -194,7 +195,7 @@ async def test_handler_exception_skips_commit() -> None:
     router.on(LifecycleEvent, failing_handler)
 
     mock_iter = _MockTypedIter(
-        (EventType.SERVICE_LIFECYCLE, _lifecycle(LifecycleEventType.READY), raw),
+        (str(EventType.SERVICE_LIFECYCLE), _lifecycle(LifecycleEventType.READY), raw),
     )
     with patch("tradingcz.sdk.messaging.router.TypedConsumer", return_value=mock_iter):
         await router.run()  # should not raise
