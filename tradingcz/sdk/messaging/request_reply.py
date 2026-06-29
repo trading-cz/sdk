@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import cast
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -44,6 +45,16 @@ class RequestReply:
         self._listen_task: asyncio.Task[None] | None = None
         self._group_suffix = group_suffix
         self._correlation_id: str = ""
+
+    # ------------------------------------------------------------------
+    # Type registry
+    # ------------------------------------------------------------------
+
+    def register_type(self, model_class: type[BaseModel]) -> None:
+        """Register a response type that this RequestReply can receive."""
+        key = str(EventRegistry.event_type_for(model_class))
+        self._response_types[key] = model_class
+        self._response_event_types.add(key)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -102,7 +113,7 @@ class RequestReply:
         await self._typed_producer.flush()
 
         future: asyncio.Future[Resp] = asyncio.get_running_loop().create_future()
-        self._pending[self._correlation_id] = future
+        self._pending[self._correlation_id] = cast(asyncio.Future[BaseModel], future)
 
         try:
             async with asyncio.timeout(timeout):

@@ -127,7 +127,7 @@ class OrderClient:
         """Return a single order by ID, or None."""
         orders = await self.get_orders(timeout=timeout)
         for o in orders:
-            if o.order_id == order_id:
+            if str(o.id) == order_id:
                 return o
         return None
 
