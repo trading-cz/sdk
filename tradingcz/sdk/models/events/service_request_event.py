@@ -17,7 +17,5 @@ class ServiceRequestEvent(BaseModel):
     :class:`~tradingcz.sdk.messaging.request_reply.RequestReply`.
     """
 
-    event_id: UUID = Field(
-        default_factory=uuid4, description="Unique identifier for the service request"
-    )
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the service request")
     service: str = Field(..., description="Service operation name")

@@ -10,12 +10,21 @@ For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegi
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from tradingcz.sdk.exceptions import RegistryError
 from tradingcz.sdk.lang.model_registry import ModelRegistry
-from tradingcz.sdk.models.enums.event import EventType, MarketDataType
+
+# TYPE_CHECKING-only: these are only used in type annotations (decorator
+# signatures, return types, ClassVar parameterisation).  `from __future__
+# import annotations` makes all annotations strings at runtime, so the
+# symbols are never needed at import time.  Keeping them runtime would
+# create a circular import: registry → models.enums.event → models.__init__
+# → models.events.* (all of which import register_event from here).
+if TYPE_CHECKING:
+    from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 
 # ═══════════════════════════════════════════════════════════════════════
 # EventRegistry — wire-protocol dispatch
