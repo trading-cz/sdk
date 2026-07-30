@@ -53,6 +53,7 @@ class EventType(StrEnum):
     # ── Event payload types ──────────────────────────────────────────────
     EXECUTION_REQUEST = "execution_request"
     TRADING_SIGNAL = "trading_signal"
+    SIGNAL_REJECTED = "signal_rejected"
 
     # ── Market data (data topics) ────────────────────────────────────────
     # TODO wrong enum - move somewhere else
