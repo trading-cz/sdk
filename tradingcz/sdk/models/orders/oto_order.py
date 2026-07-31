@@ -5,7 +5,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.sdk.models.enums.order import OrderClass, TimeInForce
 from tradingcz.sdk.models.orders.base_order import BaseOrderRequest
 
 
@@ -16,7 +16,6 @@ class OtoOrderRequest(BaseOrderRequest):
     # Basic fields for entry side - limit is optional
     qty: float | None = Field(default=None)
     notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
     time_in_force: TimeInForce = Field(
         ..., description="Lifecycle of the order: day,  gtc, etc."
     )
