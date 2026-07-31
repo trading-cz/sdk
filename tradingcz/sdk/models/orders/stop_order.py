@@ -2,16 +2,16 @@
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
 from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.sdk.models.orders.base_order import BaseOrderRequest
 
 
-class StopOrderRequest(BaseModel):
+class StopOrderRequest(BaseOrderRequest):
     """Model for Stop Order request"""
 
     # Non-optional fields for stop order
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
     qty: float | None = Field(default=None)
     notional: float | None = Field(default=None)
     side: OrderSide = Field(..., description="Order side, sell or buy")

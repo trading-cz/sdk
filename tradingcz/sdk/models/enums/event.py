@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+from tradingcz.sdk.models.orders.base_order import BaseOrderRequest
 from tradingcz.sdk.models.orders.bracket_order import BracketOrderRequest
 from tradingcz.sdk.models.orders.limit_order import LimitOrderRequest
 from tradingcz.sdk.models.orders.market_order import MarketOrderRequest
