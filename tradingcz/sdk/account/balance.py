@@ -7,8 +7,9 @@ and awaits BalanceResponse.
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import EventType
@@ -33,7 +34,7 @@ class Balance(BaseModel):
 class BalanceResponse(BaseModel):
     """Response to a balance query."""
 
-    event_id: str
+    event_id: UUID = Field(..., description="Unique identifier for this event")
     balance: Balance
 
 

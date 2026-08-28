@@ -6,7 +6,9 @@ and awaits PositionList response.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
 from tradingcz.sdk.models.enums.event import AssetType, EventType
@@ -29,7 +31,7 @@ class Position(BaseModel):
 class PositionList(BaseModel):
     """Response to a get_positions request."""
 
-    event_id: str
+    event_id: UUID = Field(..., description="Unique identifier for this event")
     positions: list[Position]
 
 
@@ -54,9 +56,7 @@ class PositionClient:
         )
         return resp.positions
 
-    async def get_position(
-        self, symbol: str, *, timeout: float = 30.0
-    ) -> Position | None:
+    async def get_position(self, symbol: str, *, timeout: float = 30.0) -> Position | None:
         """Return position for a single symbol, or None."""
         positions = await self.get_positions(timeout=timeout)
         for pos in positions:
