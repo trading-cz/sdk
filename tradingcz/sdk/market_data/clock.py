@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from enum import Enum, StrEnum, auto
 from typing import Protocol
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 

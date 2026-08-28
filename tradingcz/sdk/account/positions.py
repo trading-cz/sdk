@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import AssetType, EventType
+from tradingcz.sdk.models.enums.event import AssetType, EventType, ServiceRequestType
 from tradingcz.sdk.models.events import ServiceRequestEvent
 from tradingcz.sdk.registry import register_event
 
@@ -48,7 +48,7 @@ class PositionClient:
 
     async def get_positions(self, *, timeout: float = 30.0) -> list[Position]:
         """Return all currently open positions."""
-        req = ServiceRequestEvent(service="get_positions")
+        req = ServiceRequestEvent(service=ServiceRequestType.REQUEST_CURRENT_POSITIONS)
         resp = await self._rr.request(
             req,
             response_type=PositionList,
