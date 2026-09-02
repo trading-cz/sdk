@@ -3,19 +3,18 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from tradingcz.sdk.models.enums.order import OrderClass, OrderSide, TimeInForce
+from tradingcz.sdk.models.enums.order import OrderClass, TimeInForce
+from tradingcz.sdk.models.orders.base_order import BaseOrderRequest
 
 
-class BracketOrderRequest(BaseModel):
+class BracketOrderRequest(BaseOrderRequest):
     """Model for Bracket Order request. Also called OTOCO: OTO where exit side is OCO"""
 
     # Basic fields for entry side - limit is optional
-    symbol: str = Field(..., description="Ticker symbol", min_length=1)
     qty: float | None = Field(default=None)
     notional: float | None = Field(default=None)
-    side: OrderSide = Field(..., description="Order side, sell or buy")
     time_in_force: TimeInForce = Field(
         ..., description="Lifecycle of the order: day,  gtc, etc."
     )
