@@ -10,7 +10,7 @@ For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegi
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel
 
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 # EventRegistry — wire-protocol dispatch
 # ═══════════════════════════════════════════════════════════════════════
 
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 class EventRegistry(ModelRegistry["EventType"]):
     """EventType ↔ Pydantic model.
@@ -81,25 +82,25 @@ class MarketDataRegistry(ModelRegistry["MarketDataType"]):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def register_event(event_type: EventType) -> Callable[[type[BaseModel]], type[BaseModel]]:
+def register_event(event_type: EventType) -> Callable[[type[ModelT]], type[ModelT]]:
     """Decorator: register a model under an EventType.
 
         @register_event(EventType.BAR)
         class Bar(BaseModel): ...
     """
-    def decorator(cls: type[BaseModel]) -> type[BaseModel]:
+    def decorator(cls: type[ModelT]) -> type[ModelT]:
         EventRegistry.register(event_type, cls)
         return cls
     return decorator
 
 
-def register_market_data(data_type: MarketDataType) -> Callable[[type[BaseModel]], type[BaseModel]]:
+def register_market_data(data_type: MarketDataType) -> Callable[[type[ModelT]], type[ModelT]]:
     """Decorator: register a model under a MarketDataType.
 
         @register_market_data(MarketDataType.BARS)
         class Bar(BaseModel): ...
     """
-    def decorator(cls: type[BaseModel]) -> type[BaseModel]:
+    def decorator(cls: type[ModelT]) -> type[ModelT]:
         MarketDataRegistry.register(data_type, cls)
         return cls
     return decorator

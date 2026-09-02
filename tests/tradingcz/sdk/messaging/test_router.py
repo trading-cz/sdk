@@ -9,14 +9,14 @@ import pytest
 from pydantic import BaseModel
 
 from tradingcz.sdk.messaging.router import EventRouter
-from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType
+from tradingcz.sdk.models.enums.event import EventType, LifecycleEventType, ServiceRequestType
 from tradingcz.sdk.models.events.lifecycle_event import LifecycleEvent
 from tradingcz.sdk.models.events.service_request_event import ServiceRequestEvent
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _settings() -> KafkaSettings:
     return KafkaSettings(bootstrap_servers="localhost:9092", consumer_group="test-router")
@@ -31,6 +31,7 @@ def _lifecycle(event: LifecycleEventType) -> LifecycleEvent:
 
 
 # ── Async iterator mock for TypedConsumer ──────────────────────────────
+
 
 class _MockTypedIter:
     """Fake async iterator yielding (str, model, KafkaMessage) tuples."""
@@ -59,11 +60,12 @@ class _MockTypedIter:
 # Test 1 — dispatch by event_type
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_dispatches_to_correct_handler() -> None:
     """Two handlers for different event types → each dispatched for its own type."""
     lifecycle_model = _lifecycle(LifecycleEventType.READY)
-    request_model = ServiceRequestEvent(service="get_balance")
+    request_model = ServiceRequestEvent(service=ServiceRequestType.REQUEST_CASH_BALANCE)
     raw = _raw_msg()
 
     lifecycle_called = False
@@ -116,6 +118,7 @@ async def test_filter_fn_skips_non_matching() -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # Test 2 — auto_commit
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_auto_commit_true_commits_after_handler() -> None:
@@ -183,6 +186,7 @@ async def test_manual_commit_with_auto_commit_false() -> None:
 # Test 3 — handler exception → no commit
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_handler_exception_skips_commit() -> None:
     """Handler raises → exception swallowed, commit NOT called."""
@@ -206,6 +210,7 @@ async def test_handler_exception_skips_commit() -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # Test 4 — on_error callback
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_on_error_callback_passed_to_typed_consumer() -> None:

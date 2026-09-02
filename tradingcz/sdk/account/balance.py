@@ -7,11 +7,12 @@ and awaits BalanceResponse.
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.event import EventType, ServiceRequestType
 from tradingcz.sdk.models.events import ServiceRequestEvent
 from tradingcz.sdk.registry import register_event
 
@@ -33,7 +34,7 @@ class Balance(BaseModel):
 class BalanceResponse(BaseModel):
     """Response to a balance query."""
 
-    event_id: str
+    event_id: UUID = Field(..., description="Unique identifier for this event")
     balance: Balance
 
 
@@ -51,7 +52,7 @@ class BalanceClient:
     async def get_balance(self, *, timeout: float = 30.0) -> Balance:
         """Return current account balance."""
         logger.debug("BalanceClient: get_balance")
-        req = ServiceRequestEvent(service="get_balance")
+        req = ServiceRequestEvent(service=ServiceRequestType.REQUEST_CASH_BALANCE)
         resp = await self._rr.request(
             req,
             response_type=BalanceResponse,

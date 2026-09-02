@@ -14,7 +14,7 @@ from uuid import UUID
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.messaging.request_reply import RequestReply
-from tradingcz.sdk.models.enums.event import EventType
+from tradingcz.sdk.models.enums.event import EventType, ServiceRequestType
 from tradingcz.sdk.models.enums.order import (
     OrderClass,
     OrderSide,
@@ -110,7 +110,7 @@ class OrderClient:
         """Return orders, optionally filtered."""
         logger.debug("OrderClient: get_orders status=%s symbol=%s", status, symbol)
         req = ServiceRequestEvent(
-            service="get_orders",
+            service=ServiceRequestType.REQUEST_ORDERS_FOR_EVENT,
             symbol=symbol,
             order_status=status,
         )
@@ -121,9 +121,7 @@ class OrderClient:
         )
         return resp.orders
 
-    async def get_order_status(
-        self, order_id: str, *, timeout: float = 30.0
-    ) -> OrderSummary | None:
+    async def get_order_status(self, order_id: str, *, timeout: float = 30.0) -> OrderSummary | None:
         """Return a single order by ID, or None."""
         orders = await self.get_orders(timeout=timeout)
         for o in orders:

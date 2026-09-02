@@ -43,13 +43,14 @@ class EventType(StrEnum):
     DATA_REQUEST = "data_request"
     DATA_READY = "data_ready"
     DATA_ERROR = "data_error"
-    SERVICE_REQUEST = "service_request" # executor
+    SERVICE_REQUEST = "service_request"  # executor
     SERVICE_LIFECYCLE = "service_lifecycle"
 
     # ── Service responses (event topic) ──────────────────────────────────
     POSITION_RESPONSE = "position_response"
     BALANCE_RESPONSE = "balance_response"
     ORDER_RESPONSE = "order_response"
+    TIME_DATA_RESPONSE = "time_data_response"
 
     # ── Event payload types ──────────────────────────────────────────────
     EXECUTION_REQUEST = "execution_request"
@@ -79,6 +80,7 @@ class ServiceRequestType(StrEnum):
     REQUEST_CURRENT_POSITIONS = "request_current_positions"
     REQUEST_ORDERS_FOR_EVENT = "request_orders_for_event"
     REQUEST_CASH_BALANCE = "request_cash_balance"
+    REQUEST_TIME_DATA = "request_time_data"
 
 
 type OrderRequest = (
@@ -90,6 +92,7 @@ type OrderRequest = (
     | StopOrderRequest
     | TrailingStopOrderRequest
 )
+
 
 class DataRequestType(StrEnum):
     """``DataRequest.type`` and ``DataReady.type`` — the kind of data-plane operation.
