@@ -67,14 +67,6 @@ class TransportMarketClockProvider(MarketClockProvider):
         resp: TimeDataResponse = await self._rr.request(req=req, response_type=TimeDataResponse)
         return resp.time_data
 
-    def __init__(
-        self,
-        *,
-        rr: RequestReply,
-        default_timeout: float = 30.0,
-    ) -> None:
-        self._rr = rr
-        self._default_timeout = default_timeout
 
 class WarningEventTriggerCondition(StrEnum):
     MINUTES_BEFORE_CLOSE = "MINUTES_BEFORE_CLOSE"
