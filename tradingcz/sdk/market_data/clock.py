@@ -114,12 +114,6 @@ class TimeKeeper:
         """Public check indicating whether cached time data needs a refresh."""
         return self._get_stale_reason(self._last_sync_monotonic) != TimeDataStaleReason.NOT_STALE
 
-    @property
-    def seconds_until_market_close(self) -> int:
-        """Calculate the number of seconds until the market closes."""
-        time_to_close = self.active_time_data.next_market_close - self.market_time_utc
-        return int(time_to_close.total_seconds())
-
     async def start_timekeeping(self) -> None:
         """Start the time keeper heartbeat."""
         self._task = asyncio.create_task(self._run_loop(), name="time-keeper-heartbeat")
