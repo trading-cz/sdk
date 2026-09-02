@@ -91,3 +91,9 @@ disable = [
 [tool.coverage.run]
 source = ["tradingcz"]
 relative_files = true
+
+[tool.coverage.paths]
+source = [
+    "tradingcz",
+    "*/site-packages/tradingcz",
+]
