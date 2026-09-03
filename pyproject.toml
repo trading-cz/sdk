@@ -88,13 +88,4 @@ disable = [
     "C0116",  # missing-function-docstring
     "C0301",  # line-too-long
 ]
-
-[tool.coverage.run]
-source = ["tradingcz"]
-relative_files = true
-
-[tool.coverage.paths]
-source = [
-    "tradingcz",
-    "*/site-packages/tradingcz",
-]
+ 
