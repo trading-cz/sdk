@@ -50,6 +50,10 @@ class SingleTypeConsumer[T: BaseModel]:
     async def commit(self, msg: KafkaMessage) -> None:
         await self._inner.commit(msg)
 
+    async def close(self) -> None:
+        """Close the underlying TypedConsumer."""
+        await self._inner.close()
+
     async def __aiter__(self) -> AsyncIterator[tuple[str, T, KafkaMessage]]:
         async for event_type, model, raw in self._inner:
             if model is None:
