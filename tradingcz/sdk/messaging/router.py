@@ -122,8 +122,10 @@ class EventRouter:
                     "Timed out after %.0fs waiting for consumer loop to cancel",
                     cancel_timeout,
                 )
+        if self._consumer is not None:
+            await self._consumer.close()
+            self._consumer = None
         self._run_task = None
-        self._consumer = None
 
     async def __aenter__(self) -> EventRouter:
         await self.start()

@@ -65,6 +65,12 @@ class TypedConsumer:
             raise ServiceNotReadyError("commit() called outside iteration")
         await self._session.commit(msg)
 
+    async def close(self) -> None:
+        """Close the underlying TransportConsumer session if active."""
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
+
     async def __aiter__(self) -> AsyncIterator[tuple[str, BaseModel | None, KafkaMessage]]:
         self._session = TransportConsumer(
             self._topic,
@@ -75,21 +81,24 @@ class TypedConsumer:
             batch_size=self._batch_size,
             auto_commit=self._auto_commit,
         )
-        async for msg in self._session:
-            # ── Pre-dispatch filters (skip before parse, saves CPU) ──
-            if self._key_filter is not None and not self._key_filter(msg.key):
-                continue
-            if self._header_filter is not None and not self._header_filter(msg.headers):
-                continue
-            # ── Dispatch ──
-            try:
-                result = self._dispatch(msg)
-            except SdkError:
-                await self._notify_error(msg)
-                continue
-            event_type, model = result
-            yield event_type, model, msg
-            await self._commit_if_enabled(msg)
+        try:
+            async for msg in self._session:
+                # ── Pre-dispatch filters (skip before parse, saves CPU) ──
+                if self._key_filter is not None and not self._key_filter(msg.key):
+                    continue
+                if self._header_filter is not None and not self._header_filter(msg.headers):
+                    continue
+                # ── Dispatch ──
+                try:
+                    result = self._dispatch(msg)
+                except SdkError:
+                    await self._notify_error(msg)
+                    continue
+                event_type, model = result
+                yield event_type, model, msg
+                await self._commit_if_enabled(msg)
+        finally:
+            await self.close()
 
     # ── Dispatch ─────────────────────────────────────────────────────────
 

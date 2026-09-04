@@ -46,7 +46,9 @@ class TransportConsumer:
         # Own the executor so we can shut it down after consumer close.
         # AIOConsumer creates its own ThreadPoolExecutor if none is passed,
         # but never shuts it down — causing segfault on Python 3.14.
-        self._executor = ThreadPoolExecutor(max_workers=2)
+        # max_workers=1 ensures poll() and close() never run concurrently on
+        # librdkafka's consumer handle, preventing access violations on cancel.
+        self._executor = ThreadPoolExecutor(max_workers=1)
         self._consumer = AIOConsumer(config, executor=self._executor)
         self._subscribed = False
         self._closed = False
@@ -88,11 +90,7 @@ class TransportConsumer:
                 for msg in await self.poll():
                     yield msg
         finally:
-            await self._consumer.close()
-            self._closed = True
-            # Executor shutdown is handled by close() (wait=True).
-            # Calling shutdown(wait=False) here crashes on Python 3.14 +
-            # librdkafka 2.14.x (SIGABRT in ThreadPoolExecutor).
+            await self.close()
 
     async def commit(self, msg: KafkaMessage) -> None:
         """Commit a message's offset.  Must be called during iteration."""
@@ -102,7 +100,8 @@ class TransportConsumer:
         if not self._closed:
             await self._consumer.close()
             self._closed = True
-            self._executor.shutdown(wait=True)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: self._executor.shutdown(wait=True))
             logger.debug("TransportConsumer executor shut down")
 
     # ── Internal ─────────────────────────────────────────────────────────
