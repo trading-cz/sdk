@@ -39,6 +39,7 @@ class TransportConsumer:
         self._batch_size = batch_size
 
         group_id = f"{self._settings.consumer_group}-{self._topic}-{group_suffix}"
+        self._group_id = group_id
         config = self._settings.consumer_config(group_id=group_id)
         if auto_offset_reset is not None:
             config["auto.offset.reset"] = auto_offset_reset
@@ -78,7 +79,9 @@ class TransportConsumer:
             if msg.error():
                 await self._handle_error(msg)
                 continue
-            result.append(self._build_message(msg))
+            kmsg = self._build_message(msg)
+            logger.debug("TransportConsumer receive: topic=%s partition=%d offset=%d key=%r size=%dB", kmsg.topic, kmsg.partition, kmsg.offset, kmsg.key, len(kmsg.payload))
+            result.append(kmsg)
 
         return result
 
@@ -100,9 +103,10 @@ class TransportConsumer:
         if not self._closed:
             await self._consumer.close()
             self._closed = True
+            logger.info("TransportConsumer closed: topic=%s group=%s", self._topic, self._group_id)
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, lambda: self._executor.shutdown(wait=True))
-            logger.debug("TransportConsumer executor shut down")
+            logger.debug("TransportConsumer executor shutdown: topic=%s", self._topic)
 
     # ── Internal ─────────────────────────────────────────────────────────
 
@@ -110,6 +114,7 @@ class TransportConsumer:
         if not self._subscribed:
             await self._consumer.subscribe([self._topic])
             self._subscribed = True
+            logger.info("TransportConsumer subscribed: topic=%s group=%s", self._topic, self._group_id)
 
     async def _handle_error(self, msg: Any) -> None:
         """Log, invoke on_error callback, and conditionally skip past a corrupt Kafka message."""

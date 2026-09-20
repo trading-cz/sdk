@@ -185,6 +185,7 @@ class EventRouter:
         if not self._handlers:
             logger.warning("EventRouter.run() started with no handlers registered")
             return
+        logger.info("EventRouter started: topic=%s handlers=%d", self._topic, len(self._handlers))
 
         types: dict[str, type[BaseModel]] = {
             str(reg.msg_type): reg.model_class
@@ -210,6 +211,7 @@ class EventRouter:
                 continue
             if reg.filter_fn is not None and not reg.filter_fn(model, raw):
                 continue
+            logger.debug("EventRouter dispatch: event_type=%s handler=%s offset=%d", msg_type, reg.handler.__name__, raw.offset)
             if reg.spawn_task:
                 if self._semaphore:
                     await self._semaphore.acquire()

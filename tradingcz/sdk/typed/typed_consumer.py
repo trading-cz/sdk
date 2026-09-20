@@ -104,6 +104,7 @@ class TypedConsumer:
 
     def _dispatch(self, msg: KafkaMessage) -> tuple[str, BaseModel | None]:
         event_type = msg.headers.get(Header.EVENT_TYPE, "")
+        logger.debug("TypedConsumer dispatch: event_type=%s topic=%s offset=%d", event_type, self._topic, msg.offset)
         if not event_type:
             raise MessageTypeError(f"Missing event_type header on {self._topic} (offset={msg.offset} key={msg.key!r})")
 
