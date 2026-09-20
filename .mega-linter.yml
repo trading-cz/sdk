@@ -40,6 +40,9 @@ DISABLE_LINTERS:
 
 # ActionLint configuration for workflow validation
 ACTION_ACTIONLINT_CONFIG_FILE: .github/actionlint.yaml
+# actionlint 1.7.12 does not know the ubuntu-26.04 label yet (false positive).
+# Remove once upstream actionlint/megalinter updates its runner label list.
+ACTION_ACTIONLINT_ARGUMENTS: "-ignore ubuntu-26.04"
 
 # Python configuration
 # pylint: Use .pylintrc (INI format) if available, otherwise default
