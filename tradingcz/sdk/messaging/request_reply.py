@@ -111,6 +111,7 @@ class RequestReply:
         headers = EventHeader(event_type=request_event_type, source_app=self._service_id, event_id=self._correlation_id)
         await self._typed_producer.send(req, key=key, headers=headers)
         await self._typed_producer.flush()
+        logger.debug("RequestReply request: event_type=%s event_id=%s topic=%s", request_event_type, self._correlation_id, self._typed_producer.topic)
 
         future: asyncio.Future[Resp] = asyncio.get_running_loop().create_future()
         self._pending[self._correlation_id] = cast(asyncio.Future[BaseModel], future)
@@ -151,6 +152,7 @@ class RequestReply:
                     continue
                 future = self._pending.get(event_id)
                 if future is not None and not future.done():
+                    logger.debug("RequestReply response: event_type=%s event_id=%s", event_type, event_id)
                     future.set_result(model)
         except asyncio.CancelledError:
             logger.info("RequestReply listener cancelled")

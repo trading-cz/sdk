@@ -64,6 +64,7 @@ class TransportProducer:
             )
 
         await asyncio.to_thread(_produce)
+        logger.debug("TransportProducer send: topic=%s key=%r headers=%d size=%dB", topic, key or "", len(header_list or ()), len(payload))
 
     async def flush(self, timeout: float = 30.0) -> None:
         """Wait for all queued messages to be delivered to Kafka."""
