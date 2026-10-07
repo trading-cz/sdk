@@ -125,19 +125,13 @@ class _DataTransport:
         expected = resp.record_count or 0
         correlation_id = self._rr.correlation_id
 
-        consumer = TransportConsumer(resp.data_topic, self._settings, f"data-{uuid.uuid4().hex[:8]}")
+        consumer = TransportConsumer(resp.data_topic, self._settings, f"data-{uuid.uuid4().hex[:8]}", auto_offset_reset="earliest")
         try:
             async for msg in consumer:
                 if msg.headers.get(Header.EVENT_ID) != correlation_id:
                     continue
                 seq = msg.headers.get(Header.SEQUENCE, "")
-                if seq and self._dedup.is_duplicate(
-                    msg.headers.get(
-                        Header.SOURCE,
-                        msg.headers.get(Header.SOURCE_APP, ""),
-                    ),
-                    seq,
-                ):
+                if seq and self._dedup.is_duplicate(msg.headers.get(Header.SOURCE_APP, ""), seq):
                     continue
                 try:
                     item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
@@ -195,7 +189,7 @@ class _DataTransport:
                 async for msg in consumer:
                     seq = msg.headers.get(Header.SEQUENCE, "")
                     if seq and self._dedup.is_duplicate(
-                        msg.headers.get(Header.SOURCE, msg.headers.get(Header.SOURCE_APP, "")),
+                        msg.headers.get(Header.SOURCE_APP, ""),
                         seq,
                     ):
                         continue

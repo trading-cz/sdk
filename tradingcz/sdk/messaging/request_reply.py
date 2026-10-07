@@ -107,16 +107,16 @@ class RequestReply:
         request_event_type = EventRegistry.event_type_for(req)
         _ = response_type  # used only for type-checker generic binding
 
-        key = KafkaKey(value=f"{request_event_type.value}:{self._service_id}:{self._correlation_id}")
-        headers = EventHeader(event_type=request_event_type, source_app=self._service_id, event_id=self._correlation_id)
-        await self._typed_producer.send(req, key=key, headers=headers)
-        await self._typed_producer.flush()
-        logger.debug("RequestReply request: event_type=%s event_id=%s topic=%s", request_event_type, self._correlation_id, self._typed_producer.topic)
-
         future: asyncio.Future[Resp] = asyncio.get_running_loop().create_future()
         self._pending[self._correlation_id] = cast(asyncio.Future[BaseModel], future)
 
         try:
+            key = KafkaKey(value=f"{request_event_type.value}:{self._service_id}:{self._correlation_id}")
+            headers = EventHeader(event_type=request_event_type, source_app=self._service_id, event_id=self._correlation_id)
+            await self._typed_producer.send(req, key=key, headers=headers)
+            await self._typed_producer.flush()
+            logger.debug("RequestReply request: event_type=%s event_id=%s topic=%s", request_event_type, self._correlation_id, self._typed_producer.topic)
+
             async with asyncio.timeout(timeout):
                 return await future
         except TimeoutError as e:
@@ -138,6 +138,8 @@ class RequestReply:
             types=self._response_types,
             group_suffix=self._group_suffix,
             auto_commit=True,
+            # A new group on "latest" skips replies produced before Kafka positions it.
+            auto_offset_reset="earliest",
         )
         try:
             async for event_type, model, _raw in consumer:
