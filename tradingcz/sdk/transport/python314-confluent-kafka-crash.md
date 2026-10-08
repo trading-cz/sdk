@@ -1,6 +1,7 @@
 # Python 3.14 + confluent-kafka Segfault/Abort on Cleanup
 
-> **Status**: Workaround applied (2026-06-20)  
+> **Status**: Resolved — workarounds removed after upgrading to confluent-kafka 2.16.0 (2026-10-07)  
+> **Real root cause**: `close()` ran on a second executor worker while a cancelled `poll()`/`consume()` was still running. 2.16.0 serializes cross-thread `Consumer` calls and `AIOConsumer.close()` shuts down its own executor; a retest on Python 3.14.4/Linux passed every scenario below.  
 > **confluent-kafka tested**: 2.14.0, 2.14.2 — **both affected**  
 > **librdkafka**: 2.14.x (bundled)  
 > **Python**: 3.14.4  

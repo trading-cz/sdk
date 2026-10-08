@@ -1,9 +1,7 @@
 """TransportConsumer — async Kafka consumer for a single topic."""
 
-import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from confluent_kafka import TopicPartition
@@ -32,50 +30,29 @@ class TransportConsumer:
         on_error: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> None:
         self._topic = topic
-        self._settings = settings
         self._on_error = on_error
         self._auto_commit = auto_commit
-        self._poll_timeout_ms = poll_timeout_ms
-        self._batch_size = batch_size
+        self._batch_size = batch_size if batch_size is not None else settings.consumer_batch_size
+        self._poll_timeout_s = (poll_timeout_ms if poll_timeout_ms is not None else settings.consumer_poll_timeout_ms) / 1000.0
 
-        group_id = f"{self._settings.consumer_group}-{self._topic}-{group_suffix}"
-        self._group_id = group_id
-        config = self._settings.consumer_config(group_id=group_id)
+        self._group_id = f"{settings.consumer_group}-{topic}-{group_suffix}"
+        config = settings.consumer_config(group_id=self._group_id)
         if auto_offset_reset is not None:
             config["auto.offset.reset"] = auto_offset_reset
 
-        # Own the executor so we can shut it down after consumer close.
-        # AIOConsumer creates its own ThreadPoolExecutor if none is passed,
-        # but never shuts it down — causing segfault on Python 3.14.
-        # max_workers=1 ensures poll() and close() never run concurrently on
-        # librdkafka's consumer handle, preventing access violations on cancel.
-        self._executor = ThreadPoolExecutor(max_workers=1)
-        self._consumer = AIOConsumer(config, executor=self._executor)
+        self._consumer = AIOConsumer(config)
         self._subscribed = False
         self._closed = False
 
     # ── Core API ────────────────────────────────────────────────────────
 
     async def poll(self) -> list[KafkaMessage]:
-        await self._ensure_subscribed()
         if self._closed:
             raise TransportError("TransportConsumer is closed")
-
-        batch_size = self._batch_size if self._batch_size is not None else self._settings.consumer_batch_size
-        timeout_s = (self._poll_timeout_ms if self._poll_timeout_ms is not None else self._settings.consumer_poll_timeout_ms) / 1000.0
+        await self._ensure_subscribed()
 
         result: list[KafkaMessage] = []
-        # Use poll() (single message) instead of consume() (batch) to avoid
-        # a segfault in rd_kafka_consume_batch_queue on Python 3.14 +
-        # librdkafka 2.14.x.  Individual poll() calls are safe.
-        deadline = asyncio.get_running_loop().time() + timeout_s
-        while len(result) < batch_size:
-            remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
-                break
-            msg = await self._consumer.poll(min(remaining, 1.0))
-            if msg is None:
-                continue
+        for msg in await self._consumer.consume(num_messages=self._batch_size, timeout=self._poll_timeout_s):
             if msg.error():
                 await self._handle_error(msg)
                 continue
@@ -87,7 +64,6 @@ class TransportConsumer:
 
     async def __aiter__(self) -> AsyncIterator[KafkaMessage]:
         """Iterate messages forever — polls batches, yields each message."""
-        await self._ensure_subscribed()
         try:
             while True:
                 for msg in await self.poll():
@@ -104,9 +80,6 @@ class TransportConsumer:
             await self._consumer.close()
             self._closed = True
             logger.info("TransportConsumer closed: topic=%s group=%s", self._topic, self._group_id)
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: self._executor.shutdown(wait=True))
-            logger.debug("TransportConsumer executor shutdown: topic=%s", self._topic)
 
     # ── Internal ─────────────────────────────────────────────────────────
 

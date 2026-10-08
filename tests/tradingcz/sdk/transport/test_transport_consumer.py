@@ -23,7 +23,7 @@ def _session(**kwargs: object) -> TransportConsumer:
     s._consumer.commit = AsyncMock()
     s._consumer.close = AsyncMock()
     s._consumer.subscribe = AsyncMock()
-    s._consumer.poll = AsyncMock(return_value=None)  # poll() returns single msg or None
+    s._consumer.consume = AsyncMock(return_value=[])
     s._subscribed = True
     return s
 
@@ -87,12 +87,10 @@ async def test_close() -> None:
 
 @pytest.mark.asyncio
 async def test_poll() -> None:
-    s = _session(batch_size=1)
+    s = _session()
     good = _raw_msg(value=b"ok")
     corrupt = _raw_msg(error=True)
-    # poll() loop calls consumer.poll() one-by-one per message.
-    # corrupt → skipped, good → collected (batch_size=1 → exit).
-    s._consumer.poll = AsyncMock(side_effect=[corrupt, good])
+    s._consumer.consume = AsyncMock(return_value=[corrupt, good])
 
     msgs = await s.poll()
     assert len(msgs) == 1

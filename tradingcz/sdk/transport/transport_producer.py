@@ -85,9 +85,7 @@ class TransportProducer:
                 await self.flush()
             except TransportError:
                 pass  # already closed or delivery failure during shutdown
-            if hasattr(self._producer, "close"):
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, self._producer.close)
+            await asyncio.to_thread(self._producer.close)
             self._closed = True
 
     # ── Delivery callback ────────────────────────────────────────────────
