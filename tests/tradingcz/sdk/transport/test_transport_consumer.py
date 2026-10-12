@@ -4,6 +4,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from confluent_kafka import KafkaError
 
 from tradingcz.sdk.exceptions import TransportError
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
@@ -23,12 +24,13 @@ def _session(**kwargs: object) -> TransportConsumer:
     s._consumer.commit = AsyncMock()
     s._consumer.close = AsyncMock()
     s._consumer.subscribe = AsyncMock()
+    s._consumer.poll = AsyncMock(return_value=None)
     s._consumer.consume = AsyncMock(return_value=[])
     s._subscribed = True
     return s
 
 
-def _raw_msg(*, value: bytes = b'{"x":1}', key: bytes = b"", headers: list[tuple[str, bytes]] | None = None, offset: int = 42, partition: int = 0, topic: str = "test-topic", error: bool = False) -> MagicMock:
+def _raw_msg(*, value: bytes = b'{"x":1}', key: bytes = b"", headers: list[tuple[str, bytes]] | None = None, offset: int | None = 42, partition: int | None = 0, topic: str = "test-topic", error: KafkaError | None = None) -> MagicMock:
     msg = MagicMock()
     msg.error.return_value = error
     msg.value.return_value = value
@@ -55,18 +57,35 @@ def test_build_message() -> None:
 async def test_handle_corrupt_calls_on_error_and_commits() -> None:
     on_error = AsyncMock()
     s = _session(on_error=on_error)
-    raw = _raw_msg(error=True, partition=2, offset=99)
-    raw.error.return_value = "some error"
-    await s._handle_error(raw)
-    on_error.assert_awaited_once_with(2, 99, "some error")
+    error = KafkaError(KafkaError._BAD_MSG, "some error")
+    await s._handle_error(_raw_msg(error=error, partition=2, offset=99))
+    on_error.assert_awaited_once_with(2, 99, str(error))
     s._consumer.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_handle_corrupt_suppresses_callback_failure() -> None:
     s = _session(on_error=AsyncMock(side_effect=RuntimeError("boom")))
-    await s._handle_error(_raw_msg(error=True))
+    await s._handle_error(_raw_msg(error=KafkaError(KafkaError._BAD_MSG)))
     s._consumer.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_error_without_offset_is_not_a_record_and_commits_nothing() -> None:
+    on_error = AsyncMock()
+    s = _session(on_error=on_error)
+    # As librdkafka reports a subscribed topic that does not exist: partition 0, no offset.
+    await s._handle_error(_raw_msg(error=KafkaError(KafkaError.UNKNOWN_TOPIC_OR_PART), partition=0, offset=None))
+    on_error.assert_not_awaited()
+    s._consumer.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_fatal_error_raises() -> None:
+    s = _session()
+    with pytest.raises(TransportError, match="Fatal"):
+        await s._handle_error(_raw_msg(error=KafkaError(KafkaError._FATAL, "fenced", fatal=True)))
+    s._consumer.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -89,12 +108,22 @@ async def test_close() -> None:
 async def test_poll() -> None:
     s = _session()
     good = _raw_msg(value=b"ok")
-    corrupt = _raw_msg(error=True)
-    s._consumer.consume = AsyncMock(return_value=[corrupt, good])
+    corrupt = _raw_msg(error=KafkaError(KafkaError._BAD_MSG))
+    s._consumer.poll = AsyncMock(return_value=corrupt)
+    s._consumer.consume = AsyncMock(return_value=[good])
 
     msgs = await s.poll()
     assert len(msgs) == 1
     assert msgs[0].payload == b"ok"
+    s._consumer.poll.assert_awaited_once_with(timeout=0.5)
+    s._consumer.consume.assert_awaited_once_with(num_messages=99, timeout=0)  # drain only, never wait for a full batch
+
+
+@pytest.mark.asyncio
+async def test_poll_timeout_returns_empty() -> None:
+    s = _session()
+    assert await s.poll() == []
+    s._consumer.consume.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -103,3 +132,14 @@ async def test_poll_raises_when_closed() -> None:
     s._closed = True
     with pytest.raises(TransportError, match="closed"):
         await s.poll()
+
+
+@pytest.mark.asyncio
+async def test_watermarks() -> None:
+    s = _session()
+    metadata = MagicMock()
+    metadata.topics = {"test-topic": MagicMock(partitions={0: MagicMock(), 1: MagicMock()})}
+    s._consumer.list_topics = AsyncMock(return_value=metadata)
+    s._consumer.get_watermark_offsets = AsyncMock(side_effect=[(0, 10), (3, 3)])
+
+    assert await s.watermarks() == {0: (0, 10), 1: (3, 3)}

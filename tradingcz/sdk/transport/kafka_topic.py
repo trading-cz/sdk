@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class KafkaTopicConfig:
     name: str
     partitions: int = 5
-    replication_factor: int = 2
+    replication_factor: int | None = None  # None: KafkaSettings.default_replication_factor
     retention_ms: int = 259_200_000  # 3 days
     cleanup_policy: str = "delete"
 
@@ -70,11 +70,11 @@ class KafkaTopicAdmin:
         if cp:
             topic_config["cleanup.policy"] = cp
 
-        new_topic = NewTopic(name, num_partitions=partitions, replication_factor=rf, config=topic_config)
+        new_topic = NewTopic(name, num_partitions=partitions, replication_factor=rf if rf is not None else -1, config=topic_config)  # -1: broker default
         futures = admin.create_topics([new_topic])
         for topic, future in futures.items():
             try:
-                future.result()
+                await asyncio.wrap_future(future)
                 logger.info("Created topic '%s'", topic)
             except KafkaException as exc:
                 if exc.args[0].code() == KafkaError.TOPIC_ALREADY_EXISTS:

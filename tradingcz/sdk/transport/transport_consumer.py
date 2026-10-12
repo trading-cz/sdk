@@ -7,7 +7,7 @@ from typing import Any
 from confluent_kafka import TopicPartition
 from confluent_kafka.aio import AIOConsumer
 
-from tradingcz.sdk.exceptions import TransportError
+from tradingcz.sdk.exceptions import TransportError, TransportTimeoutError
 from tradingcz.sdk.transport.kafka_message import KafkaMessage
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 
@@ -51,8 +51,14 @@ class TransportConsumer:
             raise TransportError("TransportConsumer is closed")
         await self._ensure_subscribed()
 
+        # consume() waits until the batch is full or the timeout expires; poll() returns on the first message.
+        first = await self._consumer.poll(timeout=self._poll_timeout_s)
+        if first is None:
+            return []
+        rest = await self._consumer.consume(num_messages=self._batch_size - 1, timeout=0) if self._batch_size > 1 else []
+
         result: list[KafkaMessage] = []
-        for msg in await self._consumer.consume(num_messages=self._batch_size, timeout=self._poll_timeout_s):
+        for msg in (first, *rest):
             if msg.error():
                 await self._handle_error(msg)
                 continue
@@ -75,6 +81,17 @@ class TransportConsumer:
         """Commit a message's offset.  Must be called during iteration."""
         await self._commit_offset(msg.topic, msg.partition, msg.offset + 1)
 
+    async def watermarks(self) -> dict[int, tuple[int, int]]:
+        """Return ``{partition: (low, high)}`` of the topic now; ``high`` is the offset after the last stored record."""
+        metadata = await self._consumer.list_topics(self._topic, timeout=10)
+        result: dict[int, tuple[int, int]] = {}
+        for partition in metadata.topics[self._topic].partitions:
+            offsets = await self._consumer.get_watermark_offsets(TopicPartition(self._topic, partition), timeout=10)
+            if offsets is None:
+                raise TransportTimeoutError(f"Timed out reading watermarks of {self._topic} [{partition}]")
+            result[partition] = offsets
+        return result
+
     async def close(self) -> None:
         if not self._closed:
             await self._consumer.close()
@@ -91,10 +108,15 @@ class TransportConsumer:
 
     async def _handle_error(self, msg: Any) -> None:
         """Log, invoke on_error callback, and conditionally skip past a corrupt Kafka message."""
+        err = msg.error()
+        if err.fatal():
+            raise TransportError(f"Fatal Kafka consumer error on {self._topic}: {err}")
         topic = msg.topic() or self._topic
-        partition = msg.partition() or 0
-        offset = msg.offset() or 0
-        error_str = str(msg.error())
+        partition, offset = msg.partition(), msg.offset()
+        if partition is None or offset is None:  # client or topic-level error, not a record: nothing to skip
+            logger.warning("Kafka consumer error on %s: %s", topic, err)
+            return
+        error_str = str(err)
         logger.error("Kafka consumer error on %s [%d] offset %s: %s", topic, partition, offset, error_str)
         if self._on_error is not None:
             try:

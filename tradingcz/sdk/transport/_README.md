@@ -94,7 +94,7 @@ producer = TransportProducer(settings, on_error=on_error)
 - Wraps `confluent_kafka.Producer` (sync) with `run_in_executor` for async
 - `flush()` blocks until all messages are delivered or timeout
 - `close()` flushes pending messages then releases the producer; use-after-close raises `RuntimeError`
-- Delivery errors are reported synchronously via the ``on_error`` callback (runs on librdkafka thread)
+- Delivery errors are reported via the ``on_error`` callback, which runs on the worker thread serving delivery reports inside ``send()``/``flush()``
 - One `TransportProducer` per process (shared across all channels)
 
 ## KafkaTopicAdmin
@@ -111,7 +111,6 @@ async with KafkaTopicAdmin(settings) as admin:
     await admin.ensure(
         "dev-stock-market-stream-data",
         num_partitions=5,
-        replication_factor=2,
         retention_ms=259_200_000,  # 3 days
         cleanup_policy="delete",
     )
