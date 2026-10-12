@@ -39,6 +39,7 @@ class LokiJSONFormatter(logging.Formatter):
 
 
 _DEFAULT_APP_PREFIXES: tuple[str, ...] = ("tradingcz", "__main__")
+_HANDLER_NAME = "tradingcz"  # marks the root handlers setup_logging() owns and replaces
 
 
 def setup_logging(
@@ -79,7 +80,12 @@ def setup_logging(
     for prefix in app_prefixes:
         logging.getLogger(prefix).setLevel(app_level_value)
 
+    for handler in [h for h in root_logger.handlers if h.get_name() == _HANDLER_NAME]:
+        root_logger.removeHandler(handler)
+        handler.close()
+
     stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.set_name(_HANDLER_NAME)
     stdout_handler.setFormatter(formatter)
     root_logger.addHandler(stdout_handler)
 
@@ -91,10 +97,10 @@ def setup_logging(
     # ── Optional file logging (local dev) ────────────────────────────
     if log_file is not None:
         file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.set_name(_HANDLER_NAME)
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.DEBUG)
         root_logger.addHandler(file_handler)
-        logging.getLogger("py.warnings").addHandler(file_handler)
 
 
 def _handle_exception(
