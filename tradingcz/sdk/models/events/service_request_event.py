@@ -10,8 +10,8 @@ from tradingcz.sdk.registry import register_event
 class ServiceRequestEvent(BaseModel):
     """General-purpose request to the executor/risk service.
 
-    The ``service`` field names the operation (e.g. ``"get_balance"``,
-    ``"get_orders"``, ``"get_positions"``).
+    The ``service`` field names the operation (a :class:`ServiceRequestType`,
+    e.g. ``REQUEST_CASH_BALANCE``).
 
     Correlation is handled by the transport layer — see
     :class:`~tradingcz.sdk.messaging.request_reply.RequestReply`.

@@ -72,10 +72,10 @@ async def main():
     # ── RequestReply + market data transport ──────────────
     rr = RequestReply(
         producer=TypedProducer(producer, events_topic),
-        topic=events_topic,
         settings=settings,
         service_id=service_id,
         group_suffix="svc-reply",
+        response_types=[],  # clients register their reply types
     )
     await rr.start()
     transport = _DataTransport(
