@@ -4,7 +4,7 @@
 * :class:`MarketDataRegistry` — ``MarketDataType`` ↔ Pydantic model (stream topic routing)
 
 For the generic base class see :class:`tradingcz.sdk.lang.model_registry.ModelRegistry`.
-For runtime factory dispatch see :class:`tradingcz.sdk.lang.registry.FactoryRegistry`.
+For runtime factory dispatch see :class:`tradingcz.sdk.lang.factory_registry.FactoryRegistry`.
 """
 
 from __future__ import annotations

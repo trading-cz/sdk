@@ -9,7 +9,6 @@ Pure Python utilities — no Kafka, no I/O. Used across all layers.
 | `Lazy[T]` | Descriptor — init value on first access (used by `KafkaTransport._producer`) |
 | `FactoryRegistry[K, V]` | Decorator-based IoC registry — key → (class, factory) |
 | `ModelRegistry[K]` | Decorator-based type registry — bidirectional key ↔ Pydantic model |
-| `Retry` | Async retry wrapper — call any operation with retries |
 | `setup_shutdown_handlers` | Register SIGTERM/SIGINT → set `asyncio.Event` |
 
 ---
@@ -113,24 +112,6 @@ MarketDataRegistry.data_type_for(Bar)        # → MarketDataType.BARS (or None)
 | Lookup | One-way: `get(key)` | Bidirectional: `model_for(key)` + `key_for(model)` |
 | Purpose | Runtime IoC construction | Wire-protocol deserialization |
 | Subclassing | Not needed (instantiate directly) | Required (concrete key type) |
-
----
-
-## Retry — async operation with retries
-
-```python
-from tradingcz.sdk.lang import Retry
-
-retry = Retry(max_retries=5, delay=2.0)
-
-# Retry any async callable on Exception:
-result = await retry.call(lambda: app.stock.bars(["AAPL"], days=30))
-# → 6 attempts total (1 initial + 5 retries), 2s between retries
-
-print(retry.attempts)  # number of retries actually used
-```text
-
-> `CancelledError` and `KeyboardInterrupt` propagate immediately — never retried.
 
 ---
 
