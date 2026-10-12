@@ -1,7 +1,7 @@
 """PositionClient — query open positions.
 
-Sends ServiceRequest to the event topic with ``service="get_positions"``
-and awaits PositionList response.
+Sends a ServiceRequestEvent (``ServiceRequestType.REQUEST_CURRENT_POSITIONS``)
+to the event topic and awaits PositionList.
 """
 
 from __future__ import annotations
@@ -29,18 +29,14 @@ class Position(BaseModel):
 
 @register_event(EventType.POSITION_RESPONSE)
 class PositionList(BaseModel):
-    """Response to a get_positions request."""
+    """Response to a REQUEST_CURRENT_POSITIONS service request."""
 
     event_id: UUID = Field(..., description="Unique identifier for this event")
     positions: list[Position]
 
 
 class PositionClient:
-    """Query open positions.
-
-    Sends ServiceRequest to the event topic with ``service="get_positions"``
-    and awaits PositionList response.
-    """
+    """Query open positions via a ``REQUEST_CURRENT_POSITIONS`` service request."""
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
@@ -52,6 +48,7 @@ class PositionClient:
         resp = await self._rr.request(
             req,
             response_type=PositionList,
+            event_id=str(req.event_id),  # executor replies with the payload event_id as header
             timeout=timeout,
         )
         return resp.positions

@@ -34,7 +34,7 @@ class TimeData(BaseModel):
 
 @register_event(EventType.TIME_DATA_RESPONSE)
 class TimeDataResponse(BaseModel):
-    """Response to a balance query."""
+    """Response to a time data request."""
 
     event_id: UUID = Field(..., description="Unique identifier for this event")
     time_data: TimeData = Field(..., description="Time data model")
@@ -59,12 +59,14 @@ class TransportMarketClockProvider(MarketClockProvider):
         default_timeout: float = 30.0,
     ) -> None:
         self._rr = rr
+        self._rr.register_type(TimeDataResponse)
         self._default_timeout = default_timeout
 
     async def get_current_time_data(self) -> TimeData:
         """Get the current time data via transport layer."""
         req: ServiceRequestEvent = ServiceRequestEvent(service=ServiceRequestType.REQUEST_TIME_DATA)
-        resp: TimeDataResponse = await self._rr.request(req=req, response_type=TimeDataResponse)
+        # executor replies with the payload event_id as header
+        resp: TimeDataResponse = await self._rr.request(req=req, response_type=TimeDataResponse, event_id=str(req.event_id), timeout=self._default_timeout)
         return resp.time_data
 
 

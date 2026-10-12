@@ -5,12 +5,15 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from uuid import uuid4
 
 import pytest  # type: ignore
 
 from tradingcz.sdk.market_data.clock import (
     TimeData,
+    TimeDataResponse,
     TimeKeeper,
+    TransportMarketClockProvider,
     WarningEventTriggerCondition,
 )
 
@@ -129,3 +132,15 @@ async def test_run_loop_clears_fired_warnings_when_market_has_closed(mock_time_d
     assert mock_provider.get_current_time_data.call_count == 2
 
     await tk.stop_timekeeping()
+
+
+@pytest.mark.asyncio
+async def test_transport_provider_registers_reply_type_and_uses_default_timeout(time_data: TimeData) -> None:
+    rr = MagicMock()
+    rr.request = AsyncMock(return_value=TimeDataResponse(event_id=uuid4(), time_data=time_data))
+    provider = TransportMarketClockProvider(rr=rr, default_timeout=7.0)
+
+    assert await provider.get_current_time_data() == time_data
+    rr.register_type.assert_called_once_with(TimeDataResponse)
+    assert rr.request.await_args.kwargs["timeout"] == 7.0
+    assert rr.request.await_args.kwargs["event_id"] == str(rr.request.await_args.kwargs["req"].event_id)  # executor echoes the payload ID

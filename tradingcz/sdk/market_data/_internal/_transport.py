@@ -7,11 +7,15 @@ Application code never references this module directly.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
+from pydantic import BaseModel
+
+from tradingcz.sdk import exceptions
 from tradingcz.sdk.market_data._internal._stream_handle import StreamHandle, _Unsubscribe
 from tradingcz.sdk.messaging.fire_and_forget import FireAndForget
 from tradingcz.sdk.messaging.request_reply import RequestReply
@@ -23,7 +27,6 @@ from tradingcz.sdk.models.enums.event import (
 )
 from tradingcz.sdk.models.enums.timeframe import Timeframe
 from tradingcz.sdk.models.events import DataError, DataReady, DataRequest
-from tradingcz.sdk.transport.dedup import DedupFilter
 from tradingcz.sdk.transport.kafka_header import Header
 from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 from tradingcz.sdk.transport.kafka_topic import KafkaTopicAdmin, KafkaTopicRegistry
@@ -32,6 +35,13 @@ from tradingcz.sdk.transport.transport_producer import TransportProducer
 from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 logger = logging.getLogger(__name__)
+
+
+def _missing(received: set[int], expected: int) -> str:
+    """Name the sequence numbers not received yet, e.g. ``2 missing (seq 57, 98)``."""
+    missing = sorted(set(range(expected)) - received)
+    shown = ", ".join(str(seq) for seq in missing[:10])
+    return f"{len(missing)} missing (seq {shown}{', ...' if len(missing) > 10 else ''})"
 
 
 class _DataTransport:
@@ -49,8 +59,6 @@ class _DataTransport:
         topics: KafkaTopicRegistry,
         service_id: str,
         broker: Broker = Broker.ALPACA,
-        *,
-        dedup_max_size: int = 100_000,
     ) -> None:
         self._rr = rr
         self._producer = producer
@@ -58,7 +66,6 @@ class _DataTransport:
         self._topics = topics
         self._service_id = service_id
         self._broker = broker
-        self._dedup = DedupFilter(max_size=dedup_max_size)
         self._topic_admin = KafkaTopicAdmin(settings)
         rr.register_type(DataReady)
         rr.register_type(DataError)
@@ -66,14 +73,13 @@ class _DataTransport:
     # -- Shared response validation ------------------------------------
 
     @staticmethod
-    def _validate_response(resp: DataReady, expected_type: DataRequestType) -> None:
-        """Validate DataReady response — raise on wrong request type.
-
-        Note: ``event_type`` lives in the Kafka header, not the payload.
-        The transport layer (RequestReply) already routes by EventType header.
-        """
-        if resp.type != expected_type:
-            raise RuntimeError(f"Expected {expected_type} DataReady, got type={resp.type}")
+    def _validate_response(resp: BaseModel, expected_type: DataRequestType) -> DataReady:
+        """Return the DataReady reply; raise :class:`exceptions.DataError` for a DataError reply or a wrong type."""
+        if isinstance(resp, DataError):
+            raise exceptions.DataError(resp.error)
+        if not isinstance(resp, DataReady) or resp.type != expected_type:
+            raise exceptions.DataError(f"Expected {expected_type} DataReady, got {resp!r}")
+        return resp
 
     # -- Historical (request → consume → return dict) ------------------
 
@@ -92,7 +98,9 @@ class _DataTransport:
     ) -> dict[str, list[T]]:
         """Send DataRequest for historical data, consume typed results.
 
-        Returns ``{symbol: [T sorted by timestamp]}``.
+        Returns ``{symbol: [T sorted by timestamp]}``. Raises :class:`exceptions.DataError` when
+        announced records are missing and :class:`exceptions.TransportTimeoutError` when they
+        cannot be read within ``timeout``.
         """
         start: datetime | None
         end: datetime | None
@@ -115,35 +123,47 @@ class _DataTransport:
             end_time=end,
         )
 
-        resp = await self._rr.request(req, response_type=DataReady, timeout=timeout)
-        self._validate_response(resp, DataRequestType.HISTORIC)
+        event_id = str(uuid.uuid4())  # ingestion stamps it on the reply and on every data record
+        resp = self._validate_response(await self._rr.request(req, response_type=DataReady, event_id=event_id, timeout=timeout), DataRequestType.HISTORIC)
         logger.info("DataReady(historic): topic=%s record_count=%s", resp.data_topic, resp.record_count)
+
+        expected = resp.record_count or 0
+        if expected == 0:
+            return {}
 
         await self._topic_admin.ensure(resp.data_topic)
         results: dict[str, list[T]] = {}
-        count = 0
-        expected = resp.record_count or 0
-        correlation_id = self._rr.correlation_id
+        received: set[int] = set()  # sequence numbers of this request's records
 
         consumer = TransportConsumer(resp.data_topic, self._settings, f"data-{uuid.uuid4().hex[:8]}", auto_offset_reset="earliest")
         try:
-            async for msg in consumer:
-                if msg.headers.get(Header.EVENT_ID) != correlation_id:
-                    continue
-                seq = msg.headers.get(Header.SEQUENCE, "")
-                if seq and self._dedup.is_duplicate(msg.headers.get(Header.SOURCE_APP, ""), seq):
-                    continue
-                try:
-                    item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.debug("Skipping unparseable %s", data_type, exc_info=True)
-                    continue
-                results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
-                count += 1
-                if expected and count >= expected:
-                    break
+            async with asyncio.timeout(timeout):
+                # Ingestion stores every record before it sends DataReady, so none is still on the way:
+                # a record not found below these offsets was never written.
+                watermarks = await consumer.watermarks()
+                position = {partition: low for partition, (low, _) in watermarks.items()}
+                while len(received) < expected and any(position[p] < high for p, (_, high) in watermarks.items()):
+                    for msg in await consumer.poll():
+                        position[msg.partition] = msg.offset + 1
+                        if msg.headers.get(Header.EVENT_ID) != event_id:
+                            continue
+                        seq = int(msg.headers.get(Header.SEQUENCE, len(received)))  # unnumbered producers: count arrivals
+                        if seq in received or not 0 <= seq < expected:
+                            continue  # duplicate (e.g. ingestion re-ran the request) or not part of this DataReady
+                        received.add(seq)
+                        try:
+                            item = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]
+                        except Exception:  # pylint: disable=broad-exception-caught
+                            logger.debug("Skipping unparseable %s", data_type, exc_info=True)
+                        else:
+                            results.setdefault(item.symbol, []).append(item)  # type: ignore[union-attr]
+        except TimeoutError as e:
+            raise exceptions.TransportTimeoutError(f"Historical request {event_id}: {len(received)}/{expected} records after {timeout:.0f}s, {_missing(received, expected)}") from e
         finally:
             await consumer.close()
+
+        if len(received) < expected:
+            raise exceptions.DataError(f"Historical request {event_id}: {_missing(received, expected)} of {expected} records; {resp.data_topic} was read to its end without them")
 
         for symbol_items in results.values():
             symbol_items.sort(key=lambda b: b.timestamp)  # type: ignore[attr-defined]
@@ -178,20 +198,16 @@ class _DataTransport:
             timeframe=timeframe or Timeframe.D1,
         )
 
-        resp = await self._rr.request(req, response_type=DataReady, timeout=timeout)
-        self._validate_response(resp, DataRequestType.STREAM)
+        resp = self._validate_response(await self._rr.request(req, response_type=DataReady, timeout=timeout), DataRequestType.STREAM)
 
         await self._topic_admin.ensure(resp.data_topic)
         consumer = TransportConsumer(resp.data_topic, self._settings, f"stream-{uuid.uuid4().hex[:8]}")
+        wanted = set(symbols)
 
         async def _consume() -> AsyncIterator[T]:
             try:
                 async for msg in consumer:
-                    seq = msg.headers.get(Header.SEQUENCE, "")
-                    if seq and self._dedup.is_duplicate(
-                        msg.headers.get(Header.SOURCE_APP, ""),
-                        seq,
-                    ):
+                    if msg.key not in wanted:  # the stream topic carries every subscriber's symbols
                         continue
                     try:
                         parsed = model_type.model_validate_json(msg.payload)  # type: ignore[attr-defined]

@@ -1,7 +1,7 @@
 """OrderClient — query order status.
 
-Sends ServiceRequest to the event topic with ``service="get_orders"``
-and awaits OrderList response.
+Sends a ServiceRequestEvent (``ServiceRequestType.REQUEST_ORDERS_FOR_EVENT``)
+to the event topic and awaits OrderList.
 """
 
 from __future__ import annotations
@@ -83,18 +83,14 @@ class OrderResponse(BaseModel):
 
 
 class OrderList(BaseModel):
-    """Response to a get_orders request."""
+    """Response to a REQUEST_ORDERS_FOR_EVENT service request."""
 
     event_id: str
     orders: list[OrderSummary]
 
 
 class OrderClient:
-    """Query order status.
-
-    Sends ServiceRequest to the event topic with ``service="get_orders"``
-    and awaits OrderList response.
-    """
+    """Query order status via a ``REQUEST_ORDERS_FOR_EVENT`` service request."""
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
@@ -117,6 +113,7 @@ class OrderClient:
         resp = await self._rr.request(
             req,
             response_type=OrderList,
+            event_id=str(req.event_id),  # executor replies with the payload event_id as header
             timeout=timeout,
         )
         return resp.orders
