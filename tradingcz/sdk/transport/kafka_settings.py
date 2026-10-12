@@ -17,7 +17,7 @@ class KafkaSettings(BaseSettings):
     consumer_poll_timeout_ms: int = Field(500, gt=0)
     consumer_batch_size: int = Field(100, gt=0)
     default_num_partitions: int = Field(5, gt=0)
-    default_replication_factor: int = Field(2, gt=1)
+    default_replication_factor: int | None = Field(None, ge=1)  # None: the broker's default.replication.factor
     default_retention_ms: int = Field(432000000)  # 5 days
     default_cleanup_policy: str = Field("delete")
     auto_offset_reset: str = Field("latest", pattern="^(earliest|latest|none)$")
@@ -35,6 +35,7 @@ class KafkaSettings(BaseSettings):
             "queue.buffering.max.messages": "500000",
             "queue.buffering.max.kbytes": "524288",
             "message.send.max.retries": "10",
+            "enable.idempotence": "true",  # implies acks=all: a flushed record is already readable
         }
         return {**base, **self.producer_overrides}
 

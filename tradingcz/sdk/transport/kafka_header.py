@@ -15,10 +15,8 @@ class Header(StrEnum):
 
     EVENT_TYPE = "event_type"  # Typed message/event name used for dispatch.
     SOURCE_APP = "source_app"  # Application or service that emitted the message.
-    SEQUENCE = "sequence"  # Producer sequence used for data-record deduplication.
+    SEQUENCE = "sequence"  # Index of a historical record within its request (0..record_count-1).
     EVENT_ID = "event_id"  # Request, response, or data-stream correlation ID.
-    # BROKER = "broker"  # Reserved; provider identity is currently in the payload.
-    # SOURCE = "source"  # Reserved; source_app is the canonical producer identity.
 
 
 class KafkaHeader(BaseModel):
@@ -41,18 +39,16 @@ class KafkaHeader(BaseModel):
 
 
 class EventHeader(KafkaHeader):
-    """Headers for event-topic messages — no sequence field."""
+    """Headers for event-topic messages."""
 
     event_id: str
 
 
 class DataHeader(KafkaHeader):
-    """Headers for data-topic messages — includes sequence for dedup."""
+    """Headers for data-topic messages."""
 
     event_id: str = ""  # Correlates the record with its data request/stream.
-    sequence: int = 0  # Monotonic producer sequence for deduplication.
-    # broker: str = ""  # Reserved; provider identity is currently in the payload.
-    # source: str = ""  # Reserved; source_app identifies the emitting service.
+    sequence: int | None = None  # Historical records only; lets the reader drop duplicates and name gaps.
     symbol: str = ""  # Symbol carried with the data record.
 
 

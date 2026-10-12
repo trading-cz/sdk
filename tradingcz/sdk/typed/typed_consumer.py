@@ -47,7 +47,7 @@ class TypedConsumer:
     ) -> None:
         self._topic = topic
         self._settings = settings
-        self._types = types or {}
+        self._types = types if types is not None else {}  # same dict: RequestReply registers types after start
         self._auto_commit = auto_commit
         self._on_error = on_error
         self._group_suffix = group_suffix
