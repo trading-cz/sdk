@@ -63,10 +63,10 @@ class StockStreamClient:
         self,
         symbols: list[str],
         *,
-        timeframe: Timeframe = Timeframe.H4,
+        timeframe: Timeframe = Timeframe.M1,
         timeout: float = 30.0,
     ) -> StreamHandle[Bar]:
-        """Stream live bar closes (OHLCV aggregates)."""
+        """Stream live bar closes (OHLCV aggregates). Ingestion streams 1-minute bars only; any other timeframe gets a ``DataError``."""
         logger.info(
             "StockStreamClient: stream_bars symbols=%d timeframe=%s",
             len(symbols), timeframe,
