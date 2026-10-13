@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
+from tradingcz.sdk.models.enums.event import MarketDataType
 from tradingcz.sdk.models.market import Bar, Quote, Trade
 
 
@@ -19,12 +20,12 @@ class StockStreamProvider(ABC):
     """
 
     @abstractmethod
-    async def subscribe(self, symbols: list[str]) -> None:
-        """Subscribe to live data for *symbols*."""
+    async def subscribe(self, data_type: MarketDataType, symbols: list[str]) -> None:
+        """Subscribe to live *data_type* (trades, quotes or bars) for *symbols*; other data types stay as they are."""
 
     @abstractmethod
-    async def unsubscribe(self, symbols: list[str]) -> None:
-        """Unsubscribe from live data for *symbols*."""
+    async def unsubscribe(self, data_type: MarketDataType, symbols: list[str]) -> None:
+        """Unsubscribe from live *data_type* for *symbols*."""
 
     @abstractmethod
     async def stream(self) -> AsyncIterator[Bar | Trade | Quote]:
