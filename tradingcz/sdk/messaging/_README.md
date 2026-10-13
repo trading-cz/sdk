@@ -181,19 +181,9 @@ await faf.send(signal, event_id="evt-001")
 ```python
 from tradingcz.sdk.messaging import ReplayConsumer
 
-# INITIALIZING sentinel is published automatically by HealthPublisher.
-# Replay until your own INITIALIZING:
+# Replays what the topic holds when the replay starts, then stops.
+# Run it before router.start(): the router handles everything newer.
 consumer = ReplayConsumer(topic, settings)
-async for msg_type, model, raw in consumer.replay(
-    types={str(EventType.DATA_REQUEST): DataRequest, …},
-    until=lambda mt, m: (
-        mt == str(EventType.SERVICE_LIFECYCLE)
-        and m.service_id == svc.service_id
-        and m.event == LifecycleEventType.INITIALIZING
-    ),
-):
+async for msg_type, model, raw in consumer.replay([DataRequest, DataReady, LifecycleEvent]):
     reconstruct_state(msg_type, model, raw.headers)
-
-# READY is published automatically by HealthPublisher after
-# health.ready().  Run recovery before calling start().
 ```
