@@ -21,7 +21,8 @@ class TransportProducer:
         settings: Kafka broker configuration.
         on_error: Optional synchronous callback invoked on delivery failure.
             Signature: ``(topic, partition, offset, error_str) -> None``.
-            Runs on librdkafka's internal thread — keep it fast and
+            Runs on the worker thread that serves delivery reports
+            (inside ``send()``/``flush()``) — keep it fast and
             non-blocking.  For async work, schedule on the event loop
             yourself (e.g. ``loop.call_soon_threadsafe``).
     """
@@ -62,6 +63,7 @@ class TransportProducer:
                 headers=header_list,
                 on_delivery=self._handle_error,
             )
+            self._producer.poll(0)  # unserved delivery reports keep their queue slots until BufferError
 
         await asyncio.to_thread(_produce)
         logger.debug("TransportProducer send: topic=%s key=%r headers=%d size=%dB", topic, key or "", len(header_list or ()), len(payload))
@@ -91,14 +93,14 @@ class TransportProducer:
     # ── Delivery callback ────────────────────────────────────────────────
 
     def _handle_error(self, err: object, msg: object) -> None:
-        """Delivery callback — runs on librdkafka internal thread."""
+        """Delivery callback — runs inside ``poll()``/``flush()``."""
         if err is None:
             return
         kmsg = cast(Message, msg)
         try:
             topic = kmsg.topic() or "?"
-            partition = kmsg.partition() or -1
-            offset = kmsg.offset() or -1
+            partition = p if (p := kmsg.partition()) is not None else -1
+            offset = o if (o := kmsg.offset()) is not None else -1
         except Exception:
             logger.warning("Cannot extract metadata from delivery report", exc_info=True)
             topic = "?"

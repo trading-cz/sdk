@@ -14,6 +14,7 @@ from tradingcz.sdk.transport.kafka_settings import KafkaSettings
 @pytest.mark.asyncio
 async def test_reply_arriving_during_send_is_not_lost() -> None:
     rr = RequestReply(MagicMock(), KafkaSettings(consumer_group="t"), "svc", "rr", response_types=[DataReady])
+    rr._listen_task = MagicMock(done=MagicMock(return_value=False))  # request() needs a running listener
     rr._typed_producer.send = AsyncMock(side_effect=lambda _req, key, headers: rr._pending[headers.event_id].set_result("reply"))
     rr._typed_producer.flush = AsyncMock()
 

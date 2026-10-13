@@ -5,7 +5,7 @@ Represents a single executed trade at a point in time.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from tradingcz.sdk.models.enums.event import EventType, MarketDataType
 from tradingcz.sdk.registry import register_event, register_market_data
@@ -21,5 +21,5 @@ class Trade(BaseModel):  # pylint: disable=too-many-instance-attributes
     price: float = Field(..., description="Trade execution price")
     size: float = Field(..., description="Trade size in shares")
     exchange: str | None = Field(default=None, description="Exchange code where trade occurred")
-    trade_id: str | None = Field(default=None, description="Unique trade identifier")
+    trade_id: int | None = Field(default=None, validation_alias=AliasChoices("trade_id", "id"), description="Exchange trade ID (alpaca-py: id)")
     conditions: list[str] | None = Field(default=None, description="Trade conditions/modifiers")

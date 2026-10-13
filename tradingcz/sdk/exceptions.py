@@ -50,8 +50,9 @@ class DataError(SdkError):
     """The ingestion service returned an error for a data request.
 
     Raised by :class:`_DataTransport` when the response to a
-    :class:`DataRequest` is a :class:`DataError` event, or when the
-    response type does not match the expected request type.
+    :class:`DataRequest` is a :class:`DataError` event, when the
+    response type does not match the expected request type, or when
+    announced historical records are missing from the data topic.
     """
 
 

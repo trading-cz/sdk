@@ -33,7 +33,7 @@ they never touch raw bytes or Kafka consumers directly.
 | ------- | -------- | --------- |
 | `EventRouter` | Route incoming messages to async handlers by `event_type` | `router.on(type, model, handler)` |
 | `RequestReply` | Send a typed request, await a correlated typed response | `await rr.request(req, response_type=…)` |
-| `FireAndForget` | Send a typed message, no response expected | `await faf.send(msg, event_type=…, event_id=…)` |
+| `FireAndForget` | Send a typed message, no response expected | `await faf.send(msg, event_id=…)` |
 | `ReplayConsumer` | Replay a topic from the beginning until a sentinel | `async for … in consumer.replay(types, until=…)` |
 | `HealthPublisher` | Emit `INITIALIZING` / `READY` / `HEARTBEAT` / `DOWN` | `await health.initializing()` / `ready()` / `down()` |
 
@@ -44,7 +44,7 @@ they never touch raw bytes or Kafka consumers directly.
 | You want to… | Use |
 | ------------- | ----- |
 | Consume messages and dispatch to handlers by type | `EventRouter` |
-| Send a request and await a response (correlated by `event_id`) | `RequestReply` |
+| Send a request and await a response (correlated by the `event_id` header) | `RequestReply` |
 | Fire off a message and forget about it | `FireAndForget` |
 | Rebuild in-memory state from the event log on startup | `ReplayConsumer` |
 | Let the platform know your service is alive | `HealthPublisher` (in ``tradingcz.sdk.health``) |
@@ -75,7 +75,7 @@ async def on_data_request(model: DataRequest, raw: KafkaMessage) -> None:
     """Process a data request — model is already parsed, raw has metadata."""
     source_app = raw.headers.get("source_app", "")
     result = await fetch_data(model)
-    await svc.publish_event(result, message_type=EventType.DATA_READY, event_id=model.event_id)
+    await faf.send(result, event_id=raw.headers["event_id"])  # echo the request's event_id header
 
 # Register — direct call (NOT a decorator)
 router.on(
@@ -158,12 +158,12 @@ from tradingcz.sdk.messaging import RequestReply
 from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 typed_producer = TypedProducer(transport, events_topic)
-async with RequestReply(typed_producer, events_topic, kafka_settings, "my-svc", group_suffix="rr") as rr:
-    rr.register_type(EventType.DATA_READY, DataReady)
-    response = await rr.request(
-        request, response_type=DataReady, request_type=EventType.DATA_REQUEST, timeout=15.0,
-    )
+async with RequestReply(typed_producer, kafka_settings, "my-svc", "rr", response_types=[DataReady]) as rr:
+    response = await rr.request(request, response_type=DataReady, timeout=15.0)
 ```
+
+RR matches the reply by the Kafka header `event_id`: `request()` generates it (or takes
+`event_id=…`) and never reads the payload, so the responder must echo that header in its reply.
 
 ### Fire-and-forget (signals, lifecycle events)
 
@@ -173,7 +173,7 @@ from tradingcz.sdk.typed.typed_producer import TypedProducer
 
 typed_producer = TypedProducer(transport, events_topic)
 faf = FireAndForget(typed_producer, service_id="risk")
-await faf.send(signal, event_type=EventType.TRADING_SIGNAL, event_id="evt-001")
+await faf.send(signal, event_id="evt-001")
 ```
 
 ### Startup recovery (ingestion, risk)

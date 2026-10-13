@@ -25,17 +25,10 @@ class EventStatus(StrEnum):
 
 
 class EventType(StrEnum):
-    """Unified event type — used for both Kafka ``message_type`` headers
-    and ``event_type`` payload fields.
+    """Value of the Kafka ``event_type`` header.
 
-    Usage::
-
-        # Kafka wire header
-        make_headers(message_type=EventType.DATA_REQUEST, ...)
-        model = parse_message(EventType.DATA_READY, payload)
-
-        # Event payload
-        event = ExecutionRequestEvent(event_type=EventType.TRADING_SIGNAL, ...)
+    :class:`~tradingcz.sdk.registry.EventRegistry` maps each value to its
+    model (``@register_event``); TypedConsumer and EventRouter dispatch on it.
     """
 
     # ── Control-plane (event topic) ──────────────────────────────────────

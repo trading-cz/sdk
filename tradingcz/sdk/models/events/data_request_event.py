@@ -2,20 +2,19 @@
 
 Wire protocol shared between ingestion, executor, and strategy pods.
 
-Message type is carried in the Kafka header ``message_type``, NOT in
-the value payload.  Use ``tradingcz.model.headers.parse_message()``
-to deserialize based on the header.
+The message type travels in the Kafka ``event_type`` header, not in the
+payload; TypedConsumer / EventRouter pick the model via ``EventRegistry``.
 
 Models:
     - ``DataRequest``  — request historical or streaming market data
     - ``DataReady``    — acknowledgement: data available on data_topic
     - ``DataError``    — error response to a DataRequest
 
-Correlation is handled by the transport layer (Kafka header ``event_id``).
+The payloads carry no ID: ``event_id`` is routing metadata and travels only in the
+Kafka header (set by RequestReply, echoed by the responder).
 """
 
 from datetime import datetime
-from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -33,7 +32,6 @@ from tradingcz.sdk.registry import register_event
 @register_event(EventType.DATA_REQUEST)
 class DataRequest(BaseModel):
     """Request for historical or streaming market data."""
-    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for data request")
     type: DataRequestType = Field(..., description="Request type: historical or streaming")
     source_app: str = Field(default="", description="Service identity of the requester (set by transport layer)")
     asset: AssetType = Field(default=AssetType.STOCK, description="Asset class: stock, option, etc.")
@@ -49,12 +47,9 @@ class DataRequest(BaseModel):
 class DataReady(BaseModel):
     """Acknowledgement: data is available on data_topic.
 
-    Sent by ingestion after fulfilling a DataRequest.
+    Sent by ingestion after fulfilling a DataRequest, with the request's ``event_id`` header.
     ``record_count`` is set only when ``type=DataRequestType.HISTORIC``.
     """
-    # Copied from the triggering DataRequest; no default_factory because
-    # it is never generated here — the sender must provide it.
-    event_id: UUID = Field(..., description="Event ID copied from the triggering DataRequest")
     broker: Broker = Field(..., description="Data provider broker")
     data_topic: str = Field(..., description="Kafka topic where data is published")
     type: DataRequestType = Field(default=DataRequestType.HISTORIC, description="Request type: historical or streaming")
@@ -63,9 +58,6 @@ class DataReady(BaseModel):
 
 @register_event(EventType.DATA_ERROR)
 class DataError(BaseModel):
-    """Error response to a DataRequest."""
-    # Copied from the triggering DataRequest; no default_factory because
-    # it is never generated here — the sender must provide it.
-    event_id: UUID = Field(..., description="Event ID copied from the triggering DataRequest")
+    """Error response to a DataRequest, with the request's ``event_id`` header."""
     broker: Broker = Field(..., description="Data provider broker")
     error: str = Field(..., description="Error message describing the failure")

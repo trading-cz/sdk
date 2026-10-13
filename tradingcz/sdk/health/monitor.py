@@ -27,6 +27,7 @@ class HealthMonitor:
         self._callbacks: dict[str, list[Callable[[str], Awaitable[None]]]] = {}
         self._running = False
         self._sweep_task: asyncio.Task[None] | None = None
+        self._dispatch_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def running(self) -> bool:
@@ -66,7 +67,9 @@ class HealthMonitor:
             self._seen[sid] = time.monotonic()
             if is_new:
                 logger.info("HealthMonitor: %s is now alive (event=%s)", sid, event.event)
-        asyncio.create_task(self._dispatch(event.event, sid))
+        task = asyncio.create_task(self._dispatch(event.event, sid))
+        self._dispatch_tasks.add(task)  # the loop holds only weak references to tasks
+        task.add_done_callback(self._dispatch_tasks.discard)
 
     async def start(self) -> None:
         """Start TTL sweep."""

@@ -1,7 +1,7 @@
 """BalanceClient — query account balance.
 
-Sends ServiceRequest to the event topic with ``service="get_balance"``
-and awaits BalanceResponse.
+Sends a ServiceRequestEvent (``ServiceRequestType.REQUEST_CASH_BALANCE``)
+to the event topic and awaits BalanceResponse.
 """
 
 from __future__ import annotations
@@ -39,11 +39,7 @@ class BalanceResponse(BaseModel):
 
 
 class BalanceClient:
-    """Query account balance.
-
-    Sends ServiceRequest to the event topic with ``service="get_balance"``
-    and awaits BalanceResponse.
-    """
+    """Query account balance via a ``REQUEST_CASH_BALANCE`` service request."""
 
     def __init__(self, rr: RequestReply) -> None:
         self._rr = rr
@@ -56,6 +52,7 @@ class BalanceClient:
         resp = await self._rr.request(
             req,
             response_type=BalanceResponse,
+            event_id=str(req.event_id),  # executor replies with the payload event_id as header
             timeout=timeout,
         )
         return resp.balance

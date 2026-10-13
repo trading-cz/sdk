@@ -40,10 +40,10 @@ await admin.ensure_from_config(topics.events)
 # RequestReply handles DataRequest → DataReady handshake
 rr = RequestReply(
     producer=TypedProducer(transport, topics.events.name),
-    topic=topics.events.name,
     settings=settings,
     service_id="my-service",
     group_suffix="svc-reply",
+    response_types=[],  # clients register their reply types
 )
 await rr.start()
 ```
